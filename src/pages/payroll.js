@@ -151,7 +151,8 @@ App._payslip=(itemId)=>{
     unpaid_days:i.unpaidDays||0,per_day:n2(d2.perDay||0),deductions:n2(i.deductions),net:n2(i.net),
     present:d2.present||0,wfh:d2.wfh||0,leave:d2.leaveDays||0,absent:d2.absent||0,working:d2.working||0,
     leave_balance:bal,note:B.payslipNote||'',status:run.status+((d2.hold)?' · PAYROLL HOLD':''),date:fmtD(todayISO())};
-  let body=String(B.payslipTpl||'');
+  const _DEF_TPL='PAYSLIP — {month}\n\nEmployee: {name}\nPosition: {position} · {department}\nStatus: {status}\n\n— Earnings —\nBasic salary:            {currency} {basic}\nAllowances:              {currency} {allowances}\nOvertime ({ot_hours}h):        {currency} {ot_amount}\n\n— Deductions —\nUnpaid days ({unpaid_days} × {per_day}): {currency} {deductions}\n\nNET PAY: {currency} {net}\n\n— Month summary —\nWorking days: {working} · Present: {present} · WFH: {wfh} · On leave: {leave} · Absent: {absent}\nLeave balance remaining: {leave_balance} days\n\n{note}\nGenerated on {date}';
+  let body=String(B.payslipTpl||_DEF_TPL);
   Object.keys(V).forEach(k=>{body=body.split('{'+k+'}').join(String(V[k]));});
   const _g=typeof _gratuityAccrued==='function'?_gratuityAccrued(u):null; // PHASE4: informational EOSB line
   if(_g&&_g.amount)body+='\n\nEnd-of-service accrued to date ('+_g.country+'): '+(_g.currency||cur2)+' '+n2(_g.amount)+' — informational, not part of this payslip.';

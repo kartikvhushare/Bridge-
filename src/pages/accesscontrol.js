@@ -289,9 +289,11 @@ App._renderRPEdit=()=>{
         </div>
       </div>`;
     }).join('');
-    return `<div style="margin-bottom:8px"><div style="${lab};margin-bottom:2px">${esc(g)}</div>${rowsH}</div>`;
+    return `<div style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:2px"><span style="${lab}">${esc(g)}</span>${canMng?`<button onclick="App._rpGroupSet('${esc(g)}',true)" style="font-size:9.5px;font-weight:800;color:#0B7A55;background:#ECFDF5;border:1px solid #D1FAE5;border-radius:7px;padding:2px 8px;cursor:pointer">ALL ON</button><button onclick="App._rpGroupSet('${esc(g)}',false)" style="font-size:9.5px;font-weight:800;color:#BE123C;background:#FFF1F2;border:1px solid #FECDD3;border-radius:7px;padding:2px 8px;cursor:pointer">ALL OFF</button>`:''}</div>${rowsH}</div>`;
   }).join('');
-  modalShell({title:p.isNew?'New role':('Role — '+(p.name||'Untitled')),sub:(nUsers?nUsers+' people have this role · ':'')+'toggles apply on Save',size:'max-w-3xl',
+  const _tot=PERM_AREAS.reduce((n,a)=>n+a.actions.length,0);
+  const _on=PERM_AREAS.reduce((n,a)=>n+a.actions.filter(x=>((p.perms[a.key]||{}).actions||{})[x]).length,0);
+  modalShell({title:p.isNew?'New role':('Role — '+(p.name||'Untitled')),sub:(nUsers?nUsers+' people have this role · ':'')+_on+' of '+_tot+' permissions on · toggles apply on Save',size:'max-w-3xl',
     body:`<div>
       ${p.dirty?'<div style="font-size:11.5px;font-weight:800;color:#92400E;background:#FEF3C7;border-radius:9px;padding:7px 11px;margin-bottom:12px">● Unsaved changes — press Save below</div>':''}
       <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:14px">
@@ -302,6 +304,17 @@ App._renderRPEdit=()=>{
       ${grid}
     </div>`,
     footer:btnG('Cancel','_RPD=null;App.closeModal()')+(canMng?btnP(p.isNew?'Create role':'Save role','App._rpSave()'):'')});
+};
+/* FINAL-UX: one click grants/clears a whole permission group in the role editor (marks dirty, applies on Save). */
+App._rpGroupSet=(group,on)=>{
+  const p=_RPD;if(!p||!can('accessControl','manage'))return;
+  PERM_AREAS.filter(a=>(a.group||'System')===group).forEach(a=>{
+    const cur=p.perms[a.key]=p.perms[a.key]||{scope:'none',actions:{}};
+    cur.actions=cur.actions||{};
+    a.actions.forEach(act=>{cur.actions[act]=!!on;});
+    if(a.scoped)cur.scope=on?'everyone':'none';
+  });
+  p.dirty=true;App._renderRPEdit();
 };
 App._rpT=(area,act)=>{
   if(!can('accessControl','manage')||!_RPD)return;

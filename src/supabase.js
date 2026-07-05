@@ -459,14 +459,14 @@ async function loadFromSB(){
     // B2b: role profiles — read for EVERY user (workspace_settings is read-all-authenticated) so permissions resolve.
     sb.from('workspace_settings').select('value').eq('key','role_profiles').maybeSingle(),
     // SOPs: templates (read-all-authenticated, browsable library) + instances (RLS-filtered to what the user may see).
-    sb.from('sop_templates').select('*').order('created_at',{ascending:false}),
-    sb.from('sop_instances').select('*').order('created_at',{ascending:false}),
+    Promise.resolve({data:[],error:null}), // FINAL-FIX: SOPs retired — table gone; stop the 404
+    Promise.resolve({data:[],error:null}), // FINAL-FIX: SOPs retired
     // Shifts: RLS returns own (published) + scoped/elevated rows. Windowed from 7 days back so the
     //   roster's prev-week and the employee's this/next week always resolve; older rows load on demand.
     ((can('scheduling','manage')||scopeOf('scheduling')!=='self')?sb.from('shifts').select('*').gte('date',new Date(Date.now()-7*_DAY_MS).toISOString().slice(0,10)).order('date',{ascending:true}):sb.from('shifts').select('*').eq('user_id',S.uid).gte('date',new Date(Date.now()-7*_DAY_MS).toISOString().slice(0,10)).order('date',{ascending:true})),
     // Expenses: RLS returns own claims + claims in the caller's approval scope (manager-of/elevated).
     //   Windowed from 180 days back so a recent claim and its decision always resolve; older load on demand.
-    sb.from('expenses').select('*').gte('date',new Date(Date.now()-180*_DAY_MS).toISOString().slice(0,10)).order('created_at',{ascending:false}),
+    Promise.resolve({data:[],error:null}), // FINAL-FIX: expenses retired
   ]).then(res=>{
     const [cfg,lt,hol,lr,lb,att,uh,rp,ot,oi,sh,ex]=res;
     if(cfg.status==='fulfilled'&&!cfg.value.error&&cfg.value.data)_applyHrmConfig(cfg.value.data);

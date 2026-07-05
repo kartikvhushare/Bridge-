@@ -41,10 +41,12 @@ function homeDash(){
       ${ic('chevR','w-4 h-4')}
     </button>`;
   };
+  const rvN=(typeof _rcMyTasks==='function'&&can('reviews','view'))?_rcMyTasks(me()).length:0; // FINAL-UX
   const tiles=[
     canApprove?attTile('To approve',apprN,'approvals','amber','approve'):'',
     attTile('Unread alerts',notifN,'notifications','info','bell'),
     attTile('My tickets',tkN,'tickets','rose','ticket'),
+    rvN?attTile('Reviews to fill',rvN,'reviews','brand','chart'):'',
   ].filter(Boolean).join('');
 
   // ── today's checklist summary card ──
@@ -588,7 +590,8 @@ App._sendReq=(clId,date)=>{
   // Notify manager
   const mgrId=u?.managerId;
   const clName=clById(clId)?.name||'a checklist';
-  if(mgrId)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'✏️ Edit request from '+fullName(u)+' for "'+clName+'" on '+fmtS(date),time:new Date().toISOString(),read:false,kind:'edit'});
+  if(mgrId){DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'✏️ Edit request from '+fullName(u)+' for "'+clName+'" on '+fmtS(date),time:new Date().toISOString(),read:false,kind:'edit'});
+    if(typeof queueEmail==='function')queueEmail('approval_requested',mgrId,clId,date,{checklist_name:clName,employee_name:fullName(u)});} // FINAL-FIX
   // Notify admin if not same as manager
   const admin=DB.users.find(x=>x.role==='Admin');
   if(admin&&admin.id!==mgrId)DB.notifications.unshift({id:uid('n'),userId:admin.id,text:'Edit request: '+fullName(u)+' — '+clName,time:new Date().toISOString(),read:false,kind:'edit'});

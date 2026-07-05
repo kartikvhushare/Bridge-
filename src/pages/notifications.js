@@ -154,10 +154,14 @@ const _NOTIF_ROUTE={
   submission:'approvals', edit:'approvals',
   document:'approvals', // pending-approval default; decided rows set targetRoute
   ticket:'tickets', escalation:'tickets',
-  feedback:'feedback',
+  feedback:'notifications', // FINAL-FIX: 'feedback' is a tab inside Notifications, not a route
   announcement:'announcements',
   checklist:'mychecklists',
   attendance:'attendance',
+  // FINAL-FIX: kinds emitted by the HRM/Phase-4 modules now land on their pages
+  overtime:'overtime', discipline:'discipline', payroll:'payroll',
+  letter:'letters', lifecycle:'lifecycle', shift:'shifts', review:'reviews',
+  submission_late:'teamview', hrm:'attendance', general:'notifications',
 };
 App._notifClick=(id)=>{
   const n=DB.notifications.find(x=>x.id===id);if(!n)return;
@@ -278,6 +282,7 @@ App._saveSendFeedback=(userId)=>{
   const type=(document.getElementById('sfb-type-val')?.value)||'General';
   const priority=$('#sfb-pri')?.value||'Low';
   if(!DB.feedback)DB.feedback=[];
+  if(typeof queueEmail==='function')queueEmail('feedback_received',userId,clId||null,null,{from_name_person:fullName(me())});
   DB.feedback.push({
     id:uid('fb'),title:title||type+' Feedback',type,
     checklistId:clId||null,userId,managerId:S.uid,

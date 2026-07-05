@@ -93,6 +93,31 @@ function _dashRangeBounds(){
   return null; // 'all'
 }
 const _inDashRange=date=>{const b=_dashRangeBounds();if(!b)return true;return !!date&&date>=b.from&&date<=b.to;};
+
+/* ── FINAL-UX: "Pulse" strip — live counts across every module, permission-gated, one tap to act ── */
+function _pulseStrip(){
+  const t=todayISO();
+  const cards=[];
+  const add=(show,label,n,route,accent,sub)=>{if(!show)return;cards.push(`<button onclick="App.go('${route}')" style="flex:1;min-width:132px;background:#fff;border:1px solid var(--c-border);border-left:3px solid ${accent};border-radius:14px;padding:10px 14px;cursor:pointer;text-align:left">
+    <div style="font-size:20px;font-weight:800;color:${n>0?'var(--c-text)':'var(--c-text-3)'}">${n}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--c-text-2)">${label}</div>
+    ${sub?`<div style="font-size:10px;color:var(--c-text-3)">${sub}</div>`:''}</button>`);};
+  add(can('approvals','view'),'Approvals waiting',(DB.approvals||[]).filter(a=>a.status==='Pending').length,'approvals','#F59E0B','submissions & edits');
+  add(can('leaveRequests','approve'),'Leave to decide',(DB.leaveRequests||[]).filter(r=>r.status==='Pending').length,'leave','#0EA5E9','pending requests');
+  add(can('overtime','approve'),'Overtime to review',(DB.overtime||[]).filter(o=>o.status==='Pending').length,'overtime','#8B5CF6','pending hours');
+  add(can('tickets','view'),'Open tickets',(DB.tickets||[]).filter(x=>x.status==='Open').length,'tickets','#EF4444','need attention');
+  add(true,'On leave today',(DB.leaveRequests||[]).filter(r=>r.status==='Approved'&&r.start<=t&&t<=r.end).length,'attendance','#10B981','approved absences');
+  add(true,'WFH today',(DB.attendance||[]).filter(a=>a.date===t&&(a.flags||[]).includes('WFH')).length,'attendance','#0EA5E9','self-marked');
+  if(can('reviews','view')&&typeof _rcActive==='function'){
+    const act=_rcActive();
+    if(act.length){const c=act[0];const done=_rcSubmitted(c),tot=_rcParticipants(c);
+      cards.push(`<button onclick="App.go('reviews')" style="flex:1.4;min-width:170px;background:#fff;border:1px solid var(--c-border);border-left:3px solid var(--c-brand);border-radius:14px;padding:10px 14px;cursor:pointer;text-align:left">
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:11px;font-weight:700;color:var(--c-text-2)">Review cycle · ${esc(c.name).slice(0,24)}</span><b style="font-size:12px">${done}/${tot}</b></div>
+        <div style="height:6px;background:var(--c-surface-2);border-radius:3px;margin-top:8px;overflow:hidden"><div style="width:${tot?Math.round(done/tot*100):0}%;height:100%;background:var(--c-brand)"></div></div>
+        <div style="font-size:10px;color:var(--c-text-3);margin-top:4px">${tot?Math.round(done/tot*100):0}% submitted — tap to manage</div></button>`);}
+  }
+  return cards.length?`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">${cards.join('')}</div>`:'';
+}
 function _dashFilterBar(){
   const r=S.filters.dashRange||'all';
   const b=_dashRangeBounds();
@@ -154,6 +179,7 @@ function adminDash(){
   return t.length?'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">'+t.map(x=>`<button onclick="App.go('${x[2]}')" style="flex:1;min-width:130px;display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;border:1px solid var(--c-border);background:var(--c-surface);cursor:pointer;text-align:left"><span style="width:34px;height:34px;border-radius:9px;background:${x[4]};color:${x[5]};display:grid;place-items:center;flex-shrink:0">${ic(x[3],'w-4 h-4')}</span><span style="min-width:0"><span class="fd" style="display:block;font-size:16px;font-weight:800;color:var(--c-text)">${x[1]}</span><span style="display:block;font-size:10.5px;color:var(--c-text-2)">${x[0]}</span></span></button>`).join('')+'</div>':'';
 })()}${hdr('Dashboard',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
   ${_dashFilterBar()}
+  ${_pulseStrip()}
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
     ${statCard('Active users',active,'sky',"App.go('users')")}${statCard('Pending approvals',pendA,'amber',"App.go('approvals')")}${statCard('Late submissions',late,'rose',"S.filters={stats:['Late']};App.go('dashboard')")}
   </div>
@@ -218,6 +244,7 @@ function mgrDash(){
   const curRows=rows.filter(r=>r.cur);
   return`<div class="fade">${_whoIsInWidget()}${hdr('Team Dashboard',team.length+' member'+(team.length!==1?'s':''))}
   ${_dashFilterBar()}
+  ${_pulseStrip()}
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
     ${statCard('Team members',team.length,'sky',"App.go('teamview')")}${statCard('Late submissions',rows.reduce((n,r)=>n+r.late,0),'rose',"S.filters={stats:['Late']};App.go('dashboard')")}${statCard('Avg completion',Math.round(curRows.reduce((n,r)=>n+r.pct,0)/Math.max(curRows.length,1))+'%','brand',"App.go('dashboard')")}
   </div>
@@ -228,4 +255,4 @@ function mgrDash(){
   </div></div>`;}
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._onLeaveToday=_onLeaveToday;window._whoIsInWidget=_whoIsInWidget;window._setupGuideWidget=_setupGuideWidget;window.DASH_RANGES=DASH_RANGES;window._dashRangeBounds=_dashRangeBounds;window._inDashRange=_inDashRange;window._dashFilterBar=_dashFilterBar;window._dashTicketsPanel=_dashTicketsPanel;window._dashboardPage=_dashboardPage;window.adminDash=adminDash;window.mgrDash=mgrDash;
+window._onLeaveToday=_onLeaveToday;window._whoIsInWidget=_whoIsInWidget;window._setupGuideWidget=_setupGuideWidget;window._pulseStrip=_pulseStrip;window.DASH_RANGES=DASH_RANGES;window._dashRangeBounds=_dashRangeBounds;window._inDashRange=_inDashRange;window._dashFilterBar=_dashFilterBar;window._dashTicketsPanel=_dashTicketsPanel;window._dashboardPage=_dashboardPage;window.adminDash=adminDash;window.mgrDash=mgrDash;

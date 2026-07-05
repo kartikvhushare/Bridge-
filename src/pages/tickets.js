@@ -207,8 +207,10 @@ App._tkFilter=(key,val)=>{if(key==='status')S.filters.tkStatus=val;else S.filter
 App._ticketStatus=(id,status)=>{
   const t=(DB.tickets||[]).find(x=>x.id===id);if(!t)return;
   t.status=status;
+  if(status==='Resolved'&&!t.resolvedAt)t.resolvedAt=new Date().toISOString(); // FINAL-FIX: resolution timestamp for analytics
+  if(status==='Open')t.resolvedAt=null;
   saveDB();rr();
-  sb.from('tickets').update({status}).eq('id',id).then(()=>{}).catch(e=>console.warn('ticket status:',e.message));
+  sb.from('tickets').update({status,resolved_at:t.resolvedAt||null}).eq('id',id).then(()=>{}).catch(e=>console.warn('ticket status:',e.message));
 };
 
 App._resolveTicket=(id)=>{

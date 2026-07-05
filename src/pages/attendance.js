@@ -43,7 +43,8 @@ App.clockOut=()=>{
     if(geo)rec.outGeo=geo;
     else{rec.outGeo=null;if(!(rec.flags||[]).includes('fence-changed'))rec.flags=[...(rec.flags||[]),'fence-changed'];} // H4 audit
     _applyFlags(rec);saveDB();
-    if(rec.flags.includes('early'))_hrmNotify(uId,'⚠️ You clocked out early at '+_m2hm(m)+' on '+fmtD(date)+'.','attendance');
+    if(rec.flags.includes('early')){_hrmNotify(uId,'⚠️ You clocked out early at '+_m2hm(m)+' on '+fmtD(date)+'.','attendance');
+      if(_hnpEmail('email_hrm_early'))queueEmail('hrm_early',uId,null,date,{date:fmtD(date)});} // FINAL-FIX: wire dormant template
     toast('Clocked out — '+rec.hours+'h worked');rr();
   },true); // H4: lenient — a real clock-in exists, never trap the out-punch on a mid-shift fence change
 };

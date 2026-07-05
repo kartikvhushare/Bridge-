@@ -47,6 +47,7 @@ App._otDecide=(id,action,comp)=>{
   }
   _pushRow('overtime',_otRow(o),'overtime');
   notify(o.userId,'⏱️ Overtime '+o.status.toLowerCase()+(o.comp?' ('+(o.comp==='lieu'?'time-in-lieu → comp-off':'payment')+')':'')+': '+o.hours+'h on '+fmtS(o.date),'overtime','overtime');
+  if(o.status==='Approved'&&o.comp==='lieu'&&_hnpEmail('email_hrm_comp_off'))queueEmail('hrm_comp_off',o.userId,null,o.date,{days:(o.hours/8).toFixed(2)}); // FINAL-FIX: wire dormant template
   log(fullName(me()),'Overtime '+o.status.toLowerCase(),o.hours+'h · '+(uById(o.userId)?fullName(uById(o.userId)):''));
   saveDB();rr();
 };

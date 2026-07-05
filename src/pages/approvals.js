@@ -181,6 +181,7 @@ App._decide=async(id,status)=>{
   document.querySelectorAll(`[data-id="${id}"]`).forEach(b=>{b.disabled=true;b.style.opacity='0.5';});
   a.status=status;
   const u=uById(a.requesterId),c=clById(a.checklistId);
+  if(typeof queueEmail==='function')queueEmail(status==='Approved'?'submission_approved':'submission_rejected',a.requesterId,a.checklistId,a.date,{checklist_name:(c&&c.name)||'checklist'}); // FINAL-FIX: decision emails
   const s=DB.submissions.find(x=>x.checklistId===a.checklistId&&x.userId===a.requesterId&&x.date===a.date);
   if(s&&a.type==='Submission'){
     if(status==='Approved'){
