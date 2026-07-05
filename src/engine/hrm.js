@@ -339,6 +339,10 @@ function _birthdayOk(u,startISO){
 
 /* ── Boot init (idempotent) ── */
 function _hrmInit(){
+  // PHASE3-FIX (self-heal): drop malformed empty-text notifications left in any device's local
+  // cache by the pre-fix build — one such row 400s the whole batched notifications upsert and
+  // keeps every later notification from syncing (endless "didn't save" toasts on that device).
+  DB.notifications=(DB.notifications||[]).filter(n=>n&&n.text&&String(n.text).trim());
   _seedProfiles();
   _seedRoleProfiles();
   DB.hrmConfig.locationGeo=DB.hrmConfig.locationGeo||{}; // per-location geofence store; synced via hrm_config.location_geo
