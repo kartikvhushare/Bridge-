@@ -28,6 +28,7 @@ const NAV_ALL=[
   ['lifecycle','users','Lifecycle',()=>can('lifecycle','view')],
   ['letters','doc','Letters',()=>can('letters','view')],
   ['surveys','msg','Surveys',()=>can('surveys','view')],
+  ['reviews','chart','Reviews',()=>can('reviews','view')],
   ['discipline','alert','Discipline',()=>can('discipline','view')],
   ['payroll','chart','Payroll',()=>can('payroll','view')],
   ['notifications','bell','Inbox — Alerts',()=>true],
@@ -53,7 +54,7 @@ const NAV_SECTION_OF={
   // Work — tasks and content
   checklists:'Work',allcl:'Work',questions:'Work',tickets:'Work',letters:'Work',announcements:'Work',surveys:'Work',
   // People
-  users:'People',teamview:'People',hierarchy:'People',lifecycle:'People',discipline:'People',
+  users:'People',teamview:'People',hierarchy:'People',lifecycle:'People',discipline:'People',reviews:'People',
   // Insights
   analytics:'Insights',hrmanalytics:'Insights',okr:'Insights',
   // Setup (admin plumbing — collapsed unless you're in it)
@@ -318,6 +319,7 @@ function pageContent(){
   if(r==='discipline'){if(can('discipline','view'))return disciplinePage();S.route='mychecklists';return myClsPage();}
   if(r==='payroll'){if(can('payroll','view'))return payrollPage();S.route='mychecklists';return myClsPage();}
   if(r==='surveys'){if(can('surveys','view'))return surveysPage();S.route='mychecklists';return myClsPage();}
+  if(r==='reviews'){if(can('reviews','view'))return reviewsPage();S.route='mychecklists';return myClsPage();}
   if(r==='okr'){if(can('okr','view'))return okrPage();S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
   return empty('grid','Not found','');
 }

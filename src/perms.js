@@ -42,6 +42,7 @@ const PERM_AREAS=[
   {key:'letters',label:'Letters',desc:'Request, approve & issue HR letters from templates',actions:['view','create','approve','issue'],scoped:true,group:'Content'},
   {key:'payroll',label:'Payroll',desc:'Runs, verification, payslips, WPS export',actions:['view','verify','run','approve','finalize','rollback','download'],scoped:false,group:'Payroll'},
   {key:'surveys',label:'Surveys',desc:'Pulse & performance surveys — answer and (HR) manage',actions:['view','submit','manage'],scoped:false,group:'People & Org'},
+  {key:'reviews',label:'Performance reviews',desc:'Appraisal cycles — self & manager ratings (Phase 4)',actions:['view','submit','manage'],scoped:true,group:'People & Org'},
   {key:'audit',label:'Audit / Activity log',desc:'History of actions',actions:['view'],scoped:false,group:'System'},
   {key:'settings',label:'Settings',desc:'App settings',actions:['view','edit'],scoped:false,group:'System'},
   {key:'accessControl',label:'Access Control',desc:'The role-profile system itself',actions:['view','manage'],scoped:false,group:'System'},
@@ -86,6 +87,7 @@ function _seedRoleProfiles(){
       discipline:A('team','view'),
       letters:A('self','view','create'),
       surveys:A('none','view','submit'),
+      reviews:A('team','view','submit'),
     }},
     hr:{id:'hr',name:'HR',description:'The HR modules: attendance, leave & balances, HR settings, HRM analytics, document approvals.',builtin:true,perms:{
       dashboard:A('none','view'),
@@ -110,6 +112,7 @@ function _seedRoleProfiles(){
       letters:A('everyone','view','create','approve','issue'),
       payroll:{scope:'none',actions:{view:true,verify:true,run:true,download:true}},
       surveys:A('none','view','submit','manage'),
+      reviews:A('everyone','view','submit','manage'),
     }},
     basic:{id:'basic',name:'Basic Employee',description:'A standard employee — their own checklists, attendance, leave and tickets.',builtin:true,perms:{
       dashboard:A('none','view'),
@@ -126,9 +129,10 @@ function _seedRoleProfiles(){
       overtime:A('self','view','submit'),
       letters:A('self','view','create'),
       surveys:A('none','view','submit'),
+      reviews:A('self','view','submit'),
     }},
   };
-  const V='5'; // v5: reports scoped (HRM analytics shows team/everyone), surveys
+  const V='6'; // v6: adds Phase 4 'reviews' area to the built-in roles // v5: reports scoped (HRM analytics shows team/everyone), surveys
   Object.values(presets).forEach(p=>{
     const cur=DB.roleProfiles[p.id];
     if(!cur||(cur.builtin&&cur._v!==V)){p._v=V;DB.roleProfiles[p.id]=p;} // upgrade built-ins once; never touch custom roles

@@ -169,7 +169,7 @@ function _letterTplCfgHTML(){
 /* ════════ HR CONFIG PAGE ════════ */
 function hrmConfigPage(){
   _seedProfiles();
-  const TABS=[['policy','Timing & accrual'],['types','Leave Types'],['holidays','Holidays'],['alerts','Alerts & triggers'],['flows','Flow templates'],['lettertpl','Letter templates'],['surveys','Surveys']];
+  const TABS=[['policy','Timing & accrual'],['types','Leave Types'],['holidays','Holidays'],['alerts','Alerts & triggers'],['flows','Flow templates'],['lettertpl','Letter templates'],['surveys','Surveys'],['compliance','Compliance']];
   // §3a/§3b: balance-management tabs, gated by the leave-balances permission (shim → HR/Admin).
   if(can('leaveBalances','edit'))TABS.push(['bulk','Bulk Balances']);
   if(can('leaveBalances','grant'))TABS.push(['compoff','Comp-off']);
@@ -184,6 +184,7 @@ function hrmConfigPage(){
   if(tab==='flows')body=_flowTplCfgHTML();
   if(tab==='lettertpl')body=_letterTplCfgHTML();
   if(tab==='surveys')body=_surveyCfgHTML();
+  if(tab==='compliance')body=_complianceCfgHTML();
   if(tab==='policy'){
     const canEdit=can('hrSettings','edit');
     body=`<div class="space-y-4">
@@ -485,3 +486,54 @@ App.saveLeaveType=(id)=>{
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
 window._alertsCfgHTML=_alertsCfgHTML;window._flowTplCfgHTML=_flowTplCfgHTML;window._surveyCfgHTML=_surveyCfgHTML;window._letterTplCfgHTML=_letterTplCfgHTML;window.hrmConfigPage=hrmConfigPage;window._balScopeUsers=_balScopeUsers;window._balFilterBar=_balFilterBar;window._bulkBalanceEditor=_bulkBalanceEditor;window._bulkBalMarkDirty=_bulkBalMarkDirty;window._bulkBalFlush=_bulkBalFlush;window._bulkBalTargetedSave=_bulkBalTargetedSave;window._compOffManager=_compOffManager;window._approvalFlowEditor=_approvalFlowEditor;window._afRows=_afRows;window._afRefresh=_afRefresh;
+
+/* ════════ COMPLIANCE (Phase 4) — per-country rules the accountant sets once + filing exports.
+   DISPLAY-ONLY: payslips show the accrual, exports are filing-ready, net pay never changes. ════════ */
+function _complianceCfgHTML(){
+  const canEdit=can('hrSettings','edit');const c=_compCfg();
+  const cCard=(k)=>{const cc=c.countries[k];const g=cc.gratuity||{tiers:[]};const t1=(g.tiers||[])[0]||{},t2=(g.tiers||[])[1]||{};
+    return `<div style="background:#fff;border:1px solid var(--c-border);border-radius:16px;padding:16px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b class="fd">${esc(cc.label||k)}</b><span style="font-size:11px;color:var(--c-text-3)">${esc(k)}</span></div>
+      <div class="grid grid-cols-3 gap-3">
+        ${fld('Currency','cmp-'+k+'-cur',cc.currency||'','text')}
+        ${fld('WPS employer ID','cmp-'+k+'-emp',(cc.wps||{}).employerId||'','text')}
+        ${fld('Bank / routing code','cmp-'+k+'-bank',(cc.wps||{}).bankCode||'','text')}
+      </div>
+      <div style="margin:10px 0 4px;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase">End-of-service (gratuity) accrual</div>
+      <div class="grid grid-cols-3 gap-3">
+        ${fld('Days per year — first period','cmp-'+k+'-d1',(t1.daysPerYear??0),'number')}
+        ${fld('First period lasts (years)','cmp-'+k+'-y1',(t1.uptoYears??5),'number')}
+        ${fld('Days per year — after that','cmp-'+k+'-d2',(t2.daysPerYear??t1.daysPerYear??0),'number')}
+      </div>
+      <p style="font-size:11px;color:#9CA3AF;margin-top:6px">${esc(cc.notes||'')} Daily rate = basic ÷ ${g.dailyDivisor||30}. Shown on payslips & the liability export — never deducted from pay.</p>
+    </div>`;};
+  const locRows=(DB.locations||[]).map(l=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="flex:1;font-size:13px;font-weight:600">${esc(l.name)}</span>
+    <select class="ui-select rf" style="width:220px" id="cmp-loc-${l.id}" ${canEdit?'':'disabled'}>${Object.keys(c.countries).map(k=>`<option value="${k}" ${(c.locationCountry[l.id]||'AE')===k?'selected':''}>${esc(c.countries[k].label||k)}</option>`).join('')}</select></div>`).join('');
+  return `<div class="space-y-4">
+    <div style="background:var(--c-surface-2);border-radius:12px;padding:10px 14px;font-size:12px;color:var(--c-text-2)">Your accountant sets these once. Everything here is <b>informational</b> — payslips show the accrual, exports are filing-ready, and net pay is never changed.</div>
+    ${Object.keys(c.countries).map(cCard).join('')}
+    <div style="background:#fff;border:1px solid var(--c-border);border-radius:16px;padding:16px">
+      <b class="fd" style="font-size:13.5px">Which country applies to each office</b>
+      <p style="font-size:11.5px;color:#9CA3AF;margin:4px 0 10px">People follow their assigned office's country. Offices with no mapping use UAE rules.</p>${locRows||'<span style="font-size:12px;color:var(--c-text-3)">No locations yet.</span>'}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      ${canEdit?'<button onclick="App._compSave()" class="ui-btn ui-btn-primary">Save compliance settings</button>':''}
+      <button onclick="App._compGratuityCSV()" class="ui-btn ui-btn-subtle">Export gratuity liability CSV</button>
+    </div>
+  </div>`;
+}
+App._compSave=()=>{
+  if(!can('hrSettings','edit'))return toast('You need HR settings → Edit','err');
+  const c=_compCfg();
+  Object.keys(c.countries).forEach(k=>{const cc=c.countries[k];
+    const v=id=>{const el=document.getElementById(id);return el?el.value:null;};
+    if(v('cmp-'+k+'-cur')!=null)cc.currency=String(v('cmp-'+k+'-cur')).trim();
+    cc.wps=cc.wps||{};if(v('cmp-'+k+'-emp')!=null)cc.wps.employerId=String(v('cmp-'+k+'-emp')).trim();if(v('cmp-'+k+'-bank')!=null)cc.wps.bankCode=String(v('cmp-'+k+'-bank')).trim();
+    const d1=Number(v('cmp-'+k+'-d1')),y1=Number(v('cmp-'+k+'-y1')),d2=Number(v('cmp-'+k+'-d2'));
+    if(isFinite(d1)&&isFinite(y1)&&isFinite(d2))cc.gratuity={basis:'basic',dailyDivisor:(cc.gratuity||{}).dailyDivisor||30,tiers:[{uptoYears:(y1||5),daysPerYear:(d1||0)},{uptoYears:null,daysPerYear:(d2||0)}]};
+  });
+  (DB.locations||[]).forEach(l=>{const el=document.getElementById('cmp-loc-'+l.id);if(el)c.locationCountry[l.id]=el.value;});
+  log(fullName(me()),'Compliance settings saved','');
+  saveDB();toast('Compliance settings saved');rr();
+};
+window._complianceCfgHTML=_complianceCfgHTML;

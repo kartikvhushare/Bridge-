@@ -7,6 +7,8 @@ import './engine/okr.js';
 import './engine/triggers.js';
 import './engine/payroll.js';
 import './engine/hrm.js';
+import './engine/reviews.js';
+import './engine/compliance.js';
 import './ui/nav.js';
 import './ui/charts.js';
 import './pages/login.js';
@@ -41,13 +43,14 @@ import './pages/overtime.js';
 import './pages/shifts.js';
 import './pages/payroll.js';
 import './pages/surveys.js';
+import './pages/reviews.js';
 
 /* ===== BOOT (moved from mid-file; runs after all modules above are loaded) ===== */
 
 /* ===== BOOT ===== */
 (async function boot(){
   const _hashRoute=(window.location.hash||'').replace('#','').trim();
-  const VALID_ROUTES=['dashboard','mychecklists','users','hierarchy','checklists','allcl','questions','approvals','notifications','analytics','locations','departments','settings','audit','teamview','profile','attendance','leave','hrmconfig','hrmanalytics','accesscontrol','announcements','reports','tickets','overtime','shifts','lifecycle','letters','surveys','discipline','payroll','okr'];
+  const VALID_ROUTES=['dashboard','mychecklists','users','hierarchy','checklists','allcl','questions','approvals','notifications','analytics','locations','departments','settings','audit','teamview','profile','attendance','leave','hrmconfig','hrmanalytics','accesscontrol','announcements','reports','tickets','overtime','shifts','lifecycle','letters','surveys','discipline','payroll','okr','reviews'];
   const _deepLink=VALID_ROUTES.includes(_hashRoute)?_hashRoute:null;
   try{const{data:{session}}=await sb.auth.getSession();if(session){
       // Load local cache first for instant UI

@@ -35,7 +35,7 @@ window.tailwind = {};
 // import order mirrors src/main.js (without ./styles.css and without the boot block)
 const order = [
   '../src/ui/helpers.js', '../src/supabase.js', '../src/state.js', '../src/perms.js',
-  '../src/engine/okr.js', '../src/engine/triggers.js', '../src/engine/payroll.js', '../src/engine/hrm.js',
+  '../src/engine/okr.js', '../src/engine/triggers.js', '../src/engine/payroll.js', '../src/engine/hrm.js', '../src/engine/reviews.js', '../src/engine/compliance.js',
   '../src/ui/nav.js', '../src/ui/charts.js',
   '../src/pages/login.js', '../src/pages/dashboard.js', '../src/pages/okr.js', '../src/pages/users.js',
   '../src/pages/documents.js', '../src/pages/departments.js', '../src/pages/announcements.js',
@@ -46,7 +46,7 @@ const order = [
   '../src/pages/settings.js', '../src/pages/attendance.js', '../src/pages/leave.js',
   '../src/pages/hrmconfig.js', '../src/pages/accesscontrol.js', '../src/pages/lifecycle.js',
   '../src/pages/letters.js', '../src/pages/discipline.js', '../src/pages/overtime.js',
-  '../src/pages/shifts.js', '../src/pages/payroll.js', '../src/pages/surveys.js',
+  '../src/pages/shifts.js', '../src/pages/payroll.js', '../src/pages/surveys.js', '../src/pages/reviews.js',
 ];
 for (const m of order) await import(m);
 

@@ -99,6 +99,8 @@ const EMAIL_EVENTS=[
   {key:'hrm_leave_approved', label:'HR · Leave — approved',       vars:'{{user_name}}, {{leave_type}}, {{start_date}}, {{end_date}}, {{working_days}}, {{approver_name}}, {{balance}}, {{action_url}}'},
   {key:'hrm_leave_rejected', label:'HR · Leave — rejected',       vars:'{{user_name}}, {{leave_type}}, {{start_date}}, {{end_date}}, {{approver_name}}, {{reason}}, {{action_url}}'},
   {key:'hrm_leave_escalated',label:'HR · Leave — escalated',      vars:'{{user_name}}, {{leave_type}}, {{start_date}}, {{end_date}}, {{working_days}}, {{action_url}}'},
+  {key:'review_cycle_opened',label:'Reviews · Cycle opened',     vars:'{{user_name}}, {{cycle_name}}, {{end_date}}, {{action_url}}'},
+  {key:'review_results_ready',label:'Reviews · Results ready',   vars:'{{user_name}}, {{cycle_name}}, {{action_url}}'},
   {key:'hrm_late',           label:'HR · Attendance — late',      vars:'{{user_name}}, {{date}}, {{time}}, {{action_url}}'},
   {key:'hrm_early',          label:'HR · Attendance — early out', vars:'{{user_name}}, {{date}}, {{time}}, {{action_url}}'},
   {key:'hrm_auto_closed',    label:'HR · Attendance — missed clock-out',vars:'{{user_name}}, {{date}}, {{action_url}}'},
@@ -124,6 +126,10 @@ function _defaultTemplates(){
       body:'Hi {{user_name}},\n\nYour {{leave_type}} request has been approved.\n\nDates: {{start_date}} → {{end_date}} ({{working_days}})\nApproved by: {{approver_name}}\nRemaining balance: {{balance}}\n\n{{action_url}}'},
     hrm_leave_rejected:{subject:'❌ Leave rejected: {{leave_type}} ({{start_date}} → {{end_date}})',
       body:'Hi {{user_name}},\n\nYour {{leave_type}} request for {{start_date}} → {{end_date}} was not approved.\n\nDecided by: {{approver_name}}\nReason: {{reason}}\n\nPlease reach out to your approver if you have questions.\n\n{{action_url}}'},
+    review_cycle_opened:{subject:'⭐ Review cycle open: {{cycle_name}}',
+      body:'Hi {{user_name}},\n\nThe review cycle "{{cycle_name}}" is open — please fill in your review(s) before {{end_date}}.\n\nOpen Bridge: {{action_url}}'},
+    review_results_ready:{subject:'⭐ Your review results are ready — {{cycle_name}}',
+      body:'Hi {{user_name}},\n\nYour results for "{{cycle_name}}" are now visible in the Reviews tab.\n\nOpen Bridge: {{action_url}}'},
     hrm_leave_escalated:{subject:'⚠️ Leave needs review: {{user_name}} — {{leave_type}}',
       body:'Hi,\n\n{{user_name}}\'s {{leave_type}} request ({{start_date}} → {{end_date}}, {{working_days}}) has no configured approver and has been escalated to HR / Admin for review.\n\n{{action_url}}'},
     hrm_late:{subject:'⚠️ Late clock-in on {{date}}',
@@ -237,6 +243,7 @@ async function sendEmail(eventType, userId, vars){
     deadline_reminder:'mychecklists', escalation:'tickets', announcement:'announcements',
     // HRM: approval-needed → approvals; everything else for the employee → leave page.
     hrm_leave_submitted:'approvals', hrm_leave_escalated:'approvals',
+    review_cycle_opened:'reviews', review_results_ready:'reviews',
     hrm_leave_approved:'leave', hrm_leave_rejected:'leave', hrm_comp_off:'leave',
     hrm_late:'attendance', hrm_early:'attendance', hrm_auto_closed:'attendance',
   };

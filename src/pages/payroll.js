@@ -67,6 +67,7 @@ function payrollPage(){
     if(run.status==='Verified'&&can('payroll','approve'))actions=btn('Approve (Head of People)','App._payAdvance(\'Approved\')',{variant:'primary',icon:'check'});
     if(run.status==='Approved'&&can('payroll','finalize'))actions=btn('Finalize payroll','App._payAdvance(\'Finalized\')',{variant:'brand',icon:'lock'});
     if(can('payroll','download')&&(run.status==='Approved'||run.status==='Finalized'))actions+=btn('WPS / bank file','App._payWPS()',{variant:'ghost',icon:'doc'});
+    if(can('payroll','download'))actions+=btn('Gratuity CSV','App._compGratuityCSV()',{variant:'ghost',size:'sm',icon:'doc'});
     if(run.status!=='Finalized'&&can('payroll','rollback'))actions+=btn('Roll back','App._payRollback()',{variant:'danger',size:'sm'});
     else if(run.status==='Finalized'&&can('payroll','rollback'))actions+=btn('Roll back (admin)','App._payRollback()',{variant:'danger',size:'sm'});
   }
@@ -152,6 +153,8 @@ App._payslip=(itemId)=>{
     leave_balance:bal,note:B.payslipNote||'',status:run.status+((d2.hold)?' · PAYROLL HOLD':''),date:fmtD(todayISO())};
   let body=String(B.payslipTpl||'');
   Object.keys(V).forEach(k=>{body=body.split('{'+k+'}').join(String(V[k]));});
+  const _g=typeof _gratuityAccrued==='function'?_gratuityAccrued(u):null; // PHASE4: informational EOSB line
+  if(_g&&_g.amount)body+='\n\nEnd-of-service accrued to date ('+_g.country+'): '+(_g.currency||cur2)+' '+n2(_g.amount)+' — informational, not part of this payslip.';
   const html='<div style="font-family:Georgia,serif;font-size:14px;line-height:1.8;white-space:pre-wrap">'+esc(body)+'</div>';
   _printHTML('Payslip — '+fullName(u),html,{headerImg:B.payslipHeaderImg,footerImg:B.payslipFooterImg});
 };
@@ -160,6 +163,7 @@ App._payWPS=()=>{
   const month=S.filters.pyMonth;const run=(DB.payrollRuns||[]).find(r=>r.month===month&&r.status!=='RolledBack');if(!run)return;
   const items=(DB.payrollItems||[]).filter(i=>i.runId===run.id&&!(i.detail||{}).hold);
   const rows=[['Employee ID','Name','IBAN','Basic','Allowances','Overtime','Deductions','Net Pay','Month','Currency']];
+  {const cs=(typeof _compCfg==='function'?_compCfg().countries:null)||{};Object.keys(cs).forEach(k=>{const w=(cs[k]&&cs[k].wps)||{};if(w.employerId)rows.push(['#EMPLOYER',cs[k].label||k,w.employerId,w.bankCode||'','','','','',month,cs[k].currency||'']);});}
   items.forEach(i=>{const u=uById(i.userId);if(!u)return;rows.push([u.id,fullName(u),u.hrm?.iban||'',i.basic,i.allowances,i.otAmount,i.deductions,i.net,month,(u.hrm?.salary?.currency)||'AED']);});
   _csvDownload(rows,'WPS_'+month);
   log(fullName(me()),'WPS file exported',month);

@@ -128,6 +128,7 @@ function _applyHrmConfig(row){
   if(!_editingHrm&&row.profiles&&typeof row.profiles==='object'&&Object.keys(row.profiles).length)DB.hrmConfig.profiles=row.profiles;
   if(row.active_profile)DB.hrmConfig.activeProfile=row.active_profile;
   if(row.location_geo&&typeof row.location_geo==='object')DB.hrmConfig.locationGeo=row.location_geo;
+  if(!_editingHrm&&row.compliance&&typeof row.compliance==='object'&&Object.keys(row.compliance).length)DB.hrmConfig.compliance=row.compliance; // PHASE4
 }
 function _mAtt(rows){return(rows||[]).map(a=>({id:a.id,userId:a.user_id,date:a.date,clockIn:a.clock_in||null,clockOut:a.clock_out||null,inMin:a.in_min,outMin:a.out_min,hours:a.hours,status:a.status||'Present',leaveType:a.leave_type||null,flags:a.flags||[],inGeo:a.in_geo||null,outGeo:a.out_geo||null,autoClosed:a.auto_closed||false,note:a.note||'',createdAt:a.created_at}));}
 function _applyAttendance(rows){
@@ -425,8 +426,18 @@ async function loadFromSB(){
       DB.okrLogs=_mOKRLog(data);saveDB();rr();
     }).catch(e=>console.warn('[OKR] logs fetch failed:',e.message));
   // ── HRM plan tables (same defensive targeted-load pattern) ──
-  [['flows','flows',_mFlow],['letters','letters',_mLetter],['discipline','discipline',_mDisc],['overtime','overtime',_mOT],['payroll_runs','payrollRuns',_mPRun],['payroll_items','payrollItems',_mPItem],['surveys','surveys',_mSv],['survey_answers','surveyAnswers',_mSvA]].forEach(([tbl,key,map])=>{
-    sb.from(tbl).select('*').then(({data,error})=>{
+  /* PHASE4: per-table read scoping — self-scope users fetch only their own rows; payroll tables are
+     skipped entirely without payroll.view; review tables join the same defensive pattern. */
+  [['flows','flows',_mFlow,null],
+   ['letters','letters',_mLetter,(q)=>(can('letters','approve')||can('letters','issue'))?q:q.eq('user_id',S.uid)],
+   ['discipline','discipline',_mDisc,(q)=>can('discipline','manage')?q:q.eq('user_id',S.uid)],
+   ['overtime','overtime',_mOT,(q)=>can('overtime','approve')?q:q.eq('user_id',S.uid)],
+   ...(can('payroll','view')?[['payroll_runs','payrollRuns',_mPRun,null],['payroll_items','payrollItems',_mPItem,null]]:[]),
+   ['surveys','surveys',_mSv,null],['survey_answers','surveyAnswers',_mSvA,null],
+   ['review_cycles','reviewCycles',(r)=>_mRC(r).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))),null],
+   ['review_answers','reviewAnswers',_mRA,null]].forEach(([tbl,key,map,scope])=>{
+    let _q=sb.from(tbl).select('*');if(scope)_q=scope(_q);
+    _q.then(({data,error})=>{
       if(error){console.warn('['+tbl+'] load skipped:',error.message);return;}
       DB[key]=map(data);saveDB();rr();
     }).catch(e=>console.warn('['+tbl+'] fetch failed:',e.message));
@@ -441,10 +452,10 @@ async function loadFromSB(){
     sb.from('hrm_config').select('*').eq('id',_HRM_CFG_ID).maybeSingle(),
     sb.from('leave_types').select('*'),
     sb.from('holidays').select('*'),
-    sb.from('leave_requests').select('*').order('created_at',{ascending:false}),
-    sb.from('leave_balances').select('*'),
-    sb.from('attendance').select('*').gte('date',_attCut).order('date',{ascending:false}),
-    sb.from('user_hrm').select('*'),
+    (can('leaveRequests','approve')?sb.from('leave_requests').select('*').order('created_at',{ascending:false}):sb.from('leave_requests').select('*').eq('user_id',S.uid).order('created_at',{ascending:false})),
+    ((can('leaveBalances','edit')||can('leaveBalances','grant')||can('leaveRequests','approve'))?sb.from('leave_balances').select('*'):sb.from('leave_balances').select('*').eq('user_id',S.uid)),
+    ((can('attendance','edit')||scopeOf('attendance')!=='self')?sb.from('attendance').select('*').gte('date',_attCut).order('date',{ascending:false}):Promise.all([sb.from('attendance').select('*').eq('user_id',S.uid).gte('date',_attCut).order('date',{ascending:false}),sb.from('attendance').select('*').eq('date',todayISO())]).then(([a,b])=>({data:[...(a.data||[]),...((b.data||[]).filter(r=>!(a.data||[]).some(x=>x.id===r.id)))],error:a.error||b.error}))),
+    ((can('employees','edit')||can('accessControl','manage')||can('attendance','edit')||isHR())?sb.from('user_hrm').select('*'):sb.from('user_hrm').select('*').eq('user_id',S.uid)),
     // B2b: role profiles — read for EVERY user (workspace_settings is read-all-authenticated) so permissions resolve.
     sb.from('workspace_settings').select('value').eq('key','role_profiles').maybeSingle(),
     // SOPs: templates (read-all-authenticated, browsable library) + instances (RLS-filtered to what the user may see).
@@ -452,7 +463,7 @@ async function loadFromSB(){
     sb.from('sop_instances').select('*').order('created_at',{ascending:false}),
     // Shifts: RLS returns own (published) + scoped/elevated rows. Windowed from 7 days back so the
     //   roster's prev-week and the employee's this/next week always resolve; older rows load on demand.
-    sb.from('shifts').select('*').gte('date',new Date(Date.now()-7*_DAY_MS).toISOString().slice(0,10)).order('date',{ascending:true}),
+    ((can('scheduling','manage')||scopeOf('scheduling')!=='self')?sb.from('shifts').select('*').gte('date',new Date(Date.now()-7*_DAY_MS).toISOString().slice(0,10)).order('date',{ascending:true}):sb.from('shifts').select('*').eq('user_id',S.uid).gte('date',new Date(Date.now()-7*_DAY_MS).toISOString().slice(0,10)).order('date',{ascending:true})),
     // Expenses: RLS returns own claims + claims in the caller's approval scope (manager-of/elevated).
     //   Windowed from 180 days back so a recent claim and its decision always resolve; older load on demand.
     sb.from('expenses').select('*').gte('date',new Date(Date.now()-180*_DAY_MS).toISOString().slice(0,10)).order('created_at',{ascending:false}),
@@ -494,8 +505,20 @@ async function loadFromSB(){
 }
 /* PHASE3-FIX: combine several push promises into one _safeUp-shaped result ({error?}). */
 const _syncMerge=(ps)=>ps.length?Promise.allSettled(ps).then(rs=>{for(const r of rs){const e=r.status==='rejected'?r.reason:(r.value&&r.value.error);if(e)return{error:e};}return{};}):Promise.resolve({});
+/* PHASE3-FIX: a batched upsert with the SAME id twice = Postgres 21000 ("cannot affect row a second
+   time") and the whole batch fails. Deterministic ids (deadline alerts) can duplicate locally. */
+const _dedupeById=(rows,key)=>{const k=key||'id';const seen=new Set();return rows.filter(r=>seen.has(r[k])?false:(seen.add(r[k]),true));};
 async function _sync(){try{
   if(!S.uid)return; // PHASE3-FIX: never sync while logged out — anon pushes only produce RLS-rejection toasts on the login screen
+  // PHASE4-FIX: never push with a stale/absent token. Chrome throttles background tabs, the JWT's
+  // auto-refresh window gets missed, and pushes then run as anon → 42501 on random tables → scary
+  // toasts. Refresh first; if there is STILL no session, skip quietly — everything stays queued in
+  // localStorage and the next sync (after refocus/re-login) delivers it.
+  try{
+    let {data:{session:_ss}}=await sb.auth.getSession();
+    if(!_ss||(((_ss.expires_at||0)*1000)-Date.now())<60000){const _rr2=await sb.auth.refreshSession();_ss=_rr2&&_rr2.data&&_rr2.data.session;}
+    if(!_ss)return;
+  }catch(e){return;}
   const results=await Promise.allSettled([
     _safeUp('departments',(can('departments','create')||can('departments','edit')?DB.departments:[]).map(d=>({id:d.id,name:d.name,parent_id:d.parentId||null})),{onConflict:'id'}),
     _safeUp('locations',(can('locations','edit')||can('locations','manage')||can('locations','create')?DB.locations:[]).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
@@ -510,8 +533,8 @@ async function _sync(){try{
     (()=>{const _nRow=n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString(),kind:n.kind||null,target_route:n.targetRoute||null});
       const mine=DB.notifications.filter(n=>n.userId===S.uid||isAdmin());
       const foreign=DB.notifications.filter(n=>!(n.userId===S.uid||isAdmin()));
-      const ps=[];if(mine.length)ps.push(_safeUp('notifications',mine.map(_nRow),{onConflict:'id'}));
-      if(foreign.length)ps.push(_safeUp('notifications',foreign.map(_nRow),{onConflict:'id',ignoreDuplicates:true}));
+      const ps=[];if(mine.length)ps.push(_safeUp('notifications',_dedupeById(mine.map(_nRow)),{onConflict:'id'}));
+      if(foreign.length)ps.push(_safeUp('notifications',_dedupeById(foreign.map(_nRow)),{onConflict:'id',ignoreDuplicates:true}));
       return _syncMerge(ps);})(),
     /* PHASE3-FIX: RLS fb_i (INSERT) = manager|elevated|hr, fb_u (UPDATE) adds user_id. Upserting the
        employee's own (manager-created) rows fails the INSERT check — split like tickets. */
@@ -519,7 +542,7 @@ async function _sync(){try{
       const canIns=fb=>fb.managerId===S.uid||isAdmin()||isHR();
       const ins=(DB.feedback||[]).filter(canIns);
       const updOnly=(DB.feedback||[]).filter(fb=>!canIns(fb)&&fb.userId===S.uid);
-      const ps=[];if(ins.length)ps.push(_safeUp('feedback',ins.map(_fbRow),{onConflict:'id'}));
+      const ps=[];if(ins.length)ps.push(_safeUp('feedback',_dedupeById(ins.map(_fbRow)),{onConflict:'id'}));
       updOnly.forEach(fb=>ps.push(sb.from('feedback').update(_fbRow(fb)).eq('id',fb.id)));
       return _syncMerge(ps);})(),
     _safeUp('doc_folders',(can('documentsOrg','create')||isAdmin()?(DB.folders||[]):[]).map(f=>({id:f.id,name:f.name,parent_id:f.parentId||null,type:f.type,scope:f.scope,created_by:f.createdBy||null,created_at:f.createdAt})),{onConflict:'id'}),
@@ -534,12 +557,12 @@ async function _sync(){try{
       const canIns=t=>t.createdBy===S.uid||can('tickets','manage')||isAdmin();
       const ins=DB.tickets.filter(canIns);
       const updOnly=DB.tickets.filter(t=>!canIns(t)&&t.assignedTo===S.uid);
-      const ps=[];if(ins.length)ps.push(_safeUp('tickets',ins.map(_tRow),{onConflict:'id'}));
+      const ps=[];if(ins.length)ps.push(_safeUp('tickets',_dedupeById(ins.map(_tRow)),{onConflict:'id'}));
       updOnly.forEach(t=>ps.push(sb.from('tickets').update(_tRow(t)).eq('id',t.id)));
       return _syncMerge(ps);})(),
     // ── HRM (Approach A) ── single config row + reference tables + records + per-user blob.
     // M1: reference tables (hrm_config/leave_types/holidays) are RLS-writable by HR/Admin only — gate so ordinary employees don't fire recurring rejected upserts.
-    ((isHR()||isAdmin())&&DB.hrmConfig&&Object.keys(DB.hrmConfig.profiles||{}).length?(can('hrSettings','edit')?_safeUp('hrm_config',[{id:_HRM_CFG_ID,active_profile:DB.hrmConfig.activeProfile||'UAE',profiles:DB.hrmConfig.profiles||{},location_geo:DB.hrmConfig.locationGeo||{},updated_at:new Date().toISOString()}],{onConflict:'id'}):Promise.resolve({})):Promise.resolve()),
+    ((isHR()||isAdmin())&&DB.hrmConfig&&Object.keys(DB.hrmConfig.profiles||{}).length?(can('hrSettings','edit')?_safeUp('hrm_config',[{id:_HRM_CFG_ID,active_profile:DB.hrmConfig.activeProfile||'UAE',profiles:DB.hrmConfig.profiles||{},location_geo:DB.hrmConfig.locationGeo||{},compliance:DB.hrmConfig.compliance||{},updated_at:new Date().toISOString()}],{onConflict:'id'}):Promise.resolve({})):Promise.resolve()),
     ((isHR()||isAdmin())&&DB.leaveTypes&&DB.leaveTypes.length?_safeUp('leave_types',(can('hrSettings','edit')?DB.leaveTypes:[]).map(t=>({id:t.id,profile_id:t.profileId,key:t.key||null,name:t.name||'',enabled:t.enabled!==false,unit:t.unit||'calendar',entitlement:t.entitlement||0,accrual_per_month:t.accrualPerMonth||0,eligibility_months:t.eligibilityMonths||0,paid_tiers:t.paidTiers||null,unpaid:t.unpaid||false,half_day_allowed:t.halfDayAllowed!==false,carry_over:t.carryOver||{enabled:false,maxDays:0,expiryMonths:0},once_per_employment:t.oncePerEmployment||false,birthday_month_only:t.birthdayMonthOnly||false,max_per_year:t.maxPerYear??null,nursing_breaks:t.nursingBreaks||false,notes:t.notes||'',approval_flow:Array.isArray(t.approvalFlow)?t.approvalFlow:null})),{onConflict:'id'}):Promise.resolve()),
     ((isHR()||isAdmin())&&DB.holidays&&DB.holidays.length?_safeUp('holidays',(can('hrSettings','edit')?DB.holidays:[]).map(h=>({id:h.id,profile_id:h.profileId,date:h.date,name:h.name||'',location_id:h.locationId||null})),{onConflict:'id'}):Promise.resolve()),
     ((DB.leaveRequests&&DB.leaveRequests.length)?_safeUp('leave_requests',DB.leaveRequests.filter(x=>x.userId===S.uid||can('leaveRequests','approve')).map(r=>({id:r.id,user_id:r.userId,leave_type_id:r.leaveTypeId,leave_year:r.leaveYear||null,start_date:r.start,end_date:r.end,half_day:r.halfDay||false,half_day_session:r.halfDaySession||null,working_days:r.workingDays,reason:r.reason||'',unpaid:r.unpaid||false,flow:r.flow||[],stage_index:r.stageIndex??0,stage:r.stage||'manager',status:r.status||'Pending',needs_admin:r.needsAdmin||false,mgr_decision:r.mgrDecision||null,mgr_note:r.mgrNote||'',mgr_at:r.mgrAt||null,hr_decision:r.hrDecision||null,hr_note:r.hrNote||'',hr_at:r.hrAt||null,created_at:r.createdAt||new Date().toISOString()})),{onConflict:'id'}):Promise.resolve()),

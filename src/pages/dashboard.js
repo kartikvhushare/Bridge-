@@ -25,12 +25,18 @@ function _whoIsInWidget(){
 /* WFH tag — flips today's attendance flag (creates the record if you clock in later, flag persists) */
 App._togWFH=()=>{
   const d=todayISO();let rec=(DB.attendance||[]).find(a=>a.userId===S.uid&&a.date===d);
+  // WFH-HARDEN (b): the tag freezes once you've clocked in — no retro-editing the day's story.
+  if(rec&&rec.clockIn){toast('You already clocked in today — WFH can\'t be changed after clock-in','err');return;}
   if(!rec){rec={id:uid('att'),userId:S.uid,date:d,clockIn:null,clockOut:null,status:'Present',flags:[],createdAt:new Date().toISOString()};DB.attendance.push(rec);}
   rec.flags=rec.flags||[];
   const i=rec.flags.indexOf('WFH');
   if(i>-1)rec.flags.splice(i,1);else rec.flags.push('WFH');
-  log(fullName(me()),rec.flags.includes('WFH')?'Marked WFH':'Unmarked WFH',d);
-  saveDB();toast(rec.flags.includes('WFH')?'Today marked as Work-from-Home':'WFH removed');rr();
+  const on=rec.flags.includes('WFH');
+  log(fullName(me()),on?'Marked WFH':'Unmarked WFH',d);
+  // WFH-HARDEN (a): the manager hears about every toggle, in-app (audit log already records it).
+  const m=_mgrOf(me());
+  if(m&&m.id!==S.uid&&_hnp('inapp_hrm_wfh')!==false)_hrmNotify(m.id,(on?'\uD83C\uDFE0 ':'\u21A9\uFE0F ')+fullName(me())+(on?' marked today as Work-from-Home':' removed today\'s Work-from-Home tag'),'attendance');
+  saveDB();toast(on?'Today marked as Work-from-Home \u2014 your manager was notified':'WFH removed \u2014 your manager was notified');rr();
 };
 
 /* ── SETUP GUIDE — a living checklist on the admin dashboard: what to configure next, one click away.

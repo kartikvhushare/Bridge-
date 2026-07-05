@@ -41,10 +41,10 @@ function _hrmNotifPrefsDefault(){return{
   hrm_email_enabled:false,
   // in-app toggles (default on)
   inapp_hrm_leave_submitted:true,inapp_hrm_leave_approved:true,inapp_hrm_leave_rejected:true,
-  inapp_hrm_late:true,inapp_hrm_missed_clockout:true,inapp_announcement:true,
+  inapp_hrm_late:true,inapp_hrm_missed_clockout:true,inapp_announcement:true,inapp_review_opened:true,inapp_review_results:true,inapp_hrm_wfh:true,
   // email toggles (default on, gated by master)
   email_hrm_leave_submitted:true,email_hrm_leave_approved:true,email_hrm_leave_rejected:true,
-  email_hrm_late:true,email_hrm_missed_clockout:true,email_announcement:true,
+  email_hrm_late:true,email_hrm_missed_clockout:true,email_announcement:true,email_review_cycle_opened:true,email_review_results_ready:true,
 };}
 // Getter: raw value of a HRM notif pref (defaults applied). Used by toggle rows + in-app gates.
 function _hnp(key){
@@ -343,6 +343,11 @@ function _hrmInit(){
   // cache by the pre-fix build — one such row 400s the whole batched notifications upsert and
   // keeps every later notification from syncing (endless "didn't save" toasts on that device).
   DB.notifications=(DB.notifications||[]).filter(n=>n&&n.text&&String(n.text).trim());
+  // PHASE3-FIX (self-heal 2): drop duplicate-id notifications (deterministic deadline-checker ids can
+  // double-add) — two rows with one id in a batched upsert = Postgres 21000 = whole batch fails.
+  {const _seen=new Set();DB.notifications=DB.notifications.filter(n=>_seen.has(n.id)?false:(_seen.add(n.id),true));}
+  // PHASE4: backfill new notification-pref keys on caches that predate them (undefined would read as OFF)
+  if(DB.hrmNotifPrefs){const _d=_hrmNotifPrefsDefault();['inapp_review_opened','inapp_review_results','email_review_cycle_opened','email_review_results_ready','inapp_hrm_wfh'].forEach(k=>{if(DB.hrmNotifPrefs[k]===undefined)DB.hrmNotifPrefs[k]=_d[k];});}
   _seedProfiles();
   _seedRoleProfiles();
   DB.hrmConfig.locationGeo=DB.hrmConfig.locationGeo||{}; // per-location geofence store; synced via hrm_config.location_geo
