@@ -492,7 +492,10 @@ async function loadFromSB(){
     saveDB();rr();
   }).catch(e=>console.warn('[HRM] load failed:',e.message));
 }
+/* PHASE3-FIX: combine several push promises into one _safeUp-shaped result ({error?}). */
+const _syncMerge=(ps)=>ps.length?Promise.allSettled(ps).then(rs=>{for(const r of rs){const e=r.status==='rejected'?r.reason:(r.value&&r.value.error);if(e)return{error:e};}return{};}):Promise.resolve({});
 async function _sync(){try{
+  if(!S.uid)return; // PHASE3-FIX: never sync while logged out — anon pushes only produce RLS-rejection toasts on the login screen
   const results=await Promise.allSettled([
     _safeUp('departments',(can('departments','create')||can('departments','edit')?DB.departments:[]).map(d=>({id:d.id,name:d.name,parent_id:d.parentId||null})),{onConflict:'id'}),
     _safeUp('locations',(can('locations','edit')||can('locations','manage')||can('locations','create')?DB.locations:[]).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
@@ -500,12 +503,40 @@ async function _sync(){try{
     _safeUp('submissions',DB.submissions.filter(x=>x.userId===S.uid||can('checklists','approve')).map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[],question_responses:s.questionResponses||[],edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
     _safeUp('approvals',DB.approvals.filter(a=>a.requesterId===S.uid||can('checklists','approve')||isAdmin()||isHR()).map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}),
     _safeUp('audit_logs',DB.audit.slice(0,200).map(l=>({id:l.id,actor:l.actor,action:l.action,target:l.target||''})),{onConflict:'id',ignoreDuplicates:true}),
-    _safeUp('notifications',DB.notifications.map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString(),kind:n.kind||null,target_route:n.targetRoute||null})),{onConflict:'id'}),
-    _safeUp('feedback',(DB.feedback||[]).filter(fb=>fb.userId===S.uid||fb.managerId===S.uid||isAdmin()||isHR()).map(fb=>({id:fb.id,checklist_id:fb.checklistId||null,user_id:fb.userId,manager_id:fb.managerId,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',task_name:fb.taskName||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledged_at:fb.acknowledgedAt||null,reply:fb.reply||null,replied_at:fb.repliedAt||null,replies:fb.replies||[],created_at:fb.createdAt||new Date().toISOString()})),{onConflict:'id'}),
+    /* PHASE3-FIX: RLS n_i allows INSERTing a notification for anyone, but n_u only allows UPDATING your
+       own rows. A plain upsert of an already-delivered foreign row hits the UPDATE path and 403s the whole
+       batch. Split: own rows upsert normally (read-flags sync); foreign rows insert with DO NOTHING on
+       conflict (delivery works, re-pushes are no-ops, never evaluates the UPDATE policy). */
+    (()=>{const _nRow=n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString(),kind:n.kind||null,target_route:n.targetRoute||null});
+      const mine=DB.notifications.filter(n=>n.userId===S.uid||isAdmin());
+      const foreign=DB.notifications.filter(n=>!(n.userId===S.uid||isAdmin()));
+      const ps=[];if(mine.length)ps.push(_safeUp('notifications',mine.map(_nRow),{onConflict:'id'}));
+      if(foreign.length)ps.push(_safeUp('notifications',foreign.map(_nRow),{onConflict:'id',ignoreDuplicates:true}));
+      return _syncMerge(ps);})(),
+    /* PHASE3-FIX: RLS fb_i (INSERT) = manager|elevated|hr, fb_u (UPDATE) adds user_id. Upserting the
+       employee's own (manager-created) rows fails the INSERT check — split like tickets. */
+    (()=>{const _fbRow=fb=>({id:fb.id,checklist_id:fb.checklistId||null,user_id:fb.userId,manager_id:fb.managerId,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',task_name:fb.taskName||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledged_at:fb.acknowledgedAt||null,reply:fb.reply||null,replied_at:fb.repliedAt||null,replies:fb.replies||[],created_at:fb.createdAt||new Date().toISOString()});
+      const canIns=fb=>fb.managerId===S.uid||isAdmin()||isHR();
+      const ins=(DB.feedback||[]).filter(canIns);
+      const updOnly=(DB.feedback||[]).filter(fb=>!canIns(fb)&&fb.userId===S.uid);
+      const ps=[];if(ins.length)ps.push(_safeUp('feedback',ins.map(_fbRow),{onConflict:'id'}));
+      updOnly.forEach(fb=>ps.push(sb.from('feedback').update(_fbRow(fb)).eq('id',fb.id)));
+      return _syncMerge(ps);})(),
     _safeUp('doc_folders',(can('documentsOrg','create')||isAdmin()?(DB.folders||[]):[]).map(f=>({id:f.id,name:f.name,parent_id:f.parentId||null,type:f.type,scope:f.scope,created_by:f.createdBy||null,created_at:f.createdAt})),{onConflict:'id'}),
     _safeUp('documents',(DB.documents||[]).filter(x=>x.uploadedBy===S.uid||can('documentsOrg','create')||can('documentsOrg','approve')).map(d=>({id:d.id,name:d.name,folder_id:d.folderId||null,type:d.type,scope:d.scope,url:d.url,storage_path:d.storagePath||null,file_type:d.fileType||null,file_size:d.fileSize||null,uploaded_by:d.uploadedBy||null,uploader_name:d.uploaderName||null,uploaded_at:d.uploadedAt,approval_status:d.approvalStatus||null,approver_id:d.approverId||null,decided_by:d.decidedBy||null,decided_at:d.decidedAt||null,decision_note:d.decisionNote||null})),{onConflict:'id'}),
     _safeUp('questions',(can('questions','manage')?(DB.questions||[]):[]).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,is_public:q.isPublic!==false,department:q.department||'',sub_department:q.subDepartment||'',created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}),
-    (DB.tickets&&DB.tickets.length?_safeUp('tickets',DB.tickets.filter(t=>t.createdBy===S.uid||t.assignedTo===S.uid||t.submitterId===S.uid||can('tickets','manage')||isAdmin()||isHR()).map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve()),
+    /* PHASE3-FIX: RLS tk_i (INSERT) = created_by|manage|elevated, tk_u (UPDATE) adds assigned_to. An
+       upsert must pass the INSERT check even for existing rows, so an assignee-only row 403s the whole
+       batch (and submitter-only rows are not writable at all). Split: insertable rows upsert; rows the
+       user can only UPDATE (assigned to them) go as per-row updates; submitter-only rows are skipped. */
+    (()=>{if(!DB.tickets||!DB.tickets.length)return Promise.resolve({});
+      const _tRow=t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]});
+      const canIns=t=>t.createdBy===S.uid||can('tickets','manage')||isAdmin();
+      const ins=DB.tickets.filter(canIns);
+      const updOnly=DB.tickets.filter(t=>!canIns(t)&&t.assignedTo===S.uid);
+      const ps=[];if(ins.length)ps.push(_safeUp('tickets',ins.map(_tRow),{onConflict:'id'}));
+      updOnly.forEach(t=>ps.push(sb.from('tickets').update(_tRow(t)).eq('id',t.id)));
+      return _syncMerge(ps);})(),
     // ── HRM (Approach A) ── single config row + reference tables + records + per-user blob.
     // M1: reference tables (hrm_config/leave_types/holidays) are RLS-writable by HR/Admin only — gate so ordinary employees don't fire recurring rejected upserts.
     ((isHR()||isAdmin())&&DB.hrmConfig&&Object.keys(DB.hrmConfig.profiles||{}).length?(can('hrSettings','edit')?_safeUp('hrm_config',[{id:_HRM_CFG_ID,active_profile:DB.hrmConfig.activeProfile||'UAE',profiles:DB.hrmConfig.profiles||{},location_geo:DB.hrmConfig.locationGeo||{},updated_at:new Date().toISOString()}],{onConflict:'id'}):Promise.resolve({})):Promise.resolve()),
