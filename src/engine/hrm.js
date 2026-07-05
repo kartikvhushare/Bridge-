@@ -24,7 +24,7 @@ function _hrmNotify(userId,text,kind,targetRoute){
   // Routing keys off n.kind (structured; _notifClick maps kind→route, plan4 §D). An optional
   // targetRoute pins ambiguous kinds (e.g. a DECIDED document/onboarding notif → its page, not
   // the Approvals inbox). _notifClick still has a leave-text fallback for legacy kind-less rows.
-  if(!userId)return;
+  if(!userId||!text)return; // PHASE3-FIX: empty-text guard (matches notify()) — one undefined-text row 400s the batched notifications upsert and blocks ALL notification sync
   const n={id:uid('n'),userId,text,time:new Date().toISOString(),read:false};
   if(kind)n.kind=kind;
   if(targetRoute)n.targetRoute=targetRoute;
