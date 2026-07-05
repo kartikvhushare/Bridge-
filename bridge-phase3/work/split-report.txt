@@ -1,0 +1,32 @@
+stmts total=769 emitted=769
+converted decls (reassigned lets -> window props): 22
+  L38: let _toast;  ==>  window._toast=undefined;
+  L48: let _toastAction=null;  ==>  window._toastAction=null;
+  L62: let _lastSyncErrToast=0;  ==>  window._lastSyncErrToast=0;
+  L1364: let _modalLastFocus=null;  ==>  window._modalLastFocus=null;
+  L1409: let _notifCache={uid:null,count:0,ts:0};  ==>  window._notifCache={uid:null,count:0,ts:0};
+  L784: let DB={
+  departments:[],
+  users:[],checklists:[],submissions:[],approvals:[],feedback:[],folders:[],documents:[],loca  ==>  window.DB={
+  departments:[],
+  users:[],checklists:[],submissions:[],approvals:[],feedback:[],folders:[],documents:[],l
+  L827: let _syncTimer=null;  ==>  window._syncTimer=null;
+  L1563: let _lastUserAction=0;  ==>  window._lastUserAction=0;
+  L1776: let _OKR_EXP={},_OKR_PANEL={},_OKR_LOGS={},_OKRED=null,_OKRCI=null,_OKRCIALL=null;  ==>  window._OKR_EXP={};window._OKR_PANEL={};window._OKR_LOGS={};window._OKRED=null;window._OKRCI=null;window._OKRCIALL=null;
+  L8836: let _delDocUndo=null;  ==>  window._delDocUndo=null;
+  L4896: let CLD=null;  ==>  window.CLD=null;
+  L5213: let RUN={};  ==>  window.RUN={};
+  L6596: let _QED=null;  ==>  window._QED=null;
+  L8120: let _AData=null,_HData=null,_HRMData=null,_AFiltered=null,_aCharts=[];  ==>  window._AData=null;window._HData=null;window._HRMData=null;window._AFiltered=null;window._aCharts=[];
+  L8994: let _ns=null;  ==>  window._ns=null;
+  L10691: let _bulkBalDirty=[];  ==>  window._bulkBalDirty=[];
+  L10798: let _AF=null;  ==>  window._AF=null;
+  L10799: let _AFProfId=null;  ==>  window._AFProfId=null;
+  L10845: let _ACD=null;  ==>  window._ACD=null;
+  L10846: let _RPD=null;  ==>  window._RPD=null;
+  L3439: let _SVF=null;  ==>  window._SVF=null;
+  L6539: let _dlSent=null,_dlSaveT=null,_dlRunning=false;  ==>  window._dlSent=null;window._dlSaveT=null;window._dlRunning=false;
+parse errors: 0
+order violations: 1
+supabase.js stmt#30 L157: reads '_a' before it is available
+all other statements byte-identical: true
