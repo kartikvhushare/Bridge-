@@ -18,8 +18,8 @@ App._rvOpen=(cid,role,aboutId)=>{
       ?`<div style="margin-bottom:14px"><div style="font-size:13.5px;font-weight:600;margin-bottom:6px">${esc(q.text)}</div><textarea id="rv-txt-${q.id}" class="ui-input rf" rows="2" placeholder="Optional comment…"></textarea></div>`
       :_rvRatingRow(q,c.scale||10,null,cid,role,aboutId)).join('')}
   </div>`;
-  openModal(modalShell({title:(role==='self'?'Self review':'Review — '+esc(fullName(about)))+' · '+esc(c.name),sub:'',body,
-    footer:`<button onclick="App.closeModal()" class="ui-btn ui-btn-subtle">Cancel</button><button onclick="App._rvSubmit('${cid}','${role}','${aboutId}')" class="ui-btn ui-btn-primary">Submit review</button>`,size:'max-w-xl'}));
+  modalShell({title:(role==='self'?'Self review':'Review — '+esc(fullName(about)))+' · '+esc(c.name),sub:'',body,
+    footer:`<button onclick="App.closeModal()" class="ui-btn ui-btn-subtle">Cancel</button><button onclick="App._rvSubmit('${cid}','${role}','${aboutId}')" class="ui-btn ui-btn-primary">Submit review</button>`,size:'max-w-xl'});
 };
 App._rvSubmit=(cid,role,aboutId)=>{
   const c=rcById(cid);if(!c)return;const u=me();
@@ -61,8 +61,8 @@ App._rvRenderNew=()=>{
       <button onclick="window._RVD.questions.splice(${i},1);App._rvRenderNew()" class="ui-btn ui-btn-subtle ui-btn-sm" style="color:var(--c-danger-ink)">✕</button></div>`).join('')}</div>
     <button onclick="window._RVD.questions.push({id:uid('rq'),text:'',type:'rating'});App._rvRenderNew()" class="ui-btn ui-btn-subtle ui-btn-sm">+ Add question</button>
   </div>`;
-  openModal(modalShell({title:'New review cycle',sub:'Opens for everyone the moment you create it',body,
-    footer:`<button onclick="App.closeModal()" class="ui-btn ui-btn-subtle">Cancel</button><button onclick="App._rvCreate()" class="ui-btn ui-btn-primary">Create & open cycle</button>`,size:'max-w-xl'}));
+  modalShell({title:'New review cycle',sub:'Opens for everyone the moment you create it',body,
+    footer:`<button onclick="App.closeModal()" class="ui-btn ui-btn-subtle">Cancel</button><button onclick="App._rvCreate()" class="ui-btn ui-btn-primary">Create & open cycle</button>`,size:'max-w-xl'});
 };
 App._rvCreate=()=>{
   const d=window._RVD;if(!d)return;
@@ -88,15 +88,18 @@ App._rvCreate=()=>{
 App._rvClose=(cid)=>{
   if(!can('reviews','manage'))return;
   const c=rcById(cid);if(!c||c.status!=='Active')return;
-  confirmModal('Close "'+esc(c.name)+'"? People can no longer submit, and everyone reviewed can see their own result.',()=>{
-    c.status='Closed';c.closedAt=new Date().toISOString();_rcPush(c);
-    _rcPeopleIn(c).forEach(u=>{
-      if(_hnp('inapp_review_results')!==false)_hrmNotify(u.id,'⭐ Your review results for "'+c.name+'" are ready.','review','reviews');
-      if(_hnpEmail('email_review_results_ready'))queueEmail('review_results_ready',u.id,null,null,{cycle_name:c.name});
-    });
-    log(fullName(me()),'Review cycle closed',c.name);
-    saveDB();toast('Cycle closed — results visible');rr();
+  confirmModal({title:'Close this review cycle?',body:'"'+esc(c.name)+'" — people can no longer submit, and everyone reviewed sees their own result.',confirmLabel:'Close cycle',onConfirm:"App._rvCloseGo('"+cid+"')"});
+};
+App._rvCloseGo=(cid)=>{
+  if(!can('reviews','manage'))return;
+  const c=rcById(cid);if(!c||c.status!=='Active')return;
+  c.status='Closed';c.closedAt=new Date().toISOString();_rcPush(c);
+  _rcPeopleIn(c).forEach(u=>{
+    if(_hnp('inapp_review_results')!==false)_hrmNotify(u.id,'⭐ Your review results for "'+c.name+'" are ready.','review','reviews');
+    if(_hnpEmail('email_review_results_ready'))queueEmail('review_results_ready',u.id,null,null,{cycle_name:c.name});
   });
+  log(fullName(me()),'Review cycle closed',c.name);
+  saveDB();toast('Cycle closed — results visible');rr();
 };
 App._rvCSV=(cid)=>{
   if(!can('reviews','manage'))return;
