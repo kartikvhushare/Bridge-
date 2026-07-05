@@ -1,0 +1,69 @@
+
+
+/* ===== AUDIT / NOTIF / PROFILE / SETTINGS ===== */
+
+function auditPage(){
+  // v2: filterable — by person (actor), department (actor's), and tab/category (derived from the action text).
+  const F=S.filters;
+  const cat=l=>{const s2=((l.action||'')+' '+(l.target||'')).toLowerCase();
+    if(s2.includes('okr'))return 'OKRs';
+    if(s2.includes('checklist')||s2.includes('submission'))return 'Checklists';
+    if(s2.includes('leave')||s2.includes('comp-off'))return 'Leave';
+    if(s2.includes('attendance')||s2.includes('clock'))return 'Attendance';
+    if(s2.includes('access')||s2.includes('role'))return 'Access Control';
+    if(s2.includes('user')||s2.includes('password'))return 'Users';
+    if(s2.includes('ticket'))return 'Tickets';
+    if(s2.includes('question'))return 'Questions';
+    if(s2.includes('document')||s2.includes('folder'))return 'Documents';
+    if(s2.includes('department'))return 'Departments';
+    if(s2.includes('location'))return 'Locations';
+    if(s2.includes('announcement'))return 'Announcements';
+    if(s2.includes('setting'))return 'Settings';
+    return 'Other';};
+  // ONE audit surface: system audit + per-OKR activity + HRM (leave/attendance) audit, merged.
+  const _okrAudit=(DB.okrLogs||[]).map(l=>{
+    const u=uById(l.actorId);const o=okrById(l.okrId);const dd=l.details||{};
+    let det='';
+    if(Array.isArray(dd.changes)&&dd.changes.length)det=dd.changes.map(c=>c.field+': '+String(c.from??'—')+' → '+String(c.to??'—')).join(' · ');
+    else if(dd.to)det='→ '+String(dd.to);
+    else if(dd.date)det=String(dd.date)+(dd.value!==null&&dd.value!==undefined?' · '+String(dd.value):'');
+    return{actor:u?fullName(u):'—',action:l.action+' (OKR)',target:(o?o.title:'')+(det?' — '+det:''),time:l.createdAt};
+  });
+  const all=[...(DB.audit||[]),..._okrAudit,...(DB.hrmAudit||[])].sort((a,b)=>String(b.time||'').localeCompare(String(a.time||'')));
+  const actors=[...new Set(all.map(l=>l.actor).filter(Boolean))].sort();
+  const cats=[...new Set(all.map(cat))].sort();
+  const deptOfActor=name=>{const u=DB.users.find(x=>fullName(x)===name);return u?u.department:null;};
+  const q=(F.audQ||'').toLowerCase();
+  let rows=all.filter(l=>{
+    if(F.audActor&&l.actor!==F.audActor)return false;
+    if(F.audDept&&deptOfActor(l.actor)!==F.audDept)return false;
+    if(F.audCat&&cat(l)!==F.audCat)return false;
+    if(q&&!(((l.actor||'')+' '+(l.action||'')+' '+(l.target||'')).toLowerCase().includes(q)))return false;
+    return true;
+  });
+  const fActive=!!(F.audActor||F.audDept||F.audCat||F.audQ);
+  const selSt='font-size:12px;padding:6px 26px 6px 10px;min-height:0;height:32px;width:auto';
+  const catColor={'OKRs':'#0E9F6E','Checklists':'#0EA5E9','Leave':'#8B5CF6','Attendance':'#F59E0B','Access Control':'#BE123C','Users':'#4338CA','Tickets':'#C2410C','Questions':'#0369A1','Documents':'#6B7280','Other':'#9CA3AF'};
+  const list=rows.map(l=>{const c=cat(l);const u=DB.users.find(x=>fullName(x)===l.actor);
+    return `<div style="display:flex;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid var(--c-border);font-size:13.5px">
+      ${u?avatar(u,'w-7 h-7','text-[10px]'):'<span style="width:7px;height:7px;border-radius:99px;background:var(--c-brand);flex-shrink:0"></span>'}
+      <div style="flex:1;min-width:0"><span style="font-weight:700;color:var(--c-text)">${esc(l.actor)}</span> <span style="color:var(--c-text-2)">${esc((l.action||'').toLowerCase())}</span>${l.target?` <span style="font-weight:600;color:var(--c-text)">${esc(l.target)}</span>`:''}
+        ${u&&u.department?`<span style="font-size:10.5px;color:var(--c-text-3)"> · ${esc(u.department)}</span>`:''}</div>
+      <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px;background:${(catColor[c]||'#9CA3AF')}18;color:${catColor[c]||'#9CA3AF'};flex-shrink:0">${esc(c)}</span>
+      <span style="font-size:11px;color:var(--c-text-3);flex-shrink:0">${new Date(l.time).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
+    </div>`;}).join('');
+  return`<div class="fade">${hdr('Audit Logs','Every action taken in the workspace')}
+    <div class="ui-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;margin-bottom:12px">
+      <input id="aud-q" value="${esc(F.audQ||'')}" oninput="S.filters.audQ=this.value;App._searchRR('aud-q')" placeholder="Search actions…" class="ui-input" style="flex:1;min-width:150px;height:32px;min-height:0;padding:4px 12px;font-size:12.5px"/>
+      <select onchange="S.filters.audActor=this.value;rr()" class="ui-select" style="${selSt}"><option value="">All people</option>${actors.map(a2=>`<option ${F.audActor===a2?'selected':''}>${esc(a2)}</option>`).join('')}</select>
+      <select onchange="S.filters.audDept=this.value;rr()" class="ui-select" style="${selSt}"><option value="">All departments</option>${DB.departments.map(d=>`<option ${F.audDept===d.name?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
+      <select onchange="S.filters.audCat=this.value;rr()" class="ui-select" style="${selSt}"><option value="">All tabs</option>${cats.map(c=>`<option ${F.audCat===c?'selected':''}>${esc(c)}</option>`).join('')}</select>
+      ${fActive?`<button onclick="S.filters.audQ='';S.filters.audActor='';S.filters.audDept='';S.filters.audCat='';rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear</button>`:''}
+      <span style="font-size:11px;color:var(--c-text-3)">${rows.length} of ${all.length}</span>
+    </div>
+    ${rows.length?card(`<div style="max-height:70vh;overflow-y:auto">${list}</div>`,{pad:false}):card(empty('audit',fActive?'Nothing matches':'No logs yet',fActive?'Try clearing a filter.':'Actions will appear here as people use the app.'),{pad:false})}</div>`;
+}
+App._goNotifFeedback=()=>{S.route="notifications";S.search="";S.expandedCl=null;S.afOpen=null;S.tvUser=null;S.filters={ntab:"Feedback"};render();window.scrollTo(0,0);};
+
+/* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
+window.auditPage=auditPage;
