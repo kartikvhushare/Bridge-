@@ -45,7 +45,7 @@ App.clockOut=()=>{
     _applyFlags(rec);saveDB();
     if(rec.flags.includes('early')){_hrmNotify(uId,'⚠️ You clocked out early at '+_m2hm(m)+' on '+fmtD(date)+'.','attendance');
       if(_hnpEmail('email_hrm_early'))queueEmail('hrm_early',uId,null,date,{date:fmtD(date)});} // FINAL-FIX: wire dormant template
-    toast('Clocked out — '+rec.hours+'h worked');rr();
+    toast('Clocked out — '+fmtH(rec.hours)+' worked ('+_m2hm(rec.inMin)+' → '+_m2hm(rec.outMin)+')');rr();
   },true); // H4: lenient — a real clock-in exists, never trap the out-punch on a mid-shift fence change
 };
 
@@ -68,11 +68,11 @@ function _clockWidget(){
     right=actBtn('Clock In',"App.clockIn()",'brand');
   }else if(!rec.clockOut){
     accent='var(--c-ink)';
-    left=`${tile('clock','var(--c-success-soft)','var(--c-success-ink)')}<div style="min-width:0"><div class="fd" style="font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1">${nowTime}</div><p style="font-size:13px;color:var(--c-text-2);margin-top:5px">On shift since <strong style="color:var(--c-text)">${_m2hm(rec.inMin)}</strong>${rec.flags.includes('late')?' · Late':''}</p></div>`;
+    left=`${tile('clock','var(--c-success-soft)','var(--c-success-ink)')}<div style="min-width:0"><div class="fd" style="font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1">${nowTime}</div><p style="font-size:13px;color:var(--c-text-2);margin-top:5px">Clocked in <strong style="color:var(--c-text)">${_m2hm(rec.inMin)}</strong> · <strong style="color:var(--c-text)">${fmtH((((nowHM()-rec.inMin)%1440)+1440)%1440/60)}</strong> so far${rec.flags.includes('late')?' · <span style="color:var(--c-danger-ink);font-weight:700">Late</span>':''}</p>${nowHM()>hm2m(sched.out||'18:00')+(userProfile(u).grace??15)?`<div style="margin-top:7px;font-size:12px;font-weight:600;color:#B45309;background:#FFFBEB;border:1px solid #FDE68A;border-radius:9px;padding:5px 10px;width:fit-content">Shift ended ${sched.out||'18:00'} — hours keep counting until you clock out.</div>`:''}</div>`;
     right=actBtn('Clock Out',"App.clockOut()",'primary');
   }else{
     accent='var(--c-success)';
-    left=`${tile('approve','var(--c-success-soft)','var(--c-success)')}<div style="min-width:0"><div class="fd" style="font-size:19px;font-weight:800;color:var(--c-success-ink)">Shift complete</div><div style="font-size:13px;color:var(--c-text-2);margin-top:4px">${_m2hm(rec.inMin)} → ${_m2hm(rec.outMin)} · <strong style="color:var(--c-text)">${rec.hours}h</strong>${rec.autoClosed?' '+badge('Auto-closed','warn'):''}${rec.flags.includes('late')?' '+badge('Late in','danger'):''}${rec.flags.includes('early')?' '+badge('Early out','warn'):''}</div></div>`;
+    left=`${tile('approve','var(--c-success-soft)','var(--c-success)')}<div style="min-width:0"><div class="fd" style="font-size:19px;font-weight:800;color:var(--c-success-ink)">Shift complete</div><div style="font-size:13px;color:var(--c-text-2);margin-top:4px">In ${_m2hm(rec.inMin)} → out ${_m2hm(rec.outMin)} · <strong style="color:var(--c-text)">${fmtH(rec.hours)}</strong> worked${rec.autoClosed?' '+badge('Auto-closed','warn'):''}${rec.flags.includes('late')?' '+badge('Late in','danger'):''}${rec.flags.includes('early')?' '+badge('Early out','warn'):''}</div></div>`;
     right='';
   }
   return `<div class="ui-card" style="padding:20px 24px;margin-bottom:18px;border-left:4px solid ${accent};display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:18px;min-width:0;flex:1 1 240px">${left}</div>${right}</div>`;
@@ -93,7 +93,7 @@ function _attCalendar(userId,ym){
     const bg=st?(ATT_SOFT[st.status]||'#F6F7F8'):'#F8F9FB';
     const txt=st?(ATT_INK[st.status]||'#7A8395'):'#B6BDC9';
     const isT=date===todayISO();
-    const tip=st?(ATT_LABEL[st.status]+(st.note?' — '+st.note:'')+(st.hours?(' ('+st.hours+'h)'):'')):'';
+    const tip=st?(ATT_LABEL[st.status]+(st.note?' — '+st.note:'')+(st.hours?(' ('+fmtH(st.hours)+')'):'')):'';
     cells+=`<div onclick="App._attDay('${userId}','${date}')" title="${esc(tip)}" style="aspect-ratio:1;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;cursor:pointer;background:${bg};color:${txt};border:${isT?'2px solid var(--c-ink)':'1px solid transparent'};transition:transform .1s" onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='none'">${d}</div>`;
   }
   const monName=first.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
@@ -128,7 +128,7 @@ App._attDay=(userId,date)=>{
   if(rec){
     body=row('Clock in',_m2hm(rec.inMin))
       +row('Clock out',_m2hm(rec.outMin))
-      +row('Hours worked',rec.hours!=null?rec.hours+'h':'—')
+      +row('Hours worked',rec.hours!=null?fmtH(rec.hours):'—')
       +(rec.autoClosed?row('Note','<span style="color:#B45309">Auto-closed</span>'):'')
       +(flags?'<div style="padding:10px 0"><div style="font-size:12px;font-weight:600;color:#9CA3AF;margin-bottom:6px">Flags</div>'+flags+'</div>':'')
       +(rec.note?row('Note',esc(rec.note)):'');

@@ -12,35 +12,63 @@ const MOB_MGR=['dashboard','mychecklists','attendance','notifications','more'];
 const NAV_ALL=[
   ['dashboard','grid','Dashboard',()=>true],
   ['mychecklists','check','My Checklists',()=>true],
+  ['approvals','approve','Inbox — Approvals',()=>can('approvals','view')],
+  ['notifications','bell','Inbox — Alerts',()=>true],
+
   ['attendance','clock','Attendance',()=>can('attendance','view')],
   ['leave','approve','Leave',()=>can('leaveRequests','view')],
-  ['tickets','ticket','Tickets',()=>can('tickets','view')],
-  ['announcements','msg','Announcements',()=>can('announcements','view')],
-  ['allcl','list','All Checklists / Team',()=>can('allChecklists','view')||can('teamview','view')],
-  ['users','users','Users',()=>can('employees','view')],
-  ['hierarchy','tree','Hierarchy',()=>can('hierarchy','view')],
-  ['checklists','list','Create Checklist',()=>can('checklists','create')],
-
-  ['questions','help','Questions',()=>can('questions','view')],
-  ['approvals','approve','Inbox — Approvals',()=>can('approvals','view')],
   ['overtime','clock','Overtime',()=>can('overtime','view')],
   ['shifts','clock','Shifts',()=>can('scheduling','view')],
-  ['lifecycle','users','Lifecycle',()=>can('lifecycle','view')],
+
+  ['hub:cl','list','Checklists',()=>!!_hubHome('cl')],
+  ['questions','help','Questions',()=>can('questions','view')],
+  ['tickets','ticket','Tickets',()=>can('tickets','view')],
+  ['announcements','msg','Announcements',()=>can('announcements','view')],
   ['letters','doc','Letters',()=>can('letters','view')],
   ['surveys','msg','Surveys',()=>can('surveys','view')],
+
+  ['hub:people','users','People',()=>!!_hubHome('people')],
   ['reviews','chart','Reviews',()=>can('reviews','view')],
-  ['discipline','alert','Discipline',()=>can('discipline','view')],
+
   ['payroll','chart','Payroll',()=>can('payroll','view')],
-  ['notifications','bell','Inbox — Alerts',()=>true],
-  ['okr','chart','OKRs',()=>can('okr','view')],
-  ['hrmanalytics','chart','HRM Analytics',()=>can('reports','view')],
-  ['hrmconfig','cog','HR Config',()=>can('hrSettings','view')],
-  ['locations','pin','Locations',()=>can('locations','view')],
-  ['departments','dept','Departments',()=>can('departments','view')],
-  ['settings','cog','Settings',()=>can('settings','view')],
-  ['audit','audit','Audit',()=>can('audit','view')],
-  ['accesscontrol','shield','Access Control',()=>can('accessControl','view')],
+  ['hub:admin','shield','Administration',()=>!!_hubHome('admin')],
 ];
+/* ───── HUBS: one sidebar entry, sub-tab strip on every member route ─────
+   Routes are UNCHANGED (deep links, notifications, ⌘K, HOW help all keep working).
+   A hub only groups them visually: nav shows one entry; each member page renders a
+   pill strip at the top. Every pill is permission-gated by the SAME can() rule the
+   router already enforces, so access control needs no new areas. */
+const HUB_DEF={
+  dash:{label:'Dashboard',tabs:[
+    ['dashboard','My Day',()=>true],
+    ['analytics','Company',()=>isAdmin()||can('analytics','view')],
+    ['hrmanalytics','HRM Analytics',()=>can('reports','view')],
+    ['okr','OKRs',()=>can('okr','view')]]},
+  cl:{label:'Checklists',tabs:[
+    ['checklists','Builder',()=>can('checklists','create')],
+    ['allcl','All results',()=>can('allChecklists','view')],
+    ['teamview','Team',()=>can('teamview','view')]]},
+  people:{label:'People',tabs:[
+    ['users','Directory',()=>can('employees','view')],
+    ['hierarchy','Hierarchy',()=>can('hierarchy','view')],
+    ['lifecycle','Lifecycle',()=>can('lifecycle','view')],
+    ['discipline','Discipline',()=>can('discipline','view')]]},
+  admin:{label:'Administration',tabs:[
+    ['accesscontrol','Access Control',()=>can('accessControl','view')],
+    ['settings','Settings',()=>can('settings','view')],
+    ['hrmconfig','HR Config',()=>can('hrSettings','view')],
+    ['locations','Locations',()=>can('locations','view')],
+    ['departments','Departments',()=>can('departments','view')],
+    ['audit','Audit',()=>can('audit','view')]]},
+};
+function _hubOf(route){for(const k in HUB_DEF)if(HUB_DEF[k].tabs.some(t=>t[0]===route))return k;return null;}
+function _hubTabsAllowed(k){return (HUB_DEF[k]?HUB_DEF[k].tabs:[]).filter(t=>{try{return !!t[2]();}catch(e){return false;}});}
+function _hubHome(k){const t=_hubTabsAllowed(k);return t.length?t[0][0]:null;}
+function _hubStrip(k){
+  const tabs=_hubTabsAllowed(k);if(tabs.length<2)return'';
+  return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;padding:5px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:14px;width:fit-content;max-width:100%">${tabs.map(([r,l])=>{const on=S.route===r;
+    return `<button onclick="App.go('${r}')" style="padding:8px 15px;border-radius:10px;border:none;background:${on?'var(--c-surface)':'transparent'};box-shadow:${on?'0 1px 3px rgba(21,23,28,.1)':'none'};color:${on?'var(--c-text)':'var(--c-text-2)'};font-size:13px;font-weight:${on?'800':'600'};cursor:pointer;transition:background .15s,color .15s">${l}</button>`;}).join('')}</div>`;
+}
 const navFor=()=>NAV_ALL.filter(n=>{try{return !!n[3]();}catch(e){return false;}}).map(n=>[n[0],n[1],n[2]]);
 /* ───── Grouped nav (presentation only) ─────
    navFor() still returns the FLAT [route,icon,label] array (gating preserved & reused below).
@@ -49,16 +77,10 @@ const navFor=()=>NAV_ALL.filter(n=>{try{return !!n[3]();}catch(e){return false;}
    (unknown keys fall through to a "More" section so nothing is ever dropped). */
 const NAV_DAILY=['dashboard','mychecklists','approvals','notifications']; // keep the daily strip tiny — everything else lives in named sections
 const NAV_SECTION_OF={
-  // My time — everything about hours, presence and time off
   attendance:'Time',leave:'Time',overtime:'Time',shifts:'Time',
-  // Work — tasks and content
-  checklists:'Work',allcl:'Work',questions:'Work',tickets:'Work',letters:'Work',announcements:'Work',surveys:'Work',
-  // People
-  users:'People',teamview:'People',hierarchy:'People',lifecycle:'People',discipline:'People',reviews:'People',
-  // Insights
-  analytics:'Insights',hrmanalytics:'Insights',okr:'Insights',
-  // Setup (admin plumbing — collapsed unless you're in it)
-  hrmconfig:'Setup',payroll:'Setup',locations:'Setup',departments:'Setup',settings:'Setup',audit:'Setup',accesscontrol:'Setup',
+  'hub:cl':'Work',questions:'Work',tickets:'Work',announcements:'Work',letters:'Work',surveys:'Work',
+  'hub:people':'People',reviews:'People',
+  payroll:'Setup','hub:admin':'Setup',
 };
 const NAV_SECTION_ORDER=['Time','Work','People','Insights','Setup'];
 const NAV_SECTION_ICON={Time:'clock',Work:'list',People:'users',Insights:'chart',Setup:'cog'};
@@ -85,7 +107,7 @@ App.toggleNavSec=(name)=>{
   S._navCollapsed[name]=!cur;
   render();
 };
-App.go=(r)=>{S.route=r;S.search='';S.expandedCl=null;S.afOpen=null;
+App.go=(r)=>{if(r&&String(r).slice(0,4)==='hub:')r=_hubHome(String(r).slice(4))||'dashboard';S.route=r;S.search='';S.expandedCl=null;S.afOpen=null;
   // Preserve analytics filters; preserve questions sub-tab state; reset everything else
   if(r==='analytics'){/* keep filters */}
   else if(r==='questions'){const qTab=S.filters.qTab;const eQ=S.filters.expandedQ;const eL=S.filters.expandedL;S.filters={};if(qTab)S.filters.qTab=qTab;if(eQ)S.filters.expandedQ=eQ;if(eL)S.filters.expandedL=eL;}
@@ -146,11 +168,11 @@ function _navBadgeFor(r){
   if(r==='notifications'){const n=_notifCount();return n?countBadge(n,'danger'):'';}
   if(r==='approvals'){const ab=_approvalPendingCount();return ab?countBadge(ab,'approve'):'';}
   if(r==='tickets'){const tkB=(DB.tickets||[]).filter(t=>t.assignedTo===S.uid&&!(t.viewedBy||[]).includes(S.uid)).length;return tkB?countBadge(tkB,'rose'):'';}
-  if(r==='okr'){const _t=todayISO();const n=okrDueForUser(S.uid,_t).filter(o=>!okrCheckinFor(o.id,S.uid,_t)).length;return n?countBadge(n,'approve'):'';}
+  if(r==='okr'||r==='dashboard'){const _t=todayISO();const n=okrDueForUser(S.uid,_t).filter(o=>!okrCheckinFor(o.id,S.uid,_t)).length;return n?countBadge(n,'approve'):'';}
   return '';
 }
 function _navItemHTML([r,i,l]){
-  const act=S.route===r;
+  const act=String(r).slice(0,4)==='hub:'?_hubOf(S.route)===String(r).slice(4):S.route===r;
   return`<button onclick="App.go('${r}')" class="nav-item${act?' on':''}"><span class="nav-ico">${ic(i,'w-[17px] h-[17px]')}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l}</span>${_navBadgeFor(r)}</button>`;
 }
 function shell(content){
@@ -165,7 +187,7 @@ function shell(content){
     // T1: honor the user's explicit collapse/expand. Only fall back to "auto-expand the
     // section with the active route" when the user hasn't toggled it yet — otherwise a
     // section containing the current page could never be collapsed.
-    const hasActive=sec.items.some(it=>it[0]===S.route);
+    const hasActive=sec.items.some(it=>it[0]===S.route||(String(it[0]).slice(0,4)==='hub:'&&_hubOf(S.route)===String(it[0]).slice(4)));
     const collapsed=(sec.label in S._navCollapsed)?!!S._navCollapsed[sec.label]:!hasActive;
     const show=!collapsed;
     return`<div class="nav-sec${show?'':' collapsed'}">
@@ -230,7 +252,7 @@ App.moreMenu=()=>{
   const {daily,sections}=navSectionsFor();
   const u=me();
   const tile=([r,i,l])=>{
-    const act=S.route===r;const b=_navBadgeFor(r);
+    const act=String(r).slice(0,4)==='hub:'?_hubOf(S.route)===String(r).slice(4):S.route===r;const b=_navBadgeFor(r);
     return`<button onclick="App.closeModal();App.go('${r}')" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;padding:14px 8px;min-height:80px;border-radius:14px;border:1px solid ${act?'var(--c-brand)':'var(--c-border)'};background:${act?'var(--c-brand-soft)':'var(--c-surface)'};color:${act?'var(--c-brand-ink)':'var(--c-text)'};cursor:pointer">${b?`<span style="position:absolute;top:7px;right:7px">${b}</span>`:''}${ic(i,'w-[22px] h-[22px]')}<span style="font-size:11px;font-weight:700;text-align:center;line-height:1.2">${esc(l)}</span></button>`;
   };
   const sectionBlock=(label,items)=>`<div style="margin-top:6px"><div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c-text-3);margin:14px 2px 8px">${esc(label)}</div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${items.map(tile).join('')}</div></div>`;
@@ -278,27 +300,27 @@ App.logout=()=>{
 };
 
 /* ===== ROUTER ===== */
-function pageContent(){
+function _pageInner(){
   const r=S.route;
   if(r==='dashboard'){return _dashboardPage();}
-  if(r==='users'){if(can('employees','view'))return usersPage();S.route='dashboard';if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='departments'){if(can('departments','view'))return deptsPage();S.route='dashboard';if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='locations'){if(can('locations','view'))return locsPage();S.route='dashboard';if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='checklists'){if(can('checklists','create'))return clsPage();S.route='dashboard';if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
+  if(r==='users'){if(can('employees','view'))return usersPage();S.route='dashboard';return homeDash();}
+  if(r==='departments'){if(can('departments','view'))return deptsPage();S.route='dashboard';return homeDash();}
+  if(r==='locations'){if(can('locations','view'))return locsPage();S.route='dashboard';return homeDash();}
+  if(r==='checklists'){if(can('checklists','create'))return clsPage();S.route='dashboard';return homeDash();}
   if(r==='approvals'){if(can('approvals','view'))return unifiedApprovalsPage();S.route='notifications';return notificationsPage();}
   if(r==='notifications')return notificationsPage();
   if(r==='tickets'){if(can('tickets','view'))return ticketsPage();S.route='mychecklists';return myClsPage();}
-  if(r==='hierarchy')return hierarchyPage();
+  if(r==='hierarchy'){if(can('hierarchy','view'))return hierarchyPage();S.route='dashboard';return homeDash();} // SWEEP: was ungated — nav hid it but a typed #hierarchy deep-link opened for anyone
   // SOPs/Onboarding feature retired — redirect any lingering #sops deep-link to the home dashboard.
-  if(r==='sops'){S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='announcements'){if(can('announcements','view'))return announcementsPage();S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='analytics'){if(can('analytics','view'))return analyticsPage();S.route='dashboard';if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='audit'){if(can('audit','view'))return auditPage();S.route='dashboard';if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='settings'){if(can('settings','view'))return settingsPage();S.route='dashboard';if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
+  if(r==='sops'){S.route='dashboard';return homeDash();}
+  if(r==='announcements'){if(can('announcements','view'))return announcementsPage();S.route='dashboard';return homeDash();}
+  if(r==='analytics'){if(can('analytics','view'))return analyticsPage();S.route='dashboard';return homeDash();}
+  if(r==='audit'){if(can('audit','view'))return auditPage();S.route='dashboard';return homeDash();}
+  if(r==='settings'){if(can('settings','view'))return settingsPage();S.route='dashboard';return homeDash();}
   if(r==='questions'){if(can('questions','view'))return questionsPage();return myClsPage();}
   if(r==='mychecklists')return myClsPage();
   if(r==='teamview'){if(can('teamview','view'))return teamViewPage();S.route='mychecklists';return myClsPage();}
-  if(r==='allcl'){if(can('allChecklists','view'))return allClsPage();S.route='teamview';return pageContent();}
+  if(r==='allcl'){if(can('allChecklists','view'))return allClsPage();S.route='teamview';return _pageInner();}
   if(r==='profile')return profilePage();
   if(r==='attendance')return attendancePage();
   if(r==='leave')return leavePage();
@@ -307,11 +329,11 @@ function pageContent(){
   // Reports tab removed (folded into HRM Analytics). Any lingering #reports deep-link/notification
   // redirects to HRM Analytics so old links keep working.
   if(r==='reports'){S.route='hrmanalytics';if(can('reports','view'))return hrmAnalyticsPage();S.route='attendance';return attendancePage();}
-  if(r==='accesscontrol'){if(can('accessControl','view'))return accessControlPage();S.route='dashboard';if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
+  if(r==='accesscontrol'){if(can('accessControl','view'))return accessControlPage();S.route='dashboard';return homeDash();}
   // Scheduling feature removed — redirect any lingering #schedule/#myschedule deep-link to the dashboard.
-  if(r==='schedule'||r==='myschedule'){S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
+  if(r==='schedule'||r==='myschedule'){S.route='dashboard';return homeDash();}
   // Expenses feature retired — redirect any lingering #expenses deep-link to the home dashboard.
-  if(r==='expenses'){S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
+  if(r==='expenses'){S.route='dashboard';return homeDash();}
   if(r==='overtime'){if(can('overtime','view'))return overtimePage();S.route='mychecklists';return myClsPage();}
   if(r==='shifts'){if(can('scheduling','view'))return shiftsPage();S.route='mychecklists';return myClsPage();}
   if(r==='lifecycle'){if(can('lifecycle','view'))return lifecyclePage();S.route='mychecklists';return myClsPage();}
@@ -320,8 +342,15 @@ function pageContent(){
   if(r==='payroll'){if(can('payroll','view'))return payrollPage();S.route='mychecklists';return myClsPage();}
   if(r==='surveys'){if(can('surveys','view'))return surveysPage();S.route='mychecklists';return myClsPage();}
   if(r==='reviews'){if(can('reviews','view'))return reviewsPage();S.route='mychecklists';return myClsPage();}
-  if(r==='okr'){if(can('okr','view'))return okrPage();S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
+  if(r==='okr'){if(can('okr','view'))return okrPage();S.route='dashboard';return homeDash();}
   return empty('grid','Not found','');
+}
+/* Wrapper: after the inner router settles on the FINAL route (fallbacks may reassign it),
+   prepend the hub pill strip when that route belongs to a hub. */
+function pageContent(){
+  const html=_pageInner();
+  const hub=_hubOf(S.route);
+  return hub?('<div class="fade">'+_hubStrip(hub)+'</div>'+html):html;
 }
 
 /* ── QUICK SEARCH (Ctrl/⌘ K) — jump to any page, person or OKR you're allowed to see ── */
@@ -338,6 +367,7 @@ App._cmdkQ=(q)=>{
   q=(q||'').toLowerCase().trim();
   const out=[];
   navFor().forEach(([r,i,l])=>{if(!q||l.toLowerCase().includes(q))out.push({icon:i,label:l,sub:'Page',go:`App.closeModal();App.go('${r}')`});});
+  Object.keys(HUB_DEF).forEach(k=>{_hubTabsAllowed(k).forEach(([r,l])=>{if(q&&!l.toLowerCase().includes(q))return;out.push({icon:'grid',label:l,sub:HUB_DEF[k].label,go:`App.closeModal();App.go('${r}')`});});});
   if(can('employees','view'))scopedUsers('employees').forEach(u=>{if(q&&fullName(u).toLowerCase().includes(q))out.push({icon:'users',label:fullName(u),sub:(u.position||'Person')+' · '+(u.department||''),go:`App.closeModal();S.search='${esc(fullName(u))}';App.go('users')`});});
   if(can('okr','view'))okrVisible().forEach(o=>{if(q&&(o.title||'').toLowerCase().includes(q))out.push({icon:'chart',label:o.title,sub:'OKR · L'+okrLevel(o),go:`App.closeModal();App.go('okr');S.filters.okrQ='${esc(o.title)}';rr()`});});
   const SUB=[['Alerts & triggers','hrmconfig','cfgtab','alerts','hrSettings'],['Flow templates','hrmconfig','cfgtab','flows','hrSettings'],['Letter templates & letterhead','hrmconfig','cfgtab','lettertpl','hrSettings'],['Surveys (manage & results)','hrmconfig','cfgtab','surveys','hrSettings'],['Leave types','hrmconfig','cfgtab','types','hrSettings'],['Holidays','hrmconfig','cfgtab','holidays','hrSettings'],['Comp-off','hrmconfig','cfgtab','compoff','hrSettings'],['Reports hub','hrmanalytics','hraTab','reports','reports'],['Roles (Access Control)','accesscontrol','acTab','roles','accessControl'],['People (Access Control)','accesscontrol','acTab','people','accessControl'],['Email settings','settings','stab','email','settings'],['Templates (Settings)','settings','stab','templates','settings']];
@@ -350,4 +380,4 @@ App._cmdkQ=(q)=>{
 window.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();App._cmdk();}});
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.NAV_ADM=NAV_ADM;window.NAV_USR=NAV_USR;window.NAV_MGR=NAV_MGR;window.MOB_ADM=MOB_ADM;window.MOB_USR=MOB_USR;window.MOB_MGR=MOB_MGR;window.NAV_ALL=NAV_ALL;window.navFor=navFor;window.NAV_DAILY=NAV_DAILY;window.NAV_SECTION_OF=NAV_SECTION_OF;window.NAV_SECTION_ORDER=NAV_SECTION_ORDER;window.NAV_SECTION_ICON=NAV_SECTION_ICON;window.navSectionsFor=navSectionsFor;window._touchAction=_touchAction;window.render=render;window.rr=rr;window._navBadgeFor=_navBadgeFor;window._navItemHTML=_navItemHTML;window.shell=shell;window.pageContent=pageContent;
+window.NAV_ADM=NAV_ADM;window.NAV_USR=NAV_USR;window.NAV_MGR=NAV_MGR;window.MOB_ADM=MOB_ADM;window.MOB_USR=MOB_USR;window.MOB_MGR=MOB_MGR;window.NAV_ALL=NAV_ALL;window.navFor=navFor;window.NAV_DAILY=NAV_DAILY;window.NAV_SECTION_OF=NAV_SECTION_OF;window.NAV_SECTION_ORDER=NAV_SECTION_ORDER;window.NAV_SECTION_ICON=NAV_SECTION_ICON;window.navSectionsFor=navSectionsFor;window.HUB_DEF=HUB_DEF;window._hubOf=_hubOf;window._hubTabsAllowed=_hubTabsAllowed;window._hubHome=_hubHome;window._hubStrip=_hubStrip;window._pageInner=_pageInner;window._touchAction=_touchAction;window.render=render;window.rr=rr;window._navBadgeFor=_navBadgeFor;window._navItemHTML=_navItemHTML;window.shell=shell;window.pageContent=pageContent;

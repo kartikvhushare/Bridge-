@@ -160,7 +160,7 @@ function _dashTicketsPanel(scopeUsers){
 
 /* ===== ADMIN DASHBOARD ===== */
 // Dashboard === Analytics for anyone with analytics access; everyone else gets the visual home dashboard.
-function _dashboardPage(){if(isAdmin()||can('analytics','view'))return analyticsPage();return homeDash();}
+function _dashboardPage(){return homeDash();} // hub: Dashboard=My Day for EVERYONE; Company lives on the 'analytics' sub-tab
 function adminDash(){
   const today=todayISO();
   const fSubs=DB.submissions.filter(s=>_inDashRange(s.date));

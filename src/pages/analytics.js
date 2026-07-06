@@ -281,6 +281,18 @@ function analyticsPage(){
     top:{labels:topU.slice(0,8).map(x=>fullName(x.u)),data:topU.slice(0,8).map(x=>x.n)}
   };
   _AFiltered={subs:subs.slice(),tickets:aTickets.slice(),missed:_missedList,compliant:_comp,nonCompliant:_noncomp,dateMap:_dateMap};
+  // Company hero: today's headline figures (permission-scoped: relevantUsers already honors report scope)
+  const _hero=(()=>{try{
+    const scope=relevantUsers.filter(x=>x.status==='Active'&&x.role!=='Admin');
+    const att=(DB.attendance||[]).filter(x2=>x2.date===today&&scope.some(x=>x.id===x2.userId));
+    const present=att.filter(x2=>x2.clockIn).length;
+    const wfh=att.filter(x2=>(x2.flags||[]).includes('WFH')&&x2.clockIn).length;
+    const late=att.filter(x2=>(x2.flags||[]).includes('late')).length;
+    const onLv=scope.filter(x=>_onLeaveToday(x.id,today)).length;
+    const onT=byS['On Time'],ltN=byS['Late'];const rate=(onT+ltN)?Math.round(onT/(onT+ltN)*100):null;
+    const k=(v,l,c)=>`<div style="flex:1;min-width:116px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;padding:13px 15px;box-shadow:var(--sh-sm)"><div class="fd" style="font-size:25px;font-weight:800;letter-spacing:-.5px;color:${c||'var(--c-text)'}">${v}</div><div style="font-size:11px;font-weight:700;color:var(--c-text-2);margin-top:3px">${l}</div></div>`;
+    return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${k(scope.length,'Active people')}${k(present,'Clocked in today','var(--c-success-ink)')}${k(wfh,'WFH today','#0369A1')}${k(onLv,'On leave','#B45309')}${k(late,'Late today',late?'var(--c-danger-ink)':undefined)}${rate!=null?k(rate+'%','Checklist on-time','var(--c-brand-ink)'):''}${k(tkOpen,'Open tickets',tkOpen?'#B45309':undefined)}</div>`;
+  }catch(e){return'';}})();
   const _cc='background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);padding:18px';
   const _ct='font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:12px';
   const _view=S.dashView==='details'?'details':'visuals';
@@ -288,7 +300,9 @@ function analyticsPage(){
   const _subTab=`<div style="display:flex;gap:8px;margin-bottom:14px">${_stb('visuals','Visuals','chart')}${_stb('details','Details','list')}</div>`;
 
   return`<div class="fade" onclick="(function(e){if(S.afOpen&&!e.target.closest('[data-af]')){S.afOpen=null;rr();}})(event)">
-  ${hdr('Dashboard',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
+  ${hdr('Company',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
+  ${typeof _pulseStrip==='function'?_pulseStrip():''}
+  ${typeof _whoIsInWidget==='function'?_whoIsInWidget():''}
   <!-- Filter bar -->
   <div style="background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);padding:14px 16px;margin-bottom:14px;position:sticky;top:0;z-index:20">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">

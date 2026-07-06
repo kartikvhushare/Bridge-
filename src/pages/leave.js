@@ -233,7 +233,7 @@ function _leaveChainView(r){
     fin=`<div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#059669;margin-top:6px">${ic('check','w-3.5 h-3.5')}Approved${who?(' by '+esc(who)):''}${at?(' on '+fmtD(at.slice(0,10))):''}</div>`;}
   else if(rejected){const who=_stageApproverNames(r,curIdx);const at=r.hrAt||r.mgrAt;
     fin=`<div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#DC2626;margin-top:6px">${ic('x','w-3.5 h-3.5')}Rejected${who?(' by '+esc(who)):''}${at?(' on '+fmtD(at.slice(0,10))):''}</div>`;}
-  return `<div style="margin-top:8px;border-top:1px solid #F3F4F6;padding-top:8px">${rows}${escal}${fin}</div>`;
+  return `<div style="margin-top:8px;border-top:1px solid #F3F4F6;padding-top:8px"><div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--c-text-3);margin-bottom:4px">Approval progress</div>${rows}${escal}${fin}</div>`;
 }
 
 function _myLeaveView(){
@@ -257,13 +257,36 @@ function _myLeaveView(){
     </div>`;
   }).join('');
   const mine=(DB.leaveRequests||[]).filter(r=>r.userId===u.id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  const list=mine.length?mine.map(r=>{const lt=ltById(r.leaveTypeId);const tone=r.status==='Approved'?'success':r.status==='Rejected'?'danger':r.status==='Cancelled'?'neutral':'warn';
+  const _reqCard=r=>{const lt=ltById(r.leaveTypeId);const tone=r.status==='Approved'?'success':r.status==='Rejected'?'danger':r.status==='Cancelled'?'neutral':'warn';
     return `<div class="ui-card" style="padding:16px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:10px"><div><div style="font-size:14.5px;font-weight:700">${esc(lt?lt.name:'Leave')}${r.halfDay?' <span style="font-size:11px;color:var(--c-warn)">(half-day)</span>':''}</div><div style="font-size:12.5px;color:var(--c-text-2);margin-top:3px">${fmtD(r.start)} → ${fmtD(r.end)} · ${r.workingDays} day${r.workingDays===1?'':'s'}</div></div>${badge(r.status==='Pending'?('Pending — '+(r.stage==='manager'?'Manager':'HR')):r.status,tone)}</div>
       ${r.reason?`<div style="font-size:12.5px;color:var(--c-text-2);margin-top:8px">${esc(r.reason)}</div>`:''}
       ${_leaveChainView(r)}
       ${r.status==='Pending'?`<button onclick="App.cancelLeave('${r.id}')" class="ui-btn ui-btn-subtle ui-btn-sm" style="margin-top:10px;color:var(--c-danger-ink)">Cancel request</button>`:''}
-    </div>`;}).join(''):emptyCTA('approve','No leave requests','Apply for leave and track its approval here.','Apply for leave','App.applyLeave()');
+    </div>`;};
+  // Segregated + collapsible: requests still in flight stay visible; decided ones fold away per year.
+  let list;
+  if(!mine.length){list=emptyCTA('approve','No leave requests','Apply for leave and track its approval here.','Apply for leave','App.applyLeave()');}
+  else{
+    const pend=mine.filter(r=>r.status==='Pending');
+    const hist=mine.filter(r=>r.status!=='Pending');
+    const byYear={};hist.forEach(r=>{const y=(r.start||r.createdAt||'').slice(0,4)||'Earlier';(byYear[y]=byYear[y]||[]).push(r);});
+    const years=Object.keys(byYear).sort().reverse();
+    const pendBlock=pend.length
+      ?`<div style="font-size:11px;font-weight:800;color:var(--c-warn-ink,#B45309);margin-bottom:8px">IN PROGRESS · ${pend.length}</div>${pend.map(_reqCard).join('')}`
+      :`<div style="font-size:12.5px;color:var(--c-text-3);background:var(--c-surface);border:1px dashed var(--c-border);border-radius:12px;padding:12px 14px;margin-bottom:10px">Nothing waiting for approval right now.</div>`;
+    const histBlock=years.map((y,i)=>{const rs=byYear[y];
+      const a=rs.filter(r=>r.status==='Approved').length,x=rs.filter(r=>r.status==='Rejected').length,c=rs.filter(r=>r.status==='Cancelled').length;
+      const mini=[a?`<span style="color:var(--c-success-ink);font-weight:700">${a} approved</span>`:'',x?`<span style="color:var(--c-danger-ink);font-weight:700">${x} rejected</span>`:'',c?`<span style="color:var(--c-text-3)">${c} cancelled</span>`:''].filter(Boolean).join(' · ');
+      return `<details ${i===0&&!pend.length?'open':''} style="margin-top:10px">
+        <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:12px 16px">
+          <span style="font-size:13px;font-weight:800;color:var(--c-text)">${y} <span style="font-weight:600;color:var(--c-text-3)">· ${rs.length} request${rs.length===1?'':'s'}</span></span>
+          <span style="display:flex;align-items:center;gap:10px;font-size:11.5px">${mini}<span style="color:var(--c-text-3)">${ic('chevD','w-4 h-4')}</span></span>
+        </summary>
+        <div style="margin-top:10px">${rs.map(_reqCard).join('')}</div>
+      </details>`;}).join('');
+    list=pendBlock+histBlock;
+  }
   return `<div style="margin-bottom:10px;font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em">Balances · ${yr}</div>
     <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">${cards||('<div style="grid-column:1/-1">'+empty('approve','No leave types configured','HR can configure leave types in HR Config.')+'</div>')}</div>
     <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">My requests</div>${list}`;
@@ -280,7 +303,7 @@ App.applyLeave=()=>{
       <div class="grid grid-cols-2 gap-3">${fld('Start date','lv-start',todayISO(),'date')}${fld('End date','lv-end',todayISO(),'date')}</div>
       <div id="lv-half-wrap">${mkTog('lv-half',false,'Half-day (single day only)')}</div>
       <div><label for="lv-reason" class="ui-label">Reason</label><textarea id="lv-reason" rows="3" class="ui-input rf" placeholder="Reason for leave"></textarea></div>
-      <div id="lv-preview" style="font-size:12.5px;color:var(--c-text-2)"></div>
+      <div id="lv-preview" style="font-size:12.5px;color:var(--c-text-2)"></div>\n      <div id="lv-flow"></div>
     </div>
     <div class="flex gap-2 mt-6"><button onclick="App.closeModal()" class="ui-btn ui-btn-ghost ui-btn-md" style="flex:1">Cancel</button><button onclick="App.submitLeave()" class="ui-btn ui-btn-brand ui-btn-md" style="flex:1">Submit</button></div>
   </div>`);
@@ -291,6 +314,12 @@ App.applyLeave=()=>{
   const _se=$('#lv-start');if(_se){_se.min=_t;_se.max=_t;_se.value=_t;}
   const _ee=$('#lv-end');if(_ee){_ee.min=_t;}
   const upd=()=>{const tId=$('#lv-type').value,lt=ltById(tId);const start=$('#lv-start').value,end=$('#lv-end').value;
+    // Show the approval path BEFORE submitting — who signs off, in order, with live names.
+    try{const _fw=$('#lv-flow');if(_fw){const _fq={userId:u.id,leaveTypeId:tId,start:start||todayISO()};const _fl=_flowFor(_fq);
+      _fw.innerHTML='<div style="background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:10px;padding:9px 11px"><div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--c-text-3);margin-bottom:6px">Approval path — in order</div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+        +_fl.map((sg,i)=>{let nm='';try{nm=_stageApproverNames(_fq,i)||'';}catch(e){}
+          return '<span style="display:inline-flex;align-items:center;gap:5px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:99px;padding:4px 11px;font-size:11.5px;font-weight:700;color:var(--c-text)">'+(i+1)+'. '+_stageLabel(sg)+(nm?' <span style="font-weight:600;color:var(--c-text-3)">'+esc(nm)+'</span>':'')+'</span>';})
+        .join('<span style="color:var(--c-text-3);font-weight:800">→</span>')+'</div></div>';}}catch(e){}
     // M6: hide the half-day toggle (and force it off) for types HR marked half-day-disallowed.
     const halfOk=!lt||lt.halfDayAllowed!==false;const hw=$('#lv-half-wrap');if(hw)hw.style.display=halfOk?'':'none';
     const hb=$('#lv-half');if(hb&&!halfOk&&hb.classList.contains('on')){hb.classList.remove('on');hb.classList.add('off');hb.setAttribute('aria-checked','false');}

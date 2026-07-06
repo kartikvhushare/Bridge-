@@ -88,6 +88,9 @@ function homeDash(){
     ${qa('Attendance',"App.go('attendance')",'clock')}
     ${qa('My checklists',"App.go('mychecklists')",'check')}
     ${qa('New ticket','App.newTicket&&App.newTicket()',"ticket")}
+    ${can('overtime','view')?qa('Log overtime',"App.go('overtime')",'clock'):''}
+    ${can('payroll','view')?qa('My payslips',"App.go('payroll')",'chart'):''}
+    ${qa('My profile',"App.go('profile')",'user')}
   </div>`;
 
   // ── personal 30-day data for the visual dashboard ──
@@ -116,6 +119,9 @@ function homeDash(){
       <div class="ui-card" style="padding:18px"><div class="fd" style="font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:12px">My last 30 days</div><div style="position:relative;height:200px"><canvas id="hChartOnTime" data-chart="my-30-days"></canvas></div></div>
       <div class="ui-card" style="padding:18px"><div class="fd" style="font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:12px">Completions trend</div><div style="position:relative;height:200px"><canvas id="hChartTrend" data-chart="my-trend"></canvas></div></div>
     </div>`:''}
+    ${(()=>{try{const yr=_leaveYearOf(u,today);const ts=_typesFor(userProfileId(u)).filter(t=>t.enabled&&!_isCompOffLt(t)).slice(0,4);if(!ts.length)return'';
+      return `<div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Leave left · ${yr}</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">${ts.map(lt=>{const b=_balanceReadonly(u.id,lt.id,yr);const rem=_balRemaining(b);const ent=_r2((b.entitled||0)+(b.carriedIn||0));
+        return `<button onclick="App.go('leave')" style="flex:1;min-width:128px;text-align:left;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px 12px;cursor:pointer"><span class="fd" style="font-size:19px;font-weight:800;color:var(--c-text)">${rem}</span><span style="font-size:11px;color:var(--c-text-3)"> / ${ent}d</span><span style="display:block;font-size:11px;font-weight:700;color:var(--c-text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(lt.name)}</span></button>`;}).join('')}</div>`;}catch(e){return'';}})()}
     <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Quick actions</div>
     ${quickActions}
   </div>`;
