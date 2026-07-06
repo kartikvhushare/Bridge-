@@ -239,7 +239,7 @@ async function sendEmail(eventType, userId, vars){
     checklist_assigned:'mychecklists',
     submission_late:'teamview', submission_approved:'mychecklists',
     submission_rejected:'mychecklists', approval_requested:'approvals',
-    approval_decided:'approvals', feedback_received:'notifications',
+    approval_decided:'mychecklists', /* employee-facing: their submission result lives in My Checklists */ feedback_received:'notifications',
     deadline_reminder:'mychecklists', escalation:'tickets', announcement:'announcements',
     // HRM: approval-needed → approvals; everything else for the employee → leave page.
     hrm_leave_submitted:'approvals', hrm_leave_escalated:'approvals',

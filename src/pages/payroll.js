@@ -75,7 +75,7 @@ function payrollPage(){
     ${_howBar('payroll')}
     <div class="ui-card" style="padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <div class="ui-tabs" style="margin:0"><button class="ui-tab on">Month</button><button class="ui-tab" onclick="S.filters.pyView='year';rr()">Year</button></div>
-      <input type="month" value="${month}" onchange="S.filters.pyMonth=this.value;rr()" class="ui-input" style="width:auto;min-height:0;height:36px"/>
+      <input type="month" value="${month}" onchange="S.filters.pyMonth=this.value;rr()" class="ui-input" style="width:auto;min-height:0;height:40px;padding:0 12px;line-height:38px;font-size:13px"/>
         <span style="font-size:11.5px;font-weight:700;color:var(--c-text-2);background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:99px;padding:5px 12px">${(()=>{const pp=_payPeriod(month);return 'Salary period: '+fmtD(pp.start)+' → '+fmtD(pp.end)+(_payCycleStartDay()===1?'':' · custom cycle (day '+_payCycleStartDay()+')');})()}</span>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${steps}</div>
       <span style="flex:1"></span>
