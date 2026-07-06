@@ -398,17 +398,38 @@ function _dayStatus(userId,date){
      null              → user has no assigned location at all.
    Bug 1: the legacy profile-office fallback (activeProfile().office) is REMOVED — it was dead
    (seeded enabled:false and never written by saveHrmConfig) and silently bypassed the fence. ── */
+/* MULTI-OFFICE (city access): a person may clock in at ANY enabled fence among
+   • their assigned office (hrm.locationId), plus
+   • every ACTIVE location EXPLICITLY selected in their City access chips (u.cities).
+   STRICT: no chips selected = no extra offices — clock-in then works only at the assigned office.
+   (City access "(none = all)" still applies to VIEWING scope elsewhere; clock-in is stricter.)
+   The assigned office stays what it was for payroll/compliance (home office & country mapping). */
+function _candidateGeofences(u){
+  if(!u)return[];
+  const geo=(DB.hrmConfig&&DB.hrmConfig.locationGeo)||{};
+  const cities=Array.isArray(u.cities)?u.cities:[];
+  const out=[],seen=new Set();
+  const add=(locId)=>{
+    if(!locId||seen.has(locId))return;seen.add(locId);
+    const g=geo[locId];if(!(g&&g.enabled&&g.lat!=null&&g.lng!=null))return;
+    const l=(DB.locations||[]).find(x=>x.id===locId);
+    out.push({locId,name:(l&&l.name)||locId,lat:g.lat,lng:g.lng,radius:g.radius||200});
+  };
+  add(u.hrm&&u.hrm.locationId);
+  (DB.locations||[]).forEach(l=>{
+    if(l.status!=='Active')return;
+    if(cities.includes(l.id)||cities.includes(l.name))add(l.id); // none = none (strict)
+  });
+  return out;
+}
+/* Legacy single-fence view (compliance/debug): first candidate, or a misconfigured marker when the
+   user has offices in scope but none of them has a working fence. */
 function _activeGeofence(u){
+  const c=_candidateGeofences(u);
+  if(c.length)return c[0];
   if(!u)return null;
-  const locId=u.hrm?.locationId;
-  if(locId){
-    const g=(DB.hrmConfig?.locationGeo||{})[locId];
-    if(g&&g.enabled&&g.lat!=null&&g.lng!=null)return{lat:g.lat,lng:g.lng,radius:g.radius||200};
-    // Assigned to a location whose fence is disabled or missing coordinates → misconfigured,
-    // NOT "no fence". Fail-closed treats this as a block (HR thinks it's enforced).
-    return{misconfigured:true,reason:locId};
-  }
-  return null;
+  const anyAllowed=!!(u.hrm&&u.hrm.locationId)||(Array.isArray(u.cities)&&u.cities.length>0);
+  return anyAllowed?{misconfigured:true}:null;
 }
 
 /* ════════ CLOCK IN / OUT ════════ */
@@ -426,16 +447,18 @@ function _activeGeofence(u){
 //   failure/timeout is allowed too; the fence is still enforced only when it IS active AND GPS resolves
 //   to a trustworthy in/outside answer. Clock-IN stays strictly fail-closed (lenient=false).
 function _withGeofence(verb,onPass,lenient,retryFn){
-  const gf=_activeGeofence(me());
+  const cands=_candidateGeofences(me());
   const word='clock '+verb;
-  // W1.6: a non-lenient (clock-in) geofence failure should offer a Retry affordance that re-runs the
-  // punch, instead of being a dead-end. `retryFn` is a JS string (e.g. "App.clockIn()") rendered into
-  // a toast-with-action button. Falls back to a plain toast when no retry was provided.
   const _fail=(m)=>{if(retryFn&&!lenient)toastAction(m,'err',{label:'Retry',fn:retryFn,ms:8000});else toast(m,'err');};
-  // Fail-closed (clock-in): no fence at all, or a misconfigured one, blocks the punch.
-  if(!gf||gf.misconfigured){
+  // Fail-closed (clock-in): the user must have at least one WORKING fence among their offices.
+  if(!cands.length){
     if(lenient){onPass(null);return;} // H4: fence changed mid-shift — let the user clock out
-    toast('No office location configured — contact HR','err');return;
+    const _adm=can('employees','edit')||can('hrSettings','edit');
+    const _u=me();const _hasScope=!!(_u&&((_u.hrm&&_u.hrm.locationId)||(Array.isArray(_u.cities)&&_u.cities.length)));
+    const _msg=!_hasScope
+      ?(_adm?'No office on your profile \u2014 Users \u2192 edit yourself \u2192 \u201COffice location (geofence)\u201D, or add City access chips':'No office assigned to you yet \u2014 ask HR to set your office or city access')
+      :(_adm?'Your office(s) have no working geofence \u2014 Locations \u2192 set coordinates + enable the fence':'Your office\u2019s location fence isn\u2019t set up yet \u2014 ask HR');
+    toast(_msg,'err');return;
   }
   if(!navigator.geolocation){
     if(lenient){onPass(null);return;}
@@ -444,15 +467,21 @@ function _withGeofence(verb,onPass,lenient,retryFn){
   toast('Checking location…');
   navigator.geolocation.getCurrentPosition(
     pos=>{
-      const radius=gf.radius||200;
-      // Accuracy floor: a fix whose ± error exceeds the fence radius can't be trusted to be inside.
-      if(pos.coords.accuracy!=null&&pos.coords.accuracy>radius){
-        if(lenient){onPass(null);return;} // H4: don't trap a legitimate clock-out on a poor fix
-        _fail('Can\'t confirm your location accurately enough to '+word+' (±'+Math.round(pos.coords.accuracy)+'m) — try again outdoors');return;
+      const acc=pos.coords.accuracy;
+      // Try EVERY office the person may work at — pass on the first fence they're inside
+      // (accuracy must also be trustworthy relative to that fence's radius).
+      let nearest=null;
+      for(const gf of cands){
+        const d=_distM(pos.coords.latitude,pos.coords.longitude,gf.lat,gf.lng);
+        if(!nearest||d<nearest.d)nearest={d,gf};
+        if(d<=(gf.radius||200)&&(acc==null||acc<=(gf.radius||200))){
+          onPass({lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:acc,locationId:gf.locId,locationName:gf.name});return;
+        }
       }
-      const d=_distM(pos.coords.latitude,pos.coords.longitude,gf.lat,gf.lng);
-      if(d<=radius){onPass({lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy});}
-      else{_fail('You must be inside the office area to '+word+' ('+Math.round(d)+'m away)');}
+      if(lenient){onPass(null);return;} // H4: never trap a clock-out
+      const maxR=Math.max.apply(null,cands.map(g=>g.radius||200));
+      if(acc!=null&&acc>maxR){_fail('Can\'t confirm your location accurately enough to '+word+' (\u00b1'+Math.round(acc)+'m) — try again outdoors or from your phone');return;}
+      _fail('You must be inside an office area to '+word+' — nearest: '+nearest.gf.name+' ('+Math.round(nearest.d)+'m away)');
     },
     ()=>{
       if(lenient){onPass(null);return;} // H4: GPS denied/unavailable on clock-out — never trap
@@ -463,4 +492,4 @@ function _withGeofence(verb,onPass,lenient,retryFn){
 }
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.HRM_SIXDAY_PRORATE=HRM_SIXDAY_PRORATE;window.HRM_ANNUAL_MID=HRM_ANNUAL_MID;window.hlog=hlog;window._hrmNotify=_hrmNotify;window._hrmNotifPrefsDefault=_hrmNotifPrefsDefault;window._hnp=_hnp;window._hnpEmail=_hnpEmail;window._isoAdd=_isoAdd;window._addMonths=_addMonths;window._monthsBetween=_monthsBetween;window._r2=_r2;window._leaveYearOf=_leaveYearOf;window._leaveYearStart=_leaveYearStart;window._seedProfiles=_seedProfiles;window._seedLeaveTypes=_seedLeaveTypes;window.ltById=ltById;window._typesFor=_typesFor;window._balanceFor=_balanceFor;window._balanceReadonly=_balanceReadonly;window._balRemaining=_balRemaining;window._compOffRemaining=_compOffRemaining;window._isCompOffLt=_isCompOffLt;window._ltRemaining=_ltRemaining;window._workingDaysBetween=_workingDaysBetween;window.computeHours=computeHours;window._applyFlags=_applyFlags;window.attFor=attFor;window._distM=_distM;window._runAutoClose=_runAutoClose;window._runMonthlyAccrual=_runMonthlyAccrual;window._runCarryOver=_runCarryOver;window._birthdayOk=_birthdayOk;window._hrmInit=_hrmInit;window.ATT_COLOR=ATT_COLOR;window.ATT_LABEL=ATT_LABEL;window.ATT_SOFT=ATT_SOFT;window.ATT_INK=ATT_INK;window._m2hm=_m2hm;window._dayStatus=_dayStatus;window._activeGeofence=_activeGeofence;window._withGeofence=_withGeofence;
+window.HRM_SIXDAY_PRORATE=HRM_SIXDAY_PRORATE;window.HRM_ANNUAL_MID=HRM_ANNUAL_MID;window.hlog=hlog;window._hrmNotify=_hrmNotify;window._hrmNotifPrefsDefault=_hrmNotifPrefsDefault;window._hnp=_hnp;window._hnpEmail=_hnpEmail;window._isoAdd=_isoAdd;window._addMonths=_addMonths;window._monthsBetween=_monthsBetween;window._r2=_r2;window._leaveYearOf=_leaveYearOf;window._leaveYearStart=_leaveYearStart;window._seedProfiles=_seedProfiles;window._seedLeaveTypes=_seedLeaveTypes;window.ltById=ltById;window._typesFor=_typesFor;window._balanceFor=_balanceFor;window._balanceReadonly=_balanceReadonly;window._balRemaining=_balRemaining;window._compOffRemaining=_compOffRemaining;window._isCompOffLt=_isCompOffLt;window._ltRemaining=_ltRemaining;window._workingDaysBetween=_workingDaysBetween;window.computeHours=computeHours;window._applyFlags=_applyFlags;window.attFor=attFor;window._distM=_distM;window._runAutoClose=_runAutoClose;window._runMonthlyAccrual=_runMonthlyAccrual;window._runCarryOver=_runCarryOver;window._birthdayOk=_birthdayOk;window._hrmInit=_hrmInit;window.ATT_COLOR=ATT_COLOR;window.ATT_LABEL=ATT_LABEL;window.ATT_SOFT=ATT_SOFT;window.ATT_INK=ATT_INK;window._m2hm=_m2hm;window._dayStatus=_dayStatus;window._activeGeofence=_activeGeofence;window._candidateGeofences=_candidateGeofences;window._withGeofence=_withGeofence;
