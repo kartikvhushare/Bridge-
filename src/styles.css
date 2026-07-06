@@ -379,3 +379,18 @@ input.ui-input:not([type="date"]):not([type="month"]):not([type="number"]),selec
   .ac-grid{grid-template-columns:1fr !important}
   th,td{padding-left:8px !important;padding-right:8px !important}
 }
+
+/* ── POLISH PASS (professional feel: motion, focus, scroll, details) ── */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#D3D7DE;border-radius:8px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:#B9BEC7;border:2px solid transparent;background-clip:content-box}
+summary::-webkit-details-marker{display:none}
+details>summary{transition:background .15s ease}
+details[open]>summary{background:var(--c-surface-2)!important}
+.ui-btn{transition:transform .12s ease,box-shadow .15s ease,background .15s ease,color .15s ease,border-color .15s ease}
+.ui-btn:active{transform:scale(.97)}
+.ui-btn-brand:hover,.ui-btn-primary:hover{box-shadow:0 4px 14px -4px rgba(14,159,110,.45)}
+h1.fd{text-wrap:balance}
+.ui-card{transition:box-shadow .18s ease,transform .18s ease}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}

@@ -12,8 +12,7 @@ const MOB_MGR=['dashboard','mychecklists','attendance','notifications','more'];
 const NAV_ALL=[
   ['dashboard','grid','Dashboard',()=>true],
   ['mychecklists','check','My Checklists',()=>true],
-  ['approvals','approve','Inbox — Approvals',()=>can('approvals','view')],
-  ['notifications','bell','Inbox — Alerts',()=>true],
+  ['hub:inbox','bell','Inbox',()=>true],
 
   ['attendance','clock','Attendance',()=>can('attendance','view')],
   ['leave','approve','Leave',()=>can('leaveRequests','view')],
@@ -39,6 +38,9 @@ const NAV_ALL=[
    pill strip at the top. Every pill is permission-gated by the SAME can() rule the
    router already enforces, so access control needs no new areas. */
 const HUB_DEF={
+  inbox:{label:'Inbox',tabs:[
+    ['approvals','Approvals',()=>can('approvals','view')],
+    ['notifications','Alerts',()=>true]]},
   dash:{label:'Dashboard',tabs:[
     ['dashboard','My Day',()=>true],
     ['analytics','Company',()=>isAdmin()||can('analytics','view')],
@@ -75,15 +77,15 @@ const navFor=()=>NAV_ALL.filter(n=>{try{return !!n[3]();}catch(e){return false;}
    navSectionsFor() buckets that SAME flat list into Daily + collapsible sections. No route or
    can()-gating logic changes — it only reshapes for rendering. Every flat item lands somewhere
    (unknown keys fall through to a "More" section so nothing is ever dropped). */
-const NAV_DAILY=['dashboard','mychecklists','approvals','notifications']; // keep the daily strip tiny — everything else lives in named sections
+const NAV_DAILY=['dashboard','mychecklists','hub:inbox']; // keep the daily strip tiny — everything else lives in named sections
 const NAV_SECTION_OF={
   attendance:'Time',leave:'Time',overtime:'Time',shifts:'Time',
   'hub:cl':'Work',questions:'Work',tickets:'Work',announcements:'Work',letters:'Work',surveys:'Work',
   'hub:people':'People',reviews:'People',
-  payroll:'Setup','hub:admin':'Setup',
+  payroll:'Manage','hub:admin':'Manage',
 };
-const NAV_SECTION_ORDER=['Time','Work','People','Insights','Setup'];
-const NAV_SECTION_ICON={Time:'clock',Work:'list',People:'users',Insights:'chart',Setup:'cog'};
+const NAV_SECTION_ORDER=['Time','Work','People','Manage'];
+const NAV_SECTION_ICON={Time:'clock',Work:'list',People:'users',Manage:'cog'};
 function navSectionsFor(){
   const flat=navFor();
   const daily=[],sections={};
@@ -165,6 +167,7 @@ App.rr=rr;
 App._searchRR=(inputId)=>{const a=document.activeElement;const ss=a?a.selectionStart:null,se=a?a.selectionEnd:null;rr();const el=document.getElementById(inputId);if(el){el.focus();try{if(ss!=null)el.setSelectionRange(ss,se);}catch(e){}}};
 
 function _navBadgeFor(r){
+  if(r==='hub:inbox'){let n=0;try{n=_notifCount();}catch(e){}try{if(can('approvals','view'))n+=_approvalPendingCount();}catch(e){}return n?countBadge(n,'danger'):'';}
   if(r==='notifications'){const n=_notifCount();return n?countBadge(n,'danger'):'';}
   if(r==='approvals'){const ab=_approvalPendingCount();return ab?countBadge(ab,'approve'):'';}
   if(r==='tickets'){const tkB=(DB.tickets||[]).filter(t=>t.assignedTo===S.uid&&!(t.viewedBy||[]).includes(S.uid)).length;return tkB?countBadge(tkB,'rose'):'';}

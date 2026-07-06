@@ -6,6 +6,7 @@ App.clockIn=()=>{
   //   half-day-leave day the worked half is still clocked, and a cancelled-leave day must be clockable.
   const existing=attFor(uId,date);
   if(existing&&(existing.clockIn!=null||existing.inMin!=null)){toast('Already clocked in today','warn');return;}
+  if(_onFullLeaveToday(uId,date)){toast("You're on approved leave today — clock-in is disabled",'warn');return;}
   const _record=(geo)=>{
     // L1: `date` & `inMin` are LOCAL (todayISO/nowHM); all hours/late math uses these local *Min values.
     // `clockIn` ISO is a UTC display/audit stamp only — never used for hours math (no functional change).
@@ -62,6 +63,16 @@ function _clockWidget(){
   const _clockedIn=rec&&(rec.clockIn!=null||rec.inMin!=null);
   const actBtn=(label,onclick,variant)=>`<button onclick="${onclick}" class="ui-btn ui-btn-${variant}" style="font-size:15px;font-weight:700;padding:14px 30px;min-height:52px;border-radius:14px;flex:1 1 200px;max-width:280px">${ic('clock','w-5 h-5')}${label}</button>`;
   const tile=(ico,ibg,iink)=>`<div style="width:56px;height:56px;border-radius:16px;background:${ibg};color:${iink};display:grid;place-items:center;flex-shrink:0">${ic(ico,'w-7 h-7')}</div>`;
+  // Full-day approved leave (and not already clocked in): show a calm "on leave" state instead of buttons.
+  if(!_clockedIn&&_onFullLeaveToday(S.uid,date)){
+    const lr=(DB.leaveRequests||[]).find(r=>r.userId===S.uid&&r.status==='Approved'&&!r.halfDay&&r.start<=date&&date<=r.end);
+    const lt=lr?ltById(lr.leaveTypeId):null;
+    return `<div class="ui-card" style="padding:20px 24px;margin-bottom:18px;border-left:4px solid #F59E0B;display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+      ${tile('approve','#FFFBEB','#B45309')}
+      <div style="min-width:0"><div class="fd" style="font-size:19px;font-weight:800;color:#92400E">On leave today${lt?' · '+esc(lt.name):''}</div>
+      <div style="font-size:13px;color:var(--c-text-2);margin-top:4px">${lr&&lr.end>date?('Back after '+fmtD(lr.end)+' · '):''}Clock in/out and WFH are paused — enjoy your time off.</div></div>
+    </div>`;
+  }
   let left,right,accent='var(--c-brand)';
   if(!_clockedIn){
     left=`${tile('clock','var(--c-brand-soft)','var(--c-brand-ink)')}<div style="min-width:0"><div class="fd" style="font-size:32px;font-weight:800;letter-spacing:-1px;line-height:1">${nowTime}</div><p style="font-size:13px;color:var(--c-text-2);margin-top:5px">${rec&&rec.status==='HalfDay'?'Half-day · ':''}Shift ${sched.in||'09:00'}–${sched.out||'18:00'} · ${sched.hours||9}h</p></div>`;

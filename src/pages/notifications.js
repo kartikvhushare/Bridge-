@@ -81,8 +81,7 @@ function notificationsPage(){
 
   };
 
-  const _inbPills='<div style="display:flex;gap:6px;margin-bottom:14px">'+(can('approvals','view')?'<button class="ui-tab-pill" onclick="App.go(\'approvals\')">To approve'+(_approvalPendingCount()?' ('+_approvalPendingCount()+')':'')+'</button>':'')+'<button class="ui-tab-pill on">Alerts</button></div>';
-  return '<div class="fade">'+hdr('Inbox','Alerts and updates')+_inbPills
+  return '<div class="fade">'+hdr('Alerts','Updates, reminders and everything sent to you')
     // A1: explicit "Mark all read" — the ONLY whole-list flip. Shown only when unread exist.
     +(hadUnread?'<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="ui-btn ui-btn-subtle ui-btn-sm" onclick="App._markAllNotifsRead()">'+ic('approve','w-4 h-4')+'Mark all read</button></div>':'')
     // Tabs

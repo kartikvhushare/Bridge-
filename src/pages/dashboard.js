@@ -25,6 +25,7 @@ function _whoIsInWidget(){
 /* WFH tag — flips today's attendance flag (creates the record if you clock in later, flag persists) */
 App._togWFH=()=>{
   const d=todayISO();let rec=(DB.attendance||[]).find(a=>a.userId===S.uid&&a.date===d);
+  if(_onFullLeaveToday(S.uid,d)){toast("You're on leave today — WFH doesn't apply",'err');return;}
   // WFH-HARDEN (b): the tag freezes once you've clocked in — no retro-editing the day's story.
   if(rec&&rec.clockIn){toast('You already clocked in today — WFH can\'t be changed after clock-in','err');return;}
   if(!rec){rec={id:uid('att'),userId:S.uid,date:d,clockIn:null,clockOut:null,status:'Present',flags:[],createdAt:new Date().toISOString()};DB.attendance.push(rec);}

@@ -251,6 +251,14 @@ function _applyFlags(rec){
   rec.flags=[...flags];
 }
 function attFor(userId,date){return (DB.attendance||[]).find(a=>a.userId===userId&&a.date===date);}
+/* FULL-day approved leave covering `date`? (Half-day is excluded on purpose — the worked half
+   is still clocked, per LV-2.) Based on the APPROVED REQUEST, not attendance rows, so a
+   cancelled leave day stays clockable. Blocks clock-in + WFH; clock-out stays allowed so an
+   already-open session can always be closed cleanly. */
+function _onFullLeaveToday(uid2,date){
+  date=date||todayISO();
+  return (DB.leaveRequests||[]).some(r=>r.userId===uid2&&r.status==='Approved'&&!r.halfDay&&r.start<=date&&date<=r.end);
+}
 
 /* ── Geofence (Haversine, meters) ── */
 function _distM(lat1,lng1,lat2,lng2){
@@ -492,4 +500,4 @@ function _withGeofence(verb,onPass,lenient,retryFn){
 }
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.HRM_SIXDAY_PRORATE=HRM_SIXDAY_PRORATE;window.HRM_ANNUAL_MID=HRM_ANNUAL_MID;window.hlog=hlog;window._hrmNotify=_hrmNotify;window._hrmNotifPrefsDefault=_hrmNotifPrefsDefault;window._hnp=_hnp;window._hnpEmail=_hnpEmail;window._isoAdd=_isoAdd;window._addMonths=_addMonths;window._monthsBetween=_monthsBetween;window._r2=_r2;window._leaveYearOf=_leaveYearOf;window._leaveYearStart=_leaveYearStart;window._seedProfiles=_seedProfiles;window._seedLeaveTypes=_seedLeaveTypes;window.ltById=ltById;window._typesFor=_typesFor;window._balanceFor=_balanceFor;window._balanceReadonly=_balanceReadonly;window._balRemaining=_balRemaining;window._compOffRemaining=_compOffRemaining;window._isCompOffLt=_isCompOffLt;window._ltRemaining=_ltRemaining;window._workingDaysBetween=_workingDaysBetween;window.computeHours=computeHours;window._applyFlags=_applyFlags;window.attFor=attFor;window._distM=_distM;window._runAutoClose=_runAutoClose;window._runMonthlyAccrual=_runMonthlyAccrual;window._runCarryOver=_runCarryOver;window._birthdayOk=_birthdayOk;window._hrmInit=_hrmInit;window.ATT_COLOR=ATT_COLOR;window.ATT_LABEL=ATT_LABEL;window.ATT_SOFT=ATT_SOFT;window.ATT_INK=ATT_INK;window._m2hm=_m2hm;window._dayStatus=_dayStatus;window._activeGeofence=_activeGeofence;window._candidateGeofences=_candidateGeofences;window._withGeofence=_withGeofence;
+window.HRM_SIXDAY_PRORATE=HRM_SIXDAY_PRORATE;window.HRM_ANNUAL_MID=HRM_ANNUAL_MID;window.hlog=hlog;window._hrmNotify=_hrmNotify;window._hrmNotifPrefsDefault=_hrmNotifPrefsDefault;window._hnp=_hnp;window._hnpEmail=_hnpEmail;window._isoAdd=_isoAdd;window._addMonths=_addMonths;window._monthsBetween=_monthsBetween;window._r2=_r2;window._leaveYearOf=_leaveYearOf;window._leaveYearStart=_leaveYearStart;window._seedProfiles=_seedProfiles;window._seedLeaveTypes=_seedLeaveTypes;window.ltById=ltById;window._typesFor=_typesFor;window._balanceFor=_balanceFor;window._balanceReadonly=_balanceReadonly;window._balRemaining=_balRemaining;window._compOffRemaining=_compOffRemaining;window._isCompOffLt=_isCompOffLt;window._ltRemaining=_ltRemaining;window._workingDaysBetween=_workingDaysBetween;window.computeHours=computeHours;window._applyFlags=_applyFlags;window.attFor=attFor;window._onFullLeaveToday=_onFullLeaveToday;window._distM=_distM;window._runAutoClose=_runAutoClose;window._runMonthlyAccrual=_runMonthlyAccrual;window._runCarryOver=_runCarryOver;window._birthdayOk=_birthdayOk;window._hrmInit=_hrmInit;window.ATT_COLOR=ATT_COLOR;window.ATT_LABEL=ATT_LABEL;window.ATT_SOFT=ATT_SOFT;window.ATT_INK=ATT_INK;window._m2hm=_m2hm;window._dayStatus=_dayStatus;window._activeGeofence=_activeGeofence;window._candidateGeofences=_candidateGeofences;window._withGeofence=_withGeofence;

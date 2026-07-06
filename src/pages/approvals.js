@@ -59,10 +59,7 @@ function unifiedApprovalsPage(){
   //   guarantees the page can never get visually stuck on "Loading…" if a background fetch is slow.
   const body=rows.length?rows.map(_inboxRow).join('')
     :empty(emptyMsg[0],emptyMsg[1],emptyMsg[2]);
-  const inboxPills='<div style="display:flex;gap:6px;margin-bottom:14px">'+
-    '<button class="ui-tab-pill on">To approve</button>'+
-    '<button class="ui-tab-pill" onclick="App.go(\'notifications\')">Alerts'+(_notifCount()?' ('+_notifCount()+')':'')+'</button></div>';
-  return '<div class="fade">'+hdr('Inbox','Approvals and alerts — one place for everything that needs you')+inboxPills
+  return '<div class="fade">'+hdr('Approvals','Everything waiting for your decision — submissions, edits, leave and more')
     +statusBar+chips+bulkBar
     +'<div class="space-y-3">'+body+'</div></div>';
 }
