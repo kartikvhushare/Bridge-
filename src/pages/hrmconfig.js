@@ -198,6 +198,15 @@ function hrmConfigPage(){
       </div>
       <div style="background:var(--c-info-soft);border:1px solid #BFDBFE;border-radius:10px;padding:9px 12px;font-size:11.5px;color:#1E40AF;line-height:1.5"><b>Approval flow</b> = the sign-off chain every LEAVE REQUEST travels, in order — e.g. Manager first, then HR. It is used automatically each time anyone applies for leave; you never pick it per request.</div>
       ${canEdit?_approvalFlowEditor(prof):`<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;padding:16px"><h3 class="fd font-bold text-sm mb-2">Approval flow</h3><p style="font-size:13px;color:#374151">${_normalizeFlow(prof).map(s=>esc(_stageLabel(s))).join(' → ')}</p></div>`}
+      <div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;padding:16px">
+        <h3 class="fd" style="font-size:14px;font-weight:800;margin-bottom:4px">Payroll cycle (whole company)</h3>
+        <p style="font-size:12px;color:#6B7280;margin-bottom:10px">Which day your salary month starts. <b>1</b> = plain calendar month. <b>21</b> = the "July" salary covers <b>21 Jun → 20 Jul</b>, and you process it in the remaining days — payroll runs, payslips, unpaid-day deductions and overtime all follow this window automatically.</p>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <select ${canEdit?'':'disabled'} onchange="DB.hrmConfig.payroll=Object.assign({},DB.hrmConfig.payroll,{cycleStartDay:parseInt(this.value)||1});saveDB();rr()" class="ui-select" style="width:auto;min-height:0;height:36px">${Array.from({length:28},(_,i)=>i+1).map(d3=>`<option value="${d3}" ${_payCycleStartDay()===d3?'selected':''}>${d3===1?'1 — calendar month':'Starts on day '+d3}</option>`).join('')}</select>
+          <span style="font-size:11.5px;font-weight:700;color:#1E40AF;background:var(--c-info-soft);border:1px solid #BFDBFE;border-radius:99px;padding:5px 12px">${(()=>{const pp=_payPeriod(todayISO().slice(0,7));return 'This month\u2019s run covers '+fmtD(pp.start)+' → '+fmtD(pp.end);})()}</span>
+        </div>
+        <p style="font-size:11px;color:#9CA3AF;margin-top:8px">Applies from the next run you create — already-created runs keep the numbers they were computed with. Leave years are separate and stay calendar/anniversary as set above.</p>
+      </div>
       ${canEdit?btn('Save configuration',`App.saveHrmConfig('${profId}')`,{variant:'primary',attrs:'style="width:100%"'}):''}
     </div>`;
   }else if(tab==='types'){
@@ -237,7 +246,7 @@ function hrmConfigPage(){
 // People in scope for balance management: scoped users minus Super Admins, with dept/loc/profile filters.
 function _balScopeUsers(){
   const f=S.filters;
-  let list=scopedUsers('leaveBalances').filter(u=>u.role!=='Admin'&&u.status!=='Inactive');
+  let list=scopedUsers('leaveBalances').filter(u=>u.status!=='Inactive'); // FIX: Admins (incl. you) now appear — owners take leave too
   if(f.cfgBalDept)list=list.filter(u=>u.department===f.cfgBalDept);
   if(f.cfgBalLoc)list=list.filter(u=>(u.hrm?.locationId||'')===f.cfgBalLoc);
   if(f.cfgBalQ){const q=f.cfgBalQ.toLowerCase();list=list.filter(u=>fullName(u).toLowerCase().includes(q)||(u.department||'').toLowerCase().includes(q));}
@@ -270,7 +279,7 @@ function _bulkBalanceEditor(){
   const head=`<tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-3 py-2.5 font-semibold" style="position:sticky;left:0;background:#fff"><input type="checkbox" onclick="App._bulkBalSelectAll(this.checked)" title="Select all"/> Employee</th>${cols.map(c=>`<th class="px-3 py-2.5 font-semibold" style="white-space:nowrap">${esc(c.name)}</th>`).join('')}</tr>`;
   const rows=users.map(u=>{
     const yr=yrOf(u);
-    return `<tr class="hover:bg-ink-50/50"><td class="px-3 py-2" style="position:sticky;left:0;background:#fff;white-space:nowrap"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="bulkbal-sel" data-uid="${u.id}"/>${avatar(u,'w-6 h-6','text-[9px]')}<span class="font-medium" style="font-size:12px">${esc(fullName(u))}</span></label></td>${cols.map(c=>{
+    return `<tr class="hover:bg-ink-50/50"><td class="px-3 py-2" style="position:sticky;left:0;background:#fff;white-space:nowrap"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="bulkbal-sel" data-uid="${u.id}"/>${avatar(u,'w-6 h-6','text-[9px]')}<span class="font-medium" style="font-size:12px">${esc(fullName(u))}${u.id===S.uid?' <span style="color:var(--c-text-3);font-weight:600">(you)</span>':''}</span></label></td>${cols.map(c=>{
       const b=_balanceReadonly(u.id,c.id,yr);
       return `<td class="px-3 py-2"><input type="number" step="0.5" value="${b.entitled||0}" data-uid="${u.id}" data-lt="${c.id}" data-yr="${yr}" class="bulkbal-cell" style="width:64px;border:1px solid #E5E7EB;border-radius:8px;padding:5px 7px;font-size:12px" title="Entitled days · remaining ${_balRemaining(b)}"/></td>`;
     }).join('')}</tr>`;
@@ -351,7 +360,7 @@ App._bulkBalAdjust=(profId)=>{
 function _compOffManager(){
   if(!can('leaveBalances','grant'))return empty('lock','Not permitted','You do not have access to manage comp-off.');
   const users=_balScopeUsers();
-  const rows=users.map(u=>`<tr class="hover:bg-ink-50/50"><td class="px-3 py-2"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="compoff-sel" data-uid="${u.id}"/>${avatar(u,'w-6 h-6','text-[9px]')}<span class="font-medium" style="font-size:12px">${esc(fullName(u))}</span></label></td><td class="px-3 py-2 text-xs text-ink-500">${esc(u.department||'')}</td><td class="px-3 py-2 font-semibold text-emerald-700">${_compOffRemaining(u.id)}</td></tr>`).join('');
+  const rows=users.map(u=>`<tr class="hover:bg-ink-50/50"><td class="px-3 py-2"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" class="compoff-sel" data-uid="${u.id}"/>${avatar(u,'w-6 h-6','text-[9px]')}<span class="font-medium" style="font-size:12px">${esc(fullName(u))}${u.id===S.uid?' <span style="color:var(--c-text-3);font-weight:600">(you)</span>':''}</span></label></td><td class="px-3 py-2 text-xs text-ink-500">${esc(u.department||'')}</td><td class="px-3 py-2 font-semibold text-emerald-700">${_compOffRemaining(u.id)}</td></tr>`).join('');
   const table=users.length?`<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden"><div style="overflow-x:auto"><table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-3 py-2.5 font-semibold"><input type="checkbox" onclick="App._compOffSelectAll(this.checked)"/> Employee</th><th class="px-3 py-2.5 font-semibold">Dept</th><th class="px-3 py-2.5 font-semibold">Comp-off bal</th></tr></thead><tbody class="divide-y divide-ink-50">${rows}</tbody></table></div></div>`:empty('users','No employees','Adjust the filters above.');
   return `<div>
     ${_balFilterBar('compoff')}

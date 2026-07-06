@@ -76,6 +76,7 @@ function payrollPage(){
     <div class="ui-card" style="padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <div class="ui-tabs" style="margin:0"><button class="ui-tab on">Month</button><button class="ui-tab" onclick="S.filters.pyView='year';rr()">Year</button></div>
       <input type="month" value="${month}" onchange="S.filters.pyMonth=this.value;rr()" class="ui-input" style="width:auto;min-height:0;height:36px"/>
+        <span style="font-size:11.5px;font-weight:700;color:var(--c-text-2);background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:99px;padding:5px 12px">${(()=>{const pp=_payPeriod(month);return 'Salary period: '+fmtD(pp.start)+' → '+fmtD(pp.end)+(_payCycleStartDay()===1?'':' · custom cycle (day '+_payCycleStartDay()+')');})()}</span>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${steps}</div>
       <span style="flex:1"></span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">${actions}</div>
@@ -146,12 +147,12 @@ App._payslip=(itemId)=>{
   const d2=i.detail||{};
   const bal=(DB.leaveBalances||[]).filter(b=>b.userId===u.id).reduce((a2,b)=>a2+(Number(b.remaining)||0),0);
   const B=(DB.hrmConfig&&DB.hrmConfig.branding)||{};
-  const V={name:fullName(u),position:u.position||'—',department:u.department||'—',month:run.month,currency:cur2,
+  const V={name:fullName(u),position:u.position||'—',department:u.department||'—',month:run.month,period:(d2.period?fmtD(d2.period.start)+' → '+fmtD(d2.period.end):run.month),currency:cur2,
     basic:n2(i.basic),allowances:n2(i.allowances),ot_hours:d2.otHours||0,ot_amount:n2(i.otAmount),
     unpaid_days:i.unpaidDays||0,per_day:n2(d2.perDay||0),deductions:n2(i.deductions),net:n2(i.net),
     present:d2.present||0,wfh:d2.wfh||0,leave:d2.leaveDays||0,absent:d2.absent||0,working:d2.working||0,
     leave_balance:bal,note:B.payslipNote||'',status:run.status+((d2.hold)?' · PAYROLL HOLD':''),date:fmtD(todayISO())};
-  const _DEF_TPL='PAYSLIP — {month}\n\nEmployee: {name}\nPosition: {position} · {department}\nStatus: {status}\n\n— Earnings —\nBasic salary:            {currency} {basic}\nAllowances:              {currency} {allowances}\nOvertime ({ot_hours}h):        {currency} {ot_amount}\n\n— Deductions —\nUnpaid days ({unpaid_days} × {per_day}): {currency} {deductions}\n\nNET PAY: {currency} {net}\n\n— Month summary —\nWorking days: {working} · Present: {present} · WFH: {wfh} · On leave: {leave} · Absent: {absent}\nLeave balance remaining: {leave_balance} days\n\n{note}\nGenerated on {date}';
+  const _DEF_TPL='PAYSLIP — {month}\nSalary period: {period}\n\nEmployee: {name}\nPosition: {position} · {department}\nStatus: {status}\n\n— Earnings —\nBasic salary:            {currency} {basic}\nAllowances:              {currency} {allowances}\nOvertime ({ot_hours}h):        {currency} {ot_amount}\n\n— Deductions —\nUnpaid days ({unpaid_days} × {per_day}): {currency} {deductions}\n\nNET PAY: {currency} {net}\n\n— Month summary —\nWorking days: {working} · Present: {present} · WFH: {wfh} · On leave: {leave} · Absent: {absent}\nLeave balance remaining: {leave_balance} days\n\n{note}\nGenerated on {date}';
   let body=String(B.payslipTpl||_DEF_TPL);
   Object.keys(V).forEach(k=>{body=body.split('{'+k+'}').join(String(V[k]));});
   const _g=typeof _gratuityAccrued==='function'?_gratuityAccrued(u):null; // PHASE4: informational EOSB line

@@ -56,11 +56,11 @@ const HUB_DEF={
     ['lifecycle','Lifecycle',()=>can('lifecycle','view')],
     ['discipline','Discipline',()=>can('discipline','view')]]},
   admin:{label:'Administration',tabs:[
-    ['accesscontrol','Access Control',()=>can('accessControl','view')],
     ['settings','Settings',()=>can('settings','view')],
+    ['accesscontrol','Access Control',()=>can('accessControl','view')],
     ['hrmconfig','HR Config',()=>can('hrSettings','view')],
-    ['locations','Locations',()=>can('locations','view')],
     ['departments','Departments',()=>can('departments','view')],
+    ['locations','Locations',()=>can('locations','view')],
     ['audit','Audit',()=>can('audit','view')]]},
 };
 function _hubOf(route){for(const k in HUB_DEF)if(HUB_DEF[k].tabs.some(t=>t[0]===route))return k;return null;}
