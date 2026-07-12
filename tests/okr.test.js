@@ -1,7 +1,7 @@
-/* OKR hierarchy engine harness — 20 assertions.
-   Covers: leaf % (caps, yes/no, direction down, no-data), roll-up averaging over
-   a 3-level tree, cycle safety, level/descendants/root walks, due-date scheduling
-   (weekly / monthly clamp / period window), and status resolution. */
+/* OKR hierarchy engine harness.
+   Covers: leaf % (caps, yes/no, direction down, no-data), INDEPENDENT levels (each node
+   measured on its own inputs — no roll-up), upper-owner chain detection, cycle safety,
+   level/descendants/root walks, due-date scheduling, and status resolution. */
 import { describe, it, expect, beforeAll } from 'vitest';
 
 const W = window;
@@ -51,15 +51,26 @@ describe('leaf progress', () => {
   });
 });
 
-describe('roll-up', () => {
-  it('parent with children = simple average of children (a=50 via a1, b=30 → root=40)', () => {
-    expect(W.okrProgress(a)).toBe(50);                                           // 9
-    expect(W.okrProgress(root)).toBe(40);                                        // 10
+describe('independent levels (no roll-up — owner request)', () => {
+  it('a parent is measured ONLY on its own inputs: a & root have none → null; b=30; a1=50', () => {
+    expect(W.okrProgress(a)).toBe(null);      // a1's 50% does NOT roll up       // 9
+    expect(W.okrProgress(root)).toBe(null);   // root has no own inputs          // 10
+    expect(W.okrProgress(b)).toBe(30);
+    expect(W.okrProgress(a1)).toBe(50);
+  });
+  it('a parent with its OWN input measures itself, ignoring children', () => {
+    W.DB.okrCheckins.push(ci('a', 80, '2026-06-05'));
+    expect(W.okrProgress(a)).toBe(80);        // own input wins; a1 irrelevant
+    W.DB.okrCheckins = W.DB.okrCheckins.filter(c => c.okrId !== 'a');
   });
   it('is cycle-safe (self-referencing tree returns, no hang)', () => {
     const c1 = okr({ id: 'c1', parentId: 'c2' }); const c2 = okr({ id: 'c2', parentId: 'c1' });
     W.DB.okrs.push(c1, c2);
     expect(W.okrProgress(c1)).toBe(null);                                        // 11
+  });
+  it('upper-level owner detection walks the parent chain', () => {
+    expect(W.okrIsUpOwner(a1, 'u1')).toBe(true);   // u1 owns root & a above a1
+    expect(W.okrIsUpOwner(root, 'u1')).toBe(false); // nothing above the root
   });
 });
 

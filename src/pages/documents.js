@@ -85,7 +85,9 @@ App._docNav=(id)=>{S.filters.docFolder=id;rr();};  // alias kept for compatibili
 App._delFolder=(id)=>{
   const f=(DB.folders||[]).find(x=>x.id===id);
   if(!f)return;
-  if(!confirm('Delete folder "'+f.name+'" and all its files?'))return;
+  // Referential-integrity guard: a folder with sub-folders or files can't be deleted (no cascade).
+  if(!guardDelete('folder',id,'folder "'+f.name+'"'))return;
+  if(!confirm('Delete folder "'+f.name+'"?'))return;
   // Collect all folder IDs (recursive) and doc IDs BEFORE modifying DB
   const toDelete=[];
   function collectRec(fid){toDelete.push(fid);(DB.folders||[]).filter(x=>x.parentId===fid).forEach(c=>collectRec(c.id));}

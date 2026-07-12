@@ -34,7 +34,7 @@ function _reportSyncResults(results,labels){
 /* ===== SUPABASE CLIENT ===== */
 const SB_URL='https://emzgwkvkgojcaqngkatw.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVtemd3a3ZrZ29qY2FxbmdrYXR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5NTQ4OTUsImV4cCI6MjA5NzUzMDg5NX0.Ng5vNIAA2N7_fvTVJT3Cw5i1FSczMR1Jfv6qp7PGXSk';
-if(typeof supabase==='undefined'){var _a=document.getElementById('app');if(_a)_a.innerHTML='<div style="max-width:640px;margin:56px auto;padding:28px;font:15px/1.6 system-ui,-apple-system,sans-serif;color:#1f232b;border:1px solid #e8eaee;border-radius:16px"><h2 style="margin:0 0 10px;font-size:20px">Open Bridge in a web browser</h2><p style="margin:0 0 8px">This app loads Tailwind and Supabase from the internet, so it can\u2019t run inside a preview pane.</p><p style="margin:0">Save this file and open it directly in <b>Chrome</b> or <b>Safari</b> with an internet connection \u2014 it will load normally.</p></div>';throw new Error('Supabase library not loaded (offline or blocked CDN) \u2014 open in a real browser.');}
+if(typeof supabase==='undefined'){var _a=document.getElementById('app');if(_a)_a.innerHTML='<div style="max-width:640px;margin:56px auto;padding:28px;font:15px/1.6 system-ui,-apple-system,sans-serif;color:#1f232b;border:1px solid #e8eaee;border-radius:16px"><h2 style="margin:0 0 10px;font-size:20px">Open Evarca in a web browser</h2><p style="margin:0 0 8px">This app loads Tailwind and Supabase from the internet, so it can\u2019t run inside a preview pane.</p><p style="margin:0">Save this file and open it directly in <b>Chrome</b> or <b>Safari</b> with an internet connection \u2014 it will load normally.</p></div>';throw new Error('Supabase library not loaded (offline or blocked CDN) \u2014 open in a real browser.');}
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _unesc(s){if(!s)return s;let p=String(s),c;do{c=p;p=p.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");}while(p!==c);return p;}
 function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:_unesc(p.first_name)||'',lastName:_unesc(p.last_name)||'',email:p.email||'',phone:_unesc(p.phone)||'',position:_unesc(p.position)||'',department:_unesc(p.department)||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,managerHistory:p.manager_history||[],rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,emailEnabled:p.email_enabled!==false,cities:Array.isArray(p.cities)?p.cities:[],password:'***'}));}
@@ -130,7 +130,24 @@ function _applyHrmConfig(row){
   if(row.location_geo&&typeof row.location_geo==='object')DB.hrmConfig.locationGeo=row.location_geo;
   if(!_editingHrm&&row.compliance&&typeof row.compliance==='object'&&Object.keys(row.compliance).length)DB.hrmConfig.compliance=row.compliance; // PHASE4
   if(!_editingHrm&&row.payroll&&typeof row.payroll==='object'&&Object.keys(row.payroll).length)DB.hrmConfig.payroll=row.payroll; // salary-month cycle
+  // PHASE4b (full persistence): the rest of HR Config rides one jsonb blob — alert/feature switches,
+  // branding, flow + letter templates. Same _editingHrm guard so open edits are never clobbered.
+  if(!_editingHrm&&row.extras&&typeof row.extras==='object'){
+    const X=row.extras;
+    if(X.emailKinds&&typeof X.emailKinds==='object')DB.hrmConfig.emailKinds=X.emailKinds;
+    if(X.inappKinds&&typeof X.inappKinds==='object')DB.hrmConfig.inappKinds=X.inappKinds;
+    if(X.branding&&typeof X.branding==='object'&&Object.keys(X.branding).length)DB.hrmConfig.branding=X.branding;
+    if(X.alerts&&typeof X.alerts==='object'&&Object.keys(X.alerts).length)DB.hrmConfig.alerts=X.alerts;
+    if(X.flowTemplates&&typeof X.flowTemplates==='object'&&Object.keys(X.flowTemplates).length)DB.hrmConfig.flowTemplates=X.flowTemplates;
+    if(X.letterTemplates&&typeof X.letterTemplates==='object'&&Object.keys(X.letterTemplates).length)DB.hrmConfig.letterTemplates=X.letterTemplates;
+  }
 }
+/* ── Announcements (PHASE4b) — previously localStorage-only; now a real table. ── */
+function _mAnn(rows){return(rows||[]).map(a=>({id:a.id,title:a.title||'',body:a.body||'',deptTarget:a.dept_target||null,locTarget:a.loc_target||null,createdBy:a.created_by||null,createdAt:a.created_at}));}
+function _annRow(a){return{id:a.id,title:a.title||'',body:a.body||'',dept_target:a.deptTarget||null,loc_target:a.locTarget||null,created_by:a.createdBy||null,created_at:a.createdAt||new Date().toISOString()};}
+/* ── Drafts (PHASE4b) — per-user cross-device saves for checklist runs & OKR check-ins. ── */
+function _mDraft(rows){return(rows||[]).map(d=>({id:d.id,userId:d.user_id,kind:d.kind,refId:d.ref_id,date:d.date||null,payload:d.payload||{},updatedAt:d.updated_at}));}
+function _draftRow(d){return{id:d.id,user_id:d.userId,kind:d.kind,ref_id:d.refId,date:d.date||null,payload:d.payload||{},updated_at:d.updatedAt||new Date().toISOString()};}
 function _mAtt(rows){return(rows||[]).map(a=>({id:a.id,userId:a.user_id,date:a.date,clockIn:a.clock_in||null,clockOut:a.clock_out||null,inMin:a.in_min,outMin:a.out_min,hours:a.hours,status:a.status||'Present',leaveType:a.leave_type||null,flags:a.flags||[],inGeo:a.in_geo||null,outGeo:a.out_geo||null,autoClosed:a.auto_closed||false,note:a.note||'',createdAt:a.created_at}));}
 function _applyAttendance(rows){
   if(!rows)return;
@@ -436,7 +453,11 @@ async function loadFromSB(){
    ...(can('payroll','view')?[['payroll_runs','payrollRuns',_mPRun,null],['payroll_items','payrollItems',_mPItem,null]]:[]),
    ['surveys','surveys',_mSv,null],['survey_answers','surveyAnswers',_mSvA,null],
    ['review_cycles','reviewCycles',(r)=>_mRC(r).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))),null],
-   ['review_answers','reviewAnswers',_mRA,null]].forEach(([tbl,key,map,scope])=>{
+   ['review_answers','reviewAnswers',_mRA,null],
+   // PHASE4b: announcements are server-backed now (read-all; targeting stays client-side as before).
+   ['announcements','announcements',(r)=>_mAnn(r).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))),null],
+   // PHASE4b: personal drafts (checklist runs / OKR check-ins) — RLS already limits to own rows.
+   ['drafts','drafts',_mDraft,(q)=>q.eq('user_id',S.uid)]].forEach(([tbl,key,map,scope])=>{
     let _q=sb.from(tbl).select('*');if(scope)_q=scope(_q);
     _q.then(({data,error})=>{
       if(error){console.warn('['+tbl+'] load skipped:',error.message);return;}
@@ -459,8 +480,8 @@ async function loadFromSB(){
     ((can('employees','edit')||can('accessControl','manage')||can('attendance','edit')||isHR())?sb.from('user_hrm').select('*'):sb.from('user_hrm').select('*').eq('user_id',S.uid)),
     // B2b: role profiles — read for EVERY user (workspace_settings is read-all-authenticated) so permissions resolve.
     sb.from('workspace_settings').select('value').eq('key','role_profiles').maybeSingle(),
-    // SOPs: templates (read-all-authenticated, browsable library) + instances (RLS-filtered to what the user may see).
-    Promise.resolve({data:[],error:null}), // FINAL-FIX: SOPs retired — table gone; stop the 404
+    // PHASE4b: HR notification prefs (Settings → HR Email) — server-backed now (was localStorage-only).
+    sb.from('workspace_settings').select('value').eq('key','hrm_notif_prefs').maybeSingle(),
     Promise.resolve({data:[],error:null}), // FINAL-FIX: SOPs retired
     // Shifts: RLS returns own (published) + scoped/elevated rows. Windowed from 7 days back so the
     //   roster's prev-week and the employee's this/next week always resolve; older rows load on demand.
@@ -490,11 +511,12 @@ async function loadFromSB(){
       DB.roleProfiles={...(DB.roleProfiles||{}),...rp.value.data.value};
       _seedRoleProfiles();
     }
-    // SOPs: server is the source of truth for the rows the user can read. Map snake→camel (steps jsonb passes through).
-    if(ot&&ot.status==='fulfilled'&&!ot.value.error&&Array.isArray(ot.value.data)){
-      DB.sopTemplates=ot.value.data.map(t=>({id:t.id,name:t.name||'',category:t.category||'',description:t.description||'',content:t.content||'',steps:Array.isArray(t.steps)?t.steps:[],active:t.active!==false,createdBy:t.created_by||null,createdAt:t.created_at||null}));
+    // PHASE4b: HR notification prefs — merge saved values over defaults (missing keys stay default-on).
+    if(ot&&ot.status==='fulfilled'&&!ot.value.error&&ot.value.data&&ot.value.data.value&&typeof ot.value.data.value==='object'){
+      DB.hrmNotifPrefs={..._hrmNotifPrefsDefault(),...ot.value.data.value};
     }
-    if(oi&&oi.status==='fulfilled'&&!oi.value.error&&Array.isArray(oi.value.data)){
+    // (SOPs retired — the oi slot stays an empty placeholder so positions hold.)
+    if(oi&&oi.status==='fulfilled'&&!oi.value.error&&Array.isArray(oi.value.data)&&oi.value.data.length){
       DB.sopInstances=oi.value.data.map(i=>({id:i.id,templateId:i.template_id||null,userId:i.user_id,status:i.status||'active',steps:Array.isArray(i.steps)?i.steps:[],createdBy:i.created_by||null,createdAt:i.created_at||null,completedAt:i.completed_at||null}));
     }
     // Shifts: server is the source of truth for the rows the user may read (RLS-scoped). Merge keeps just-created local rows.
@@ -563,7 +585,11 @@ async function _sync(){try{
       return _syncMerge(ps);})(),
     // ── HRM (Approach A) ── single config row + reference tables + records + per-user blob.
     // M1: reference tables (hrm_config/leave_types/holidays) are RLS-writable by HR/Admin only — gate so ordinary employees don't fire recurring rejected upserts.
-    ((isHR()||isAdmin())&&DB.hrmConfig&&Object.keys(DB.hrmConfig.profiles||{}).length?(can('hrSettings','edit')?_safeUp('hrm_config',[{id:_HRM_CFG_ID,active_profile:DB.hrmConfig.activeProfile||'UAE',profiles:DB.hrmConfig.profiles||{},location_geo:DB.hrmConfig.locationGeo||{},compliance:DB.hrmConfig.compliance||{},payroll:DB.hrmConfig.payroll||{},updated_at:new Date().toISOString()}],{onConflict:'id'}):Promise.resolve({})):Promise.resolve()),
+    ((isHR()||isAdmin())&&DB.hrmConfig&&Object.keys(DB.hrmConfig.profiles||{}).length?(can('hrSettings','edit')?_safeUp('hrm_config',[{id:_HRM_CFG_ID,active_profile:DB.hrmConfig.activeProfile||'UAE',profiles:DB.hrmConfig.profiles||{},location_geo:DB.hrmConfig.locationGeo||{},compliance:DB.hrmConfig.compliance||{},payroll:DB.hrmConfig.payroll||{},
+      // PHASE4b (full persistence): everything else in HR Config rides one jsonb blob so Alerts
+      // switches, branding, payslip/flow/letter templates survive refreshes and reach every device.
+      extras:{emailKinds:DB.hrmConfig.emailKinds||{},inappKinds:DB.hrmConfig.inappKinds||{},branding:DB.hrmConfig.branding||{},alerts:DB.hrmConfig.alerts||{},flowTemplates:DB.hrmConfig.flowTemplates||{},letterTemplates:DB.hrmConfig.letterTemplates||{}},
+      updated_at:new Date().toISOString()}],{onConflict:'id'}):Promise.resolve({})):Promise.resolve()),
     ((isHR()||isAdmin())&&DB.leaveTypes&&DB.leaveTypes.length?_safeUp('leave_types',(can('hrSettings','edit')?DB.leaveTypes:[]).map(t=>({id:t.id,profile_id:t.profileId,key:t.key||null,name:t.name||'',enabled:t.enabled!==false,unit:t.unit||'calendar',entitlement:t.entitlement||0,accrual_per_month:t.accrualPerMonth||0,eligibility_months:t.eligibilityMonths||0,paid_tiers:t.paidTiers||null,unpaid:t.unpaid||false,half_day_allowed:t.halfDayAllowed!==false,carry_over:t.carryOver||{enabled:false,maxDays:0,expiryMonths:0},once_per_employment:t.oncePerEmployment||false,birthday_month_only:t.birthdayMonthOnly||false,max_per_year:t.maxPerYear??null,nursing_breaks:t.nursingBreaks||false,notes:t.notes||'',approval_flow:Array.isArray(t.approvalFlow)?t.approvalFlow:null})),{onConflict:'id'}):Promise.resolve()),
     ((isHR()||isAdmin())&&DB.holidays&&DB.holidays.length?_safeUp('holidays',(can('hrSettings','edit')?DB.holidays:[]).map(h=>({id:h.id,profile_id:h.profileId,date:h.date,name:h.name||'',location_id:h.locationId||null})),{onConflict:'id'}):Promise.resolve()),
     ((DB.leaveRequests&&DB.leaveRequests.length)?_safeUp('leave_requests',DB.leaveRequests.filter(x=>x.userId===S.uid||can('leaveRequests','approve')).map(r=>({id:r.id,user_id:r.userId,leave_type_id:r.leaveTypeId,leave_year:r.leaveYear||null,start_date:r.start,end_date:r.end,half_day:r.halfDay||false,half_day_session:r.halfDaySession||null,working_days:r.workingDays,reason:r.reason||'',unpaid:r.unpaid||false,flow:r.flow||[],stage_index:r.stageIndex??0,stage:r.stage||'manager',status:r.status||'Pending',needs_admin:r.needsAdmin||false,mgr_decision:r.mgrDecision||null,mgr_note:r.mgrNote||'',mgr_at:r.mgrAt||null,hr_decision:r.hrDecision||null,hr_note:r.hrNote||'',hr_at:r.hrAt||null,created_at:r.createdAt||new Date().toISOString()})),{onConflict:'id'}):Promise.resolve()),
@@ -586,7 +612,7 @@ async function _sync(){try{
   //   (OKR v2 tables are NOT in this batch — okrs / okr_checkins / okr_logs use targeted writes at
   //   save time via _okrPush/_okrPushCheckin/okrLog, so a stale whole-table upsert can never clobber them.)
   _reportSyncResults(results,['departments','locations','checklists','submissions','approvals','audit log','notifications','feedback','folders','documents','questions','tickets','HR config','leave types','holidays','leave requests','leave balances','attendance','employee HR data','role profiles','shifts']);
-}catch(e){console.warn('[Bridge sync error]',e.message);}}
+}catch(e){console.warn('[Evarca sync error]',e.message);}}
 /* ═══════════════ HRM BUILD PLAN — Phases 0–3 + benefits (self-contained on Supabase) ═══════════════
    Modules: notify()+email outbox · event triggers · who's-in widget · WFH tag · doc expiry ·
    lifecycle flows (onboarding/probation/exit) · letters · discipline · overtime (pay / time-in-lieu
@@ -634,4 +660,4 @@ function queueEmail(eventKey,userId,clId,date,vars){
 }
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._safeUp=_safeUp;window._isRlsErr=_isRlsErr;window._syncErr=_syncErr;window._opErr=_opErr;window._reportSyncResults=_reportSyncResults;window.SB_URL=SB_URL;window.SB_ANON=SB_ANON;window.sb=sb;window._unesc=_unesc;window._mU=_mU;window._mC=_mC;window._mS=_mS;window._mA=_mA;window._DAY_MS=_DAY_MS;window._cutoff30ISO=_cutoff30ISO;window._cutoff30Date=_cutoff30Date;window._mapTk=_mapTk;window._mOKR=_mOKR;window._mOKRCheckin=_mOKRCheckin;window._mOKRLog=_mOKRLog;window._okrRow=_okrRow;window._okrCheckinRow=_okrCheckinRow;window._roleCtx=_roleCtx;window._applySubmissions=_applySubmissions;window._applyApprovals=_applyApprovals;window._applyNotifications=_applyNotifications;window._applyFeedback=_applyFeedback;window._applyFolders=_applyFolders;window._applyDocuments=_applyDocuments;window._applyTickets=_applyTickets;window._HRM_CFG_ID=_HRM_CFG_ID;window._applyHrmConfig=_applyHrmConfig;window._mAtt=_mAtt;window._applyAttendance=_applyAttendance;window._attId=_attId;window._mLT=_mLT;window._applyLeaveTypes=_applyLeaveTypes;window._mLR=_mLR;window._applyLeaveRequests=_applyLeaveRequests;window._mLB=_mLB;window._applyLeaveBalances=_applyLeaveBalances;window._mHol=_mHol;window._applyHolidays=_applyHolidays;window._mShift=_mShift;window._applyShifts=_applyShifts;window._mExpense=_mExpense;window._applyExpenses=_applyExpenses;window._hrmStrip=_hrmStrip;window._syncBar=_syncBar;window._anyLoading=_anyLoading;window._isLoading=_isLoading;window._tabLoading=_tabLoading;window._lazyLoad=_lazyLoad;window._lazyLoadDate=_lazyLoadDate;window._lazyForRoute=_lazyForRoute;window._startRealtime=_startRealtime;window.loadFromSB=loadFromSB;window._sync=_sync;window._mFlow=_mFlow;window._flowRow=_flowRow;window._mLetter=_mLetter;window._letterRow=_letterRow;window._mDisc=_mDisc;window._discRow=_discRow;window._mOT=_mOT;window._otRow=_otRow;window._mPRun=_mPRun;window._pRunRow=_pRunRow;window._mPItem=_mPItem;window._pItemRow=_pItemRow;window._pushRow=_pushRow;window._delRow=_delRow;window._mSv=_mSv;window._svRow=_svRow;window._mSvA=_mSvA;window._svARow=_svARow;window.queueEmail=queueEmail;
+window._safeUp=_safeUp;window._isRlsErr=_isRlsErr;window._syncErr=_syncErr;window._opErr=_opErr;window._reportSyncResults=_reportSyncResults;window.SB_URL=SB_URL;window.SB_ANON=SB_ANON;window.sb=sb;window._unesc=_unesc;window._mU=_mU;window._mC=_mC;window._mS=_mS;window._mA=_mA;window._DAY_MS=_DAY_MS;window._cutoff30ISO=_cutoff30ISO;window._cutoff30Date=_cutoff30Date;window._mapTk=_mapTk;window._mOKR=_mOKR;window._mOKRCheckin=_mOKRCheckin;window._mOKRLog=_mOKRLog;window._okrRow=_okrRow;window._okrCheckinRow=_okrCheckinRow;window._roleCtx=_roleCtx;window._applySubmissions=_applySubmissions;window._applyApprovals=_applyApprovals;window._applyNotifications=_applyNotifications;window._applyFeedback=_applyFeedback;window._applyFolders=_applyFolders;window._applyDocuments=_applyDocuments;window._applyTickets=_applyTickets;window._HRM_CFG_ID=_HRM_CFG_ID;window._applyHrmConfig=_applyHrmConfig;window._mAtt=_mAtt;window._applyAttendance=_applyAttendance;window._attId=_attId;window._mLT=_mLT;window._applyLeaveTypes=_applyLeaveTypes;window._mLR=_mLR;window._applyLeaveRequests=_applyLeaveRequests;window._mLB=_mLB;window._applyLeaveBalances=_applyLeaveBalances;window._mHol=_mHol;window._applyHolidays=_applyHolidays;window._mShift=_mShift;window._applyShifts=_applyShifts;window._mExpense=_mExpense;window._applyExpenses=_applyExpenses;window._hrmStrip=_hrmStrip;window._syncBar=_syncBar;window._anyLoading=_anyLoading;window._isLoading=_isLoading;window._tabLoading=_tabLoading;window._lazyLoad=_lazyLoad;window._lazyLoadDate=_lazyLoadDate;window._lazyForRoute=_lazyForRoute;window._startRealtime=_startRealtime;window.loadFromSB=loadFromSB;window._sync=_sync;window._mFlow=_mFlow;window._flowRow=_flowRow;window._mLetter=_mLetter;window._letterRow=_letterRow;window._mDisc=_mDisc;window._discRow=_discRow;window._mOT=_mOT;window._otRow=_otRow;window._mPRun=_mPRun;window._pRunRow=_pRunRow;window._mPItem=_mPItem;window._pItemRow=_pItemRow;window._pushRow=_pushRow;window._delRow=_delRow;window._mSv=_mSv;window._svRow=_svRow;window._mSvA=_mSvA;window._svARow=_svARow;window._mAnn=_mAnn;window._annRow=_annRow;window._mDraft=_mDraft;window._draftRow=_draftRow;window.queueEmail=queueEmail;

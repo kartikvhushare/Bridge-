@@ -217,7 +217,7 @@ App._saveReplyFb=(id)=>{
   fb.replies.push({text,from:S.uid,at:new Date().toISOString()});
   // Notify manager — text must contain 'Feedback reply' so notifType detects it
   const mgr=uById(fb.managerId);
-  if(mgr)DB.notifications.unshift({id:uid('n'),userId:mgr.id,
+  if(mgr&&_inappOn('feedback'))DB.notifications.unshift({id:uid('n'),userId:mgr.id,
     text:'💬 Feedback reply from '+fullName(me())+': "'+text.slice(0,60)+(text.length>60?'...':'')+'"',
     time:new Date().toISOString(),read:false,fbId:id,kind:'feedback'});
   _invalidateNotifCache();toast('Reply sent');closeModal();saveDB();render();
@@ -289,7 +289,7 @@ App._saveSendFeedback=(userId)=>{
     level:'direct',acknowledged:false,status:'Sent',
     createdAt:new Date().toISOString()
   });
-  DB.notifications.unshift({id:uid('n'),userId,text:'Feedback from '+fullName(me())+': "'+( title||text.slice(0,40))+'"',time:new Date().toISOString(),read:false,kind:'feedback'});
+  if(_inappOn('feedback')&&(!_ns||_ns.inapp_feedback_received!==false))DB.notifications.unshift({id:uid('n'),userId,text:'Feedback from '+fullName(me())+': "'+( title||text.slice(0,40))+'"',time:new Date().toISOString(),read:false,kind:'feedback'});
   _invalidateNotifCache();log(fullName(me()),'Sent feedback',fullName(uById(userId)));
   toast('Feedback sent');closeModal();saveDB();render();
 };

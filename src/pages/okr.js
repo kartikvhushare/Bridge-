@@ -10,8 +10,14 @@ window._OKR_EXP={};window._OKR_PANEL={};window._OKR_LOGS={};window._OKRED=null;w
 const _OKR_LVL_C=['#1C212B','#0EA5E9','#0E9F6E','#8B5CF6','#F59E0B','#EC4899'];
 function _okrCanManage(){return can('okr','manage');}
 function _okrCanCreate(){return can('okr','create')||_okrCanManage();}
-function _okrCanEditNode(o){return isAdmin()||isSubAdmin()||_okrCanManage()||o.createdBy===S.uid;}
+function _okrCanEditNode(o){return isAdmin()||isSubAdmin()||_okrCanManage()||o.createdBy===S.uid||okrIsUpOwner(o);}
 function _okrCanCheckin(o){return o.ownerId===S.uid||_okrCanEditNode(o);}
+/* ── Granular rights (owner request #10): relationship first, role permission on top.
+      Level owner + owner of any UPPER level always can; roles gain the same power via the
+      okr.editEntries / okr.changeOwner / okr.deleteLogs toggles in Access Control. ── */
+function _okrCanEditEntry(o){return o.ownerId===S.uid||okrIsUpOwner(o)||can('okr','editEntries');}
+function _okrCanDeleteLog(o){return o.ownerId===S.uid||okrIsUpOwner(o)||can('okr','deleteLogs');}
+function _okrCanChangeOwner(o){return okrIsUpOwner(o)||can('okr','changeOwner')||_okrCanManage()||isAdmin()||isSubAdmin();}
 function _okrLvlChip(lvl){const c=_OKR_LVL_C[lvl%_OKR_LVL_C.length];return`<span style="flex-shrink:0;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;background:${c};color:#fff;letter-spacing:.03em">L${lvl}</span>`;}
 App._okrTogExp=(id)=>{_OKR_EXP[id]=!_OKR_EXP[id];rr();};
 App._okrTogPanel=(id,which)=>{_OKR_PANEL[id]=_OKR_PANEL[id]===which?null:which;rr();};
@@ -20,7 +26,7 @@ App._okrTogLogs=(id)=>{_OKR_LOGS[id]=!_OKR_LOGS[id];rr();};
 function okrPage(){
   const vis=okrVisible(),canCreate=_okrCanCreate();
   const today=todayISO();
-  const head=hdr('OKRs','Objectives & key results — inputs roll up L2 → L1 → L0',canCreate?btn('New L0 objective','App._okrEdit(null,null)',{variant:'primary',icon:'plus'}):'');
+  const head=hdr('OKRs','Objectives & key results — every level (L0 / L1 / L2) is measured on its own inputs',canCreate?btn('New L0 objective','App._okrEdit(null,null)',{variant:'primary',icon:'plus'}):'');
   // ── Summary cards ──
   const sts=vis.map(o=>okrStatusOf(o));
   const cnt=x=>sts.filter(s=>s===x).length;
@@ -98,7 +104,8 @@ function _okrNodeHTML(o,depth){
   const canEdit=_okrCanEditNode(o),canCk=_okrCanCheckin(o),canCreate=_okrCanCreate();
   const icBtn='width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0';
   const meta='font-size:11.5px;color:var(--c-text-2);display:inline-flex;align-items:center;gap:4px';
-  const pTab=(which,label,icon)=>`<button onclick="App._okrTogPanel('${o.id}','${which}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:9px;border:1px solid ${panel===which?'var(--c-text)':'var(--c-border)'};background:${panel===which?'var(--c-ink)':'var(--c-surface)'};color:${panel===which?'#fff':'var(--c-text-2)'};font-size:12px;font-weight:700;cursor:pointer">${ic(icon,'w-3.5 h-3.5')}${label}<span style="font-size:9px;transform:${panel===which?'rotate(180deg)':'none'};display:inline-block">▼</span></button>`;
+  // Owner request #8/#9/#6: these open POPUPS now (rules / progress / per-level logs).
+  const pTab=(which,label,icon)=>`<button onclick="App._okrPop('${o.id}','${which}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:9px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);font-size:12px;font-weight:700;cursor:pointer">${ic(icon,'w-3.5 h-3.5')}${label}</button>`;
   const card=`<div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;margin-bottom:8px;${depth?'margin-left:'+Math.min(depth,5)*18+'px;':''}overflow:hidden">
     <div style="padding:13px 14px 10px">
       <div style="display:flex;align-items:flex-start;gap:9px">
@@ -117,20 +124,20 @@ function _okrNodeHTML(o,depth){
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
           ${okrStatusChip(st)}
           <span class="fd" style="font-size:16px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span>
+          <span style="font-size:11.5px;font-weight:700;color:var(--c-text-2);white-space:nowrap" title="Current → Target (this level's own inputs)">${esc(_okrFmtVal(o,(okrLatestCheckin(o.id)||{}).value))} <span style="color:var(--c-text-3)">→</span> ${o.metricType==='yesno'?'Yes':esc(_okrFmtVal(o,o.targetValue))}</span>
         </div>
       </div>
       <div style="height:6px;background:var(--c-border);border-radius:3px;overflow:hidden;margin-top:9px"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${barC};border-radius:3px;transition:width .3s"></div></div>
       <div style="display:flex;align-items:center;gap:7px;margin-top:10px;flex-wrap:wrap">
         ${pTab('rules','Rules & Target','cog')}
         ${pTab('progress','Progress & Updates','chart')}
+        ${pTab('logs','Logs','audit')}
         <span style="flex:1"></span>
-        ${canCk&&!kids.length?btn('Update',`App._okrCheckin('${o.id}','${todayISO()}')`,{variant:'ghost',size:'sm',icon:'edit'}):''}
+        ${canCk?btn('Update',`App._okrCheckin('${o.id}','${todayISO()}')`,{variant:'ghost',size:'sm',icon:'edit'}):''}
         ${canCreate?`<button onclick="App._okrEdit(null,'${o.id}')" title="Add sub-objective (L${lvl+1})" style="${icBtn}">${ic('plus','w-4 h-4')}</button>`:''}
         ${canEdit?`<button onclick="App._okrEdit('${o.id}')" title="Edit" style="${icBtn}">${ic('edit','w-3.5 h-3.5')}</button><button onclick="App._okrDelete('${o.id}')" title="Delete" style="${icBtn}">${ic('trash','w-3.5 h-3.5')}</button>`:''}
       </div>
     </div>
-    ${panel==='rules'?_okrRulesPanel(o):''}
-    ${panel==='progress'?_okrProgressPanel(o,kids,pct,st):''}
   </div>`;
   return card+(exp?kids.map(k=>_okrNodeHTML(k,depth+1)).join(''):'');
 }
@@ -154,7 +161,7 @@ function _okrRulesPanel(o){
       ${row('Owner',owner?esc(fullName(owner)):'—')}
       ${dept?row('Department',esc(dept.name)):''}
       ${subDept?row('Sub-department',esc(subDept.name)):''}
-      ${kids.length?row('Progress source','Average of '+kids.length+' sub-objective'+(kids.length===1?'':'s')):row('Progress source','Own check-ins')}
+      ${row('Progress source','Own check-ins — levels are independent'+(kids.length?' ('+kids.length+' sub-objective'+(kids.length===1?'':'s')+' measured separately)':''))}
       ${row('Status',o.statusMode==='manual'?('Marked manually ('+esc(o.statusManual||'—')+')'):'Automatic')}
       ${creator?row('Created by',esc(fullName(creator))+(o.createdAt?' · '+fmtS(String(o.createdAt).slice(0,10)):'')):''}
     </div>
@@ -163,25 +170,32 @@ function _okrRulesPanel(o){
   </div>`;
 }
 
-/* ── Panel ②: Progress & Updates ── */
-function _okrProgressPanel(o,kids,pct,st){
+/* ── Popup ②: Progress & Updates (owner request #2/#3/#7/#9) ──
+      Start · Current · Target · Progress stats, the graph (Actual vs Ideal, every date of the
+      window, Progress % pinned top-right of the chart card), the input feed with edit/DELETE
+      (level owner / upper-level owner / okr.editEntries), and an informational sub-objective
+      list (independent — they do NOT feed this level). */
+function _okrProgressBody(o){
+  const kids=okrChildren(o.id);
+  const pct=okrProgress(o),st=okrStatusOf(o);
   const last=okrLatestCheckin(o.id);
   const canCk=_okrCanCheckin(o);
   const lab='font-size:10px;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;font-weight:700';
   const big='font-size:20px;font-weight:800;color:var(--c-text)';
-  const cur=kids.length?(pct===null?'—':pct+'%'):esc(_okrFmtVal(o,last?last.value:null));
-  const tgt=kids.length?'100%':(o.metricType==='yesno'?'Yes':esc(_okrFmtVal(o,o.targetValue)));
+  const cur=esc(_okrFmtVal(o,last?last.value:null));
+  const tgt=o.metricType==='yesno'?'Yes':esc(_okrFmtVal(o,o.targetValue));
+  const strt=o.metricType==='yesno'?'No':esc(_okrFmtVal(o,o.startValue));
   // manual status marking (owner / manager) — every mark is logged
   const markRow=canCk?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px">
       <span style="font-size:11px;font-weight:700;color:var(--c-text-3)">MARK:</span>
-      ${OKR_STATUSES.map(s=>{const on=o.statusMode==='manual'&&o.statusManual===s;const m=OKR_ST_META[s];return`<button onclick="App._okrMarkStatus('${o.id}','${s}')" style="padding:4px 10px;border-radius:20px;border:1.5px solid ${on?m.dot:'var(--c-border)'};background:${on?m.bg:'var(--c-surface)'};color:${on?m.fg:'var(--c-text-2)'};font-size:11px;font-weight:700;cursor:pointer">${s}</button>`;}).join('')}
-      <button onclick="App._okrMarkStatus('${o.id}','auto')" title="Let progress decide the status" style="padding:4px 10px;border-radius:20px;border:1.5px solid ${o.statusMode!=='manual'?'var(--c-text)':'var(--c-border)'};background:${o.statusMode!=='manual'?'var(--c-ink)':'var(--c-surface)'};color:${o.statusMode!=='manual'?'#fff':'var(--c-text-2)'};font-size:11px;font-weight:700;cursor:pointer">Auto</button>
+      ${OKR_STATUSES.map(s=>{const on=o.statusMode==='manual'&&o.statusManual===s;const m=OKR_ST_META[s];return`<button onclick="App._okrMarkStatus('${o.id}','${s}');App._okrPop('${o.id}','progress')" style="padding:4px 10px;border-radius:20px;border:1.5px solid ${on?m.dot:'var(--c-border)'};background:${on?m.bg:'var(--c-surface)'};color:${on?m.fg:'var(--c-text-2)'};font-size:11px;font-weight:700;cursor:pointer">${s}</button>`;}).join('')}
+      <button onclick="App._okrMarkStatus('${o.id}','auto');App._okrPop('${o.id}','progress')" title="Let progress decide the status" style="padding:4px 10px;border-radius:20px;border:1.5px solid ${o.statusMode!=='manual'?'var(--c-text)':'var(--c-border)'};background:${o.statusMode!=='manual'?'var(--c-ink)':'var(--c-surface)'};color:${o.statusMode!=='manual'?'#fff':'var(--c-text-2)'};font-size:11px;font-weight:700;cursor:pointer">Auto</button>
     </div>`:'';
-  // check-in feed (latest first)
-  const feed=okrCheckinsOf(o.id).slice().reverse().slice(0,30).map(c=>{
+  // input feed (latest first) — edit + delete, gated per owner rules
+  const canEntry=_okrCanEditEntry(o);
+  const feed=okrCheckinsOf(o.id).slice().reverse().slice(0,40).map(c=>{
     const u=uById(c.userId);
     const photos=(c.photos||[]).filter(p=>typeof p==='string'&&p!=='[photo]');
-    const canEditCk=c.userId===S.uid||_okrCanManage();
     return `<div style="display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--c-border)">
       <div style="width:64px;flex-shrink:0;font-size:11.5px;color:var(--c-text-2);font-weight:600">${esc(fmtS(c.date))}</div>
       <div style="flex:1;min-width:0">
@@ -190,16 +204,16 @@ function _okrProgressPanel(o,kids,pct,st){
           ${c.statusMark?okrStatusChip(c.statusMark,true):''}
           <span style="font-size:11px;color:var(--c-text-3)">${u?esc(fullName(u)):'—'}</span>
           ${(c.editCount||0)>0?`<span style="font-size:9.5px;font-weight:800;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:10px">edited ×${c.editCount}</span>`:''}
-          ${canEditCk?`<button onclick="App._okrCheckin('${o.id}','${c.date}')" title="Edit this update (logged)" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer">${ic('edit','w-3 h-3')}</button>`:''}
+          ${canEntry?`<button onclick="App._okrCheckin('${o.id}','${c.date}','progress')" title="Edit this input (logged)" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer">${ic('edit','w-3 h-3')}</button><button onclick="App._okrCkDelete('${o.id}','${c.id}')" title="Delete this input (logged)" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--c-danger-ink);background:transparent;border:none;cursor:pointer">${ic('trash','w-3 h-3')}</button>`:''}
         </div>
         ${c.comment?`<div style="font-size:12px;color:var(--c-text-2);font-style:italic;margin-top:3px">"${esc(c.comment)}"</div>`:''}
         ${photos.length?`<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">${photos.map(p=>`<img src="${esc(p)}" onclick="App._bigImg('${esc(p)}')" alt="Check-in photo" style="width:44px;height:44px;object-fit:cover;border-radius:8px;cursor:pointer;border:1px solid var(--c-border)"/>`).join('')}</div>`:''}
       </div>
     </div>`;
-  }).join('')||`<div style="padding:12px 0;color:var(--c-text-3);font-size:12.5px;border-top:1px solid var(--c-border)">No updates yet${canCk?' — add the first one.':'.'}</div>`;
-  // children breakdown (roll-up view)
+  }).join('')||`<div style="padding:12px 0;color:var(--c-text-3);font-size:12.5px;border-top:1px solid var(--c-border)">No inputs yet${canCk?' — add the first one.':'.'}</div>`;
+  // sub-objective overview — informational only (levels are independent)
   const kidRows=kids.length?`<div style="margin-top:12px">
-      <div style="${lab};margin-bottom:6px">Roll-up · sub-objectives feeding this level</div>
+      <div style="${lab};margin-bottom:6px">Sub-objectives (measured independently — they don't feed this level)</div>
       ${kids.map(k=>{const kp=okrProgress(k),ks=okrStatusOf(k);return`<div style="display:flex;align-items:center;gap:9px;padding:6px 0">
         ${_okrLvlChip(okrLevel(k))}
         <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(k.title)}</span>
@@ -208,27 +222,85 @@ function _okrProgressPanel(o,kids,pct,st){
         ${okrStatusChip(ks,true)}
       </div>`;}).join('')}
     </div>`:'';
-  const logs=(DB.okrLogs||[]).filter(l=>l.okrId===o.id);
-  return `<div style="border-top:1px solid var(--c-border);background:var(--c-surface-2);padding:14px 16px">
+  return `<div>
     <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div style="display:flex;gap:22px;flex-wrap:wrap">
-        <div><div style="${lab}">${kids.length?'Roll-up progress':'Current'}</div><div style="${big}">${cur}</div></div>
+        <div><div style="${lab}">Start</div><div style="${big}">${strt}</div></div>
+        <div><div style="${lab}">Current</div><div style="${big}">${cur}</div></div>
         <div><div style="${lab}">Target</div><div style="${big}">${tgt}</div></div>
-        <div><div style="${lab}">Progress</div><div style="${big}">${pct===null?'—':pct+'%'}</div></div>
         <div><div style="${lab}">Status</div><div style="margin-top:3px">${okrStatusChip(st)}</div></div>
       </div>
-      ${canCk?btn(kids.length?'Add note / update':'Add update',`App._okrCheckin('${o.id}','${todayISO()}')`,{variant:'primary',size:'sm',icon:'plus'}):''}
+      ${canCk?btn('Add update',`App._okrCheckin('${o.id}','${todayISO()}','progress')`,{variant:'primary',size:'sm',icon:'plus'}):''}
     </div>
     ${markRow}
-    <div style="height:190px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px;margin-top:12px"><canvas data-okr-chart="${o.id}"></canvas></div>
+    <div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px;margin-top:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
+        <span style="${lab}">Actual vs ideal pace</span>
+        <span title="Progress: how far Current has moved from Start toward Target" style="font-size:12px;font-weight:800;padding:3px 11px;border-radius:20px;background:${_okrBarColor(st)}1E;color:${_okrBarColor(st)}">Progress ${pct===null?'—':pct+'%'}</span>
+      </div>
+      <div style="height:210px;position:relative"><canvas data-okr-chart="${o.id}"></canvas></div>
+    </div>
     ${kidRows}
     <div style="margin-top:12px">
       <div style="${lab};margin-bottom:2px">Updates & inputs</div>
-      <div style="max-height:300px;overflow-y:auto">${feed}</div>
+      <div style="max-height:280px;overflow-y:auto">${feed}</div>
     </div>
-    ${can('audit','view')&&logs.length?`<button onclick="S.filters.audCat='OKRs';S.filters.audQ='${esc((o.title||'').slice(0,40))}';App.go('audit')" style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;cursor:pointer;font-size:11.5px;font-weight:700;color:var(--c-text-3)">${ic('audit','w-3.5 h-3.5')}${logs.length} logged changes — view in Audit →</button>`:''}
   </div>`;
 }
+/* ── Popup dispatcher (#6/#8/#9): Rules & Target · Progress & Updates · per-level Logs ── */
+App._okrPop=(id,which)=>{
+  const o=okrById(id);if(!o)return;
+  if(which==='rules'){
+    modalShell({title:'Rules & Target',sub:o.title||'',size:'max-w-2xl',
+      body:_okrRulesPanel(o),
+      footer:btnG('Close','App.closeModal()')+(_okrCanEditNode(o)?btnP('Edit rules & target',`App.closeModal();App._okrEdit('${id}')`):'')});
+  }else if(which==='progress'){
+    modalShell({title:'Progress & Updates',sub:o.title||'',size:'max-w-2xl',
+      body:_okrProgressBody(o),
+      footer:btnG('Close','App.closeModal()')+`<button type="button" onclick="App._okrPop('${id}','logs')" class="ui-btn ui-btn-ghost">${ic('audit','w-4 h-4')}Activity log</button>`});
+    setTimeout(_paintCharts,40); // paint the modal's canvas after it's in the DOM
+  }else if(which==='logs'){
+    const logs=(DB.okrLogs||[]).filter(l=>l.okrId===id).slice(0,150);
+    const canDel=_okrCanDeleteLog(o);
+    const rows=logs.map(l=>{
+      const u=uById(l.actorId);
+      const det=l.details&&Object.keys(l.details).length?Object.entries(l.details).map(([k,v])=>esc(k)+': '+esc(typeof v==='object'?JSON.stringify(v):String(v))).join(' · '):'';
+      return `<div style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--c-border)">
+        <div style="width:96px;flex-shrink:0;font-size:11px;color:var(--c-text-3);font-weight:600">${esc(String(l.createdAt||'').slice(0,10))}<br>${esc(String(l.createdAt||'').slice(11,16))}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:var(--c-text)">${esc(l.action||'')}</div>
+          <div style="font-size:11.5px;color:var(--c-text-2)">${u?esc(fullName(u)):'—'}${det?' · '+det:''}</div>
+        </div>
+        ${canDel?`<button onclick="App._okrLogDelete('${id}','${l.id}')" title="Delete this log entry" style="width:24px;height:24px;display:grid;place-items:center;border-radius:6px;color:var(--c-danger-ink);background:transparent;border:none;cursor:pointer;flex-shrink:0">${ic('trash','w-3.5 h-3.5')}</button>`:''}
+      </div>`;
+    }).join('')||'<div style="text-align:center;padding:22px;color:var(--c-text-3);font-size:13px">No activity logged for this level yet.</div>';
+    modalShell({title:'Activity log — this level only',sub:o.title||'',size:'max-w-lg',
+      body:`<div>${rows}</div>`,
+      footer:btnG('Close','App.closeModal()')});
+  }
+};
+/* Delete one input (check-in) — level owner / upper-level owner / okr.editEntries. Logged. */
+App._okrCkDelete=(okrId,ckId)=>{
+  const o=okrById(okrId);if(!o)return;
+  if(!_okrCanEditEntry(o)){toast('Only this level\'s owner (or an upper-level owner) can delete inputs','err');return;}
+  const c=(DB.okrCheckins||[]).find(x=>x.id===ckId);if(!c)return;
+  if(!confirm('Delete the '+fmtS(c.date)+' input ('+_okrFmtVal(o,c.value)+')? This is logged.'))return;
+  DB.okrCheckins=(DB.okrCheckins||[]).filter(x=>x.id!==ckId);
+  sb.from('okr_checkins').delete().eq('id',ckId).then(({error})=>{if(error)_syncErr('OKR input delete')(error);}).catch(_syncErr('OKR input delete'));
+  okrLog(okrId,'Deleted input',{date:c.date,value:c.value});
+  saveDB();toast('Input deleted','warn');
+  App._okrPop(okrId,'progress');
+};
+/* Delete one log entry — level owner / upper-level owner / okr.deleteLogs. */
+App._okrLogDelete=(okrId,logId)=>{
+  const o=okrById(okrId);if(!o)return;
+  if(!_okrCanDeleteLog(o)){toast('Only this level\'s owner (or an upper-level owner) can delete log entries','err');return;}
+  if(!confirm('Delete this log entry? This cannot be undone.'))return;
+  DB.okrLogs=(DB.okrLogs||[]).filter(l=>l.id!==logId);
+  sb.from('okr_logs').delete().eq('id',logId).then(({error})=>{if(error)_syncErr('OKR log delete')(error);}).catch(_syncErr('OKR log delete'));
+  saveDB();toast('Log entry deleted','warn');
+  App._okrPop(okrId,'logs');
+};
 
 /* ── Node editor (create / edit any level) ── */
 App._okrEdit=(id,parentId)=>{
@@ -262,7 +334,10 @@ App._renderOKREdit=()=>{
         <div><label style="${L}">Department *</label><select class="ui-select rf" onchange="_OKRED.departmentId=this.value||null;_OKRED.subDepartmentId=null;App._renderOKREdit()"><option value="">— Select department —</option>${deptOpts.map(d=>`<option value="${esc(d[0])}" ${o.departmentId===d[0]?'selected':''}>${esc(d[1])}</option>`).join('')}</select></div>
         <div><label style="${L}">Sub-department</label><select class="ui-select rf" ${subOpts.length?'':'disabled'} onchange="_OKRED.subDepartmentId=this.value||null"><option value="">${subOpts.length?'— All / none —':'No sub-departments'}</option>${subOpts.map(s=>`<option value="${esc(s[0])}" ${o.subDepartmentId===s[0]?'selected':''}>${esc(s[1])}</option>`).join('')}</select></div>
       </div>`:''}
-      <div><label style="${L}">Owner (does the check-ins) *</label><select class="ui-select rf" onchange="_OKRED.ownerId=this.value||null"><option value="">— Select owner —</option>${users.map(u=>`<option value="${u.id}" ${o.ownerId===u.id?'selected':''}>${esc(fullName(u))}</option>`).join('')}</select></div>
+      ${(()=>{ // Owner: changing it on an EXISTING node is gated (#10) — upper-level owner / okr.changeOwner / manage.
+        const locked=isExisting&&!_okrCanChangeOwner(okrById(o.id));
+        if(locked){const cu=uById(o.ownerId);return `<div><label style="${L}">Owner (does the check-ins)</label><div class="ui-input" style="background:var(--c-surface-2);color:var(--c-text-2)">${cu?esc(fullName(cu)):'—'}</div><p style="font-size:11px;color:var(--c-text-3);margin-top:4px">Only an upper-level owner (or a role with “Change owner”) can reassign this level.</p></div>`;}
+        return `<div><label style="${L}">Owner (does the check-ins) *</label><select class="ui-select rf" onchange="_OKRED.ownerId=this.value||null"><option value="">— Select owner —</option>${users.map(u=>`<option value="${u.id}" ${o.ownerId===u.id?'selected':''}>${esc(fullName(u))}</option>`).join('')}</select></div>`;})()}
       <div style="border-top:1px dashed var(--c-border);padding-top:12px"><label style="${L}">Rules & target — how is this measured?</label>
         <select class="ui-select rf" onchange="_OKRED.metricType=this.value;App._renderOKREdit()">${OKR_METRICS.map(m=>`<option value="${m[0]}" ${o.metricType===m[0]?'selected':''}>${m[1]}</option>`).join('')}</select>
       </div>
@@ -310,6 +385,8 @@ App._okrSave=()=>{
   const idx=(DB.okrs||[]).findIndex(x=>x.id===o.id);
   if(idx>-1){
     const prev=DB.okrs[idx];
+    // #10: never trust the form — reassigning the owner requires upper-level-owner / changeOwner / manage.
+    if(String(prev.ownerId||'')!==String(o.ownerId||'')&&!_okrCanChangeOwner(prev)){o.ownerId=prev.ownerId;toast('Owner unchanged — only an upper-level owner can reassign this level','warn');}
     const fields=[['title','Title'],['description','Goal'],['departmentId','Department'],['subDepartmentId','Sub-department'],['ownerId','Owner'],['metricType','Metric'],['startValue','Start value'],['targetValue','Target'],['unit','Unit'],['direction','Direction'],['periodStart','Period start'],['periodEnd','Period end']];
     const changes=[];
     fields.forEach(([k,label])=>{const a=prev[k],b=o[k];if(String(a===null||a===undefined?'':a)!==String(b===null||b===undefined?'':b)){
@@ -327,15 +404,18 @@ App._okrSave=()=>{
     okrLog(o.id,'Created objective',{level:'L'+(o.parentId?okrLevel(o):0)});
     log(fullName(me()),'Created OKR',o.title);
     if(o.parentId)_OKR_EXP[o.parentId]=true;
-    if(o.ownerId&&o.ownerId!==S.uid)DB.notifications.unshift({id:uid('n'),userId:o.ownerId,text:'🎯 New OKR assigned to you: "'+o.title+'" — '+_okrFreqLabel(o),time:new Date().toISOString(),read:false,kind:'okr'});
+    if(o.ownerId&&o.ownerId!==S.uid&&_inappOn('okr'))DB.notifications.unshift({id:uid('n'),userId:o.ownerId,text:'🎯 New OKR assigned to you: "'+o.title+'" — '+_okrFreqLabel(o),time:new Date().toISOString(),read:false,kind:'okr'});
   }
   _okrPush(o);saveDB();closeModal();toast('OKR saved');rr();
 };
 App._okrDelete=(id)=>{
   const o=okrById(id);if(!o)return;
   if(!_okrCanEditNode(o))return toast('You can\'t delete this OKR','err');
-  const desc=okrDescendants(id);
-  if(!confirm('Delete "'+(o.title||'this objective')+'"'+(desc.length?(' and its '+desc.length+' sub-objective'+(desc.length===1?'':'s')):'')+'? Check-in history and logs go with it.'))return;
+  // Referential-integrity guard: an OKR with sub-objectives can't be deleted (the old cascade is
+  // gone) — delete or re-parent the children first. Its own check-ins/logs go with it as before.
+  if(!guardDelete('okr',id,'"'+(o.title||'this objective')+'"'))return;
+  const desc=okrDescendants(id); // empty by now — kept so the cleanup below stays byte-compatible
+  if(!confirm('Delete "'+(o.title||'this objective')+'"? Check-in history and logs go with it.'))return;
   const ids=new Set([id,...desc.map(d=>d.id)]);
   DB.okrs=(DB.okrs||[]).filter(x=>!ids.has(x.id));
   DB.okrCheckins=(DB.okrCheckins||[]).filter(c=>!ids.has(c.okrId));
@@ -356,13 +436,29 @@ App._okrMarkStatus=(id,st)=>{
 };
 
 /* ── Single check-in modal (value + comment + photos + optional status mark) ── */
-App._okrCheckin=(okrId,date)=>{
+App._okrCheckin=(okrId,date,backTo)=>{
   const o=okrById(okrId);if(!o)return;
   if(!_okrCanCheckin(o))return toast('Only the owner or a manager can add updates','err');
   const d=date||todayISO();
   const ex=okrCheckinFor(okrId,S.uid,d)||((DB.okrCheckins||[]).find(c=>c.okrId===okrId&&c.date===d));
-  _OKRCI={okrId:okrId,date:d,value:ex?ex.value:(o.metricType==='yesno'?null:null),comment:ex?ex.comment:'',photos:ex?(ex.photos||[]).filter(p=>typeof p==='string'&&p!=='[photo]').slice():[],statusMark:ex?ex.statusMark:null,existingId:ex?ex.id:null};
+  // Editing an EXISTING input is gated separately (#5): level owner / upper-level owner / okr.editEntries.
+  if(ex&&!_okrCanEditEntry(o))return toast('Only this level\'s owner (or an upper-level owner) can edit inputs','err');
+  _OKRCI={okrId:okrId,date:d,value:ex?ex.value:(o.metricType==='yesno'?null:null),comment:ex?ex.comment:'',photos:ex?(ex.photos||[]).filter(p=>typeof p==='string'&&p!=='[photo]').slice():[],statusMark:ex?ex.statusMark:null,existingId:ex?ex.id:null,_backTo:backTo||null};
+  // PHASE4b: no saved check-in for this date → resume the server draft (saved on any device).
+  if(!ex){
+    const _dr=_draftFor('okr',okrId,null);
+    if(_dr&&_dr.payload&&(_dr.payload.value!==null&&_dr.payload.value!==undefined||_dr.payload.comment||_dr.payload.statusMark)){
+      _OKRCI.value=_dr.payload.value??null;_OKRCI.comment=_dr.payload.comment||'';_OKRCI.statusMark=_dr.payload.statusMark||null;_OKRCI._fromDraft=true;
+    }
+  }
   App._renderOKRCheckin();
+};
+/* PHASE4b: save the current check-in form as a server-backed draft (one per OKR; photos excluded). */
+App._okrCkDraft=()=>{
+  const d=_OKRCI;if(!d)return;
+  if((d.value===null||d.value===undefined)&&!(d.comment||'').trim()&&!d.statusMark){toast('Nothing to save yet','warn');return;}
+  _draftSave('okr',d.okrId,null,{date:d.date,value:d.value??null,comment:d.comment||'',statusMark:d.statusMark||null});
+  toast('Draft saved — it will be here on any of your devices');
 };
 App._okrCISetDate=(v)=>{if(!v||!_OKRCI)return;App._okrCheckin(_OKRCI.okrId,v);};
 App._okrCISetVal=(v)=>{if(_OKRCI){_OKRCI.value=v;App._renderOKRCheckin();}};
@@ -395,8 +491,9 @@ App._renderOKRCheckin=()=>{
         ${OKR_STATUSES.map(s=>{const on=d.statusMark===s;const m=OKR_ST_META[s];return`<button type="button" onclick="_OKRCI.statusMark=_OKRCI.statusMark==='${s}'?null:'${s}';App._renderOKRCheckin()" style="padding:5px 11px;border-radius:20px;border:1.5px solid ${on?m.dot:'var(--c-border)'};background:${on?m.bg:'var(--c-surface)'};color:${on?m.fg:'var(--c-text-2)'};font-size:11.5px;font-weight:700;cursor:pointer">${s}</button>`;}).join('')}
       </div><div style="font-size:11px;color:var(--c-text-3);margin-top:6px">Marking a status here also sets it on the objective (logged). Leave empty to keep the automatic status.</div></div>
       ${d.existingId?`<div style="font-size:11.5px;color:#92400E;background:#FEF3C7;border-radius:9px;padding:8px 11px">You're editing an existing update — the change is recorded in the activity log.</div>`:''}
+      ${d._fromDraft?`<div style="font-size:11.5px;color:#92400E;background:#FFFBEB;border:1px solid #FDE68A;border-radius:9px;padding:8px 11px">📝 Draft restored — you saved this earlier${'' /* cross-device via the drafts table */}. Submit it or keep editing.</div>`:''}
     </div>`,
-    footer:btnG('Cancel','App.closeModal()')+btnP(d.existingId?'Save changes':'Save update','App._okrCheckinSave()')});
+    footer:btnG('Cancel','App.closeModal()')+(d.existingId?'':`<button type="button" onclick="App._okrCkDraft()" class="ui-btn" style="background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;font-weight:700">Save draft</button>`)+btnP(d.existingId?'Save changes':'Save update','App._okrCheckinSave()')});
 };
 // Shared apply: used by the single modal AND the combined "due today" modal. Logs everything.
 function _okrApplyCheckin(okrId,date,d){
@@ -423,14 +520,17 @@ function _okrApplyCheckin(okrId,date,d){
     o.statusMode='manual';o.statusManual=d.statusMark;
     okrLog(okrId,'Marked status',{to:d.statusMark});_okrPush(o);
   }
+  _draftDelete('okr',okrId,null); // PHASE4b: a real check-in landed → the draft leaves the drafts table
   return true;
 }
 App._okrCheckinSave=()=>{
   const d=_OKRCI;if(!d)return;
   const o=okrById(d.okrId);if(!o)return;
   if(d.value===null||d.value===undefined||!isFinite(d.value))return toast(o.metricType==='yesno'?'Pick Yes or No':'Enter the value','err');
+  const back=d._backTo,bid=d.okrId;
   _okrApplyCheckin(d.okrId,d.date,d);
   _OKRCI=null;saveDB();closeModal();toast('Update saved');rr();
+  if(back==='progress')App._okrPop(bid,'progress'); // came from the Progress popup — go back to it
 };
 
 /* ── Combined "all OKR tasks due that day" modal — the scheduled checklist ── */
@@ -550,38 +650,38 @@ function _drawOKRCharts(){
   const T=_aChartTheme();
   document.querySelectorAll('canvas[data-okr-chart]').forEach(cv=>{
     const o=okrById(cv.getAttribute('data-okr-chart'));if(!o)return;
-    const kids=okrChildren(o.id);
     const fail=(msg)=>{const p=cv.parentElement;if(p)p.innerHTML='<div style="height:100%;display:grid;place-items:center;color:var(--c-text-3);font-size:12px;text-align:center;padding:0 14px">'+msg+'</div>';};
     try{
-      let labels,dates,actual,ideal,pctMode;
-      if(kids.length){
-        pctMode=true;
-        const dset=new Set();
-        [o,...okrDescendants(o.id)].forEach(n=>okrCheckinsOf(n.id).forEach(c=>dset.add(c.date)));
-        dates=[...dset].sort().slice(-40);
-        if(!dates.length)return fail('No updates below this level yet — the graph appears after the first check-in.');
-        actual=dates.map(d=>_okrProgressAt(o,d));
-        ideal=dates.map(d=>_okrIdealAt(o,d,[dates[0],dates[dates.length-1]],true));
-      }else{
-        pctMode=false;
-        const cs=okrCheckinsOf(o.id).filter(c=>c.value!==null&&c.value!==undefined);
-        if(!cs.length)return fail('No updates yet — the graph appears after the first check-in.');
-        dates=cs.map(c=>c.date);
-        actual=cs.map(c=>Number(c.value));
-        ideal=o.metricType==='yesno'?null:dates.map(d=>_okrIdealAt(o,d,[dates[0],dates[dates.length-1]],false));
-      }
-      labels=dates.map(d=>fmtS(d));
+      /* INDEPENDENT LEVELS (#1): every node graphs its OWN inputs only — children never appear.
+         Window (#4): periodStart → periodEnd when set (every single date is a label; a 1st→31st
+         window shows 1,2,3,…31); otherwise first input → today. Two lines (#3): Actual (the
+         inputs, connected) and Ideal (straight start-value → target pace across the window). */
+      const cs=okrCheckinsOf(o.id).filter(c=>c.value!==null&&c.value!==undefined);
+      if(!cs.length)return fail('No inputs on this level yet — the graph appears after the first check-in.');
+      const t=todayISO();
+      let ws=o.periodStart||cs[0].date;
+      let we=o.periodEnd||(cs[cs.length-1].date>t?cs[cs.length-1].date:t);
+      if(cs[0].date<ws)ws=cs[0].date;
+      if(cs[cs.length-1].date>we)we=cs[cs.length-1].date;
+      if(we<ws)we=ws;
+      const days=[];{let d=ws,g=0;while(d<=we&&g++<370){days.push(d);d=_isoAdd(d,1);}}
+      const byDate={};cs.forEach(c=>{byDate[c.date]=Number(c.value);}); // last input of a day wins
+      const actual=days.map(d=>byDate[d]!==undefined?byDate[d]:null);
+      const s=Number(o.startValue||0),tv=(o.targetValue===null||o.targetValue===undefined)?null:Number(o.targetValue);
+      const N=days.length;
+      const ideal=(tv===null||o.metricType==='yesno'&&false)?null:days.map((d,i)=>N<=1?tv:Math.round((s+(tv-s)*(i/(N-1)))*100)/100);
+      // Month-style tick labels (#4): a window inside ~5 weeks shows the DAY NUMBER for every date.
+      const short=N<=37;
+      const labels=days.map(d=>short?String(Number(d.slice(8,10))):d.slice(5));
       const ds=[];
-      if(ideal&&ideal.some(v=>v!==null))ds.push({label:'Ideal (planned pace)',data:ideal,borderColor:'#94A3B8',borderDash:[7,5],pointRadius:0,fill:false,tension:0,borderWidth:2});
-      ds.push({label:pctMode?'Actual progress %':'Actual (reported)',data:actual,borderColor:'#0E9F6E',backgroundColor:'rgba(14,159,110,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:'#0E9F6E',borderWidth:2});
-      if(!pctMode&&o.metricType!=='yesno'&&o.targetValue!==null&&o.targetValue!==undefined&&!o.periodStart)ds.push({label:'Target',data:labels.map(()=>Number(o.targetValue)),borderColor:'#F59E0B',borderDash:[3,4],pointRadius:0,fill:false,tension:0,borderWidth:1.5});
+      if(ideal)ds.push({label:'Ideal (on-track pace)',data:ideal,borderColor:'#94A3B8',borderDash:[7,5],pointRadius:0,fill:false,tension:0,borderWidth:2});
+      ds.push({label:'Actual (your inputs)',data:actual,spanGaps:true,borderColor:T.brand,backgroundColor:_vfill(T.brand),fill:true,tension:.32,pointRadius:(c)=>actual[c.dataIndex]===null?0:3.5,pointBackgroundColor:T.brand,borderWidth:2.5});
       const yOpts={beginAtZero:true,ticks:{color:T.tick,font:{size:10}},grid:{color:T.grid}};
-      if(pctMode)yOpts.suggestedMax=110;
-      if(o.metricType==='yesno'&&!kids.length)yOpts.ticks.callback=function(v){return v===1?'Yes':v===0?'No':'';};
-      _aCharts.push(new Chart(cv.getContext('2d'),{type:'line',data:{labels:labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:T.tick,font:{size:10.5},boxWidth:14,padding:8}}},scales:{x:{ticks:{color:T.tick,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{color:T.grid}},y:yOpts}}}));
+      if(o.metricType==='yesno'){yOpts.suggestedMax=1;yOpts.ticks.stepSize=1;yOpts.ticks.callback=function(v){return v===1?'Yes':v===0?'No':'';};}
+      _aCharts.push(new Chart(cv.getContext('2d'),{type:'line',data:{labels:labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:T.tick,font:{size:10.5}}},tooltip:{callbacks:{title:(items)=>items.length?fmtS(days[items[0].dataIndex]):''}}},scales:{x:{ticks:{color:T.tick,font:{size:short?9.5:10},maxRotation:0,autoSkip:!short,...(short?{}:{maxTicksLimit:10})},grid:{display:false}},y:yOpts}}}));
     }catch(e){fail("Couldn't draw chart.");}
   });
 }
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._OKR_EXP=_OKR_EXP;window._OKR_PANEL=_OKR_PANEL;window._OKR_LOGS=_OKR_LOGS;window._OKR_LVL_C=_OKR_LVL_C;window._okrCanManage=_okrCanManage;window._okrCanCreate=_okrCanCreate;window._okrCanEditNode=_okrCanEditNode;window._okrCanCheckin=_okrCanCheckin;window._okrLvlChip=_okrLvlChip;window.okrPage=okrPage;window._okrNodeHTML=_okrNodeHTML;window._okrRulesPanel=_okrRulesPanel;window._okrProgressPanel=_okrProgressPanel;window._okrApplyCheckin=_okrApplyCheckin;window._okrClCard=_okrClCard;window._okrValueAt=_okrValueAt;window._okrLeafPctAt=_okrLeafPctAt;window._okrProgressAt=_okrProgressAt;window._okrIdealAt=_okrIdealAt;window._drawOKRCharts=_drawOKRCharts;
+window._OKR_EXP=_OKR_EXP;window._OKR_PANEL=_OKR_PANEL;window._OKR_LOGS=_OKR_LOGS;window._OKR_LVL_C=_OKR_LVL_C;window._okrCanManage=_okrCanManage;window._okrCanCreate=_okrCanCreate;window._okrCanEditNode=_okrCanEditNode;window._okrCanCheckin=_okrCanCheckin;window._okrLvlChip=_okrLvlChip;window.okrPage=okrPage;window._okrNodeHTML=_okrNodeHTML;window._okrRulesPanel=_okrRulesPanel;window._okrProgressBody=_okrProgressBody;window._okrCanEditEntry=_okrCanEditEntry;window._okrCanDeleteLog=_okrCanDeleteLog;window._okrCanChangeOwner=_okrCanChangeOwner;window._okrApplyCheckin=_okrApplyCheckin;window._okrClCard=_okrClCard;window._okrValueAt=_okrValueAt;window._okrLeafPctAt=_okrLeafPctAt;window._okrProgressAt=_okrProgressAt;window._okrIdealAt=_okrIdealAt;window._drawOKRCharts=_drawOKRCharts;

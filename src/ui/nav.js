@@ -202,8 +202,8 @@ function shell(content){
   return`<div style="min-height:100vh;display:flex">
   <aside class="sidebar hidden md:flex flex-col w-56 fixed inset-y-0 left-0 z-30 overflow-y-auto" style="background:linear-gradient(177deg,#1C212B 0%,#14171E 100%);color:#fff;border-right:1px solid rgba(255,255,255,.05)">
     <button onclick="App.go('dashboard')" style="padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.06);background:transparent;border-left:none;border-right:none;border-top:none;cursor:pointer;width:100%;text-align:left" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background='transparent'">
-      <div class="nav-brand">B</div>
-      <span class="fd" style="font-weight:800;font-size:18px;letter-spacing:-.5px;color:#fff">Bridge</span>
+      <div class="nav-brand">E</div>
+      <span class="fd" style="font-weight:800;font-size:18px;letter-spacing:-.5px;color:#fff">Evarca</span>
     </button>
     <nav style="flex:1;padding:10px 8px;display:flex;flex-direction:column;gap:2px">${dailyHTML}<div style="height:1px;background:rgba(255,255,255,.07);margin:8px 6px"></div>${sectionsHTML}</nav>
     <div style="padding:8px;border-top:1px solid rgba(255,255,255,.06)">
@@ -225,8 +225,8 @@ function shell(content){
       <div style="height:56px;padding:0 18px;display:flex;align-items:center;gap:10px">
         <button onclick="App.moreMenu()" class="md:hidden" aria-label="Open menu" style="width:38px;height:38px;border-radius:10px;border:none;background:transparent;color:var(--c-text);display:grid;place-items:center;cursor:pointer">${ic('menu','w-5 h-5')}</button>
         <div class="md:hidden flex items-center gap-2">
-          <div class="nav-brand" style="width:24px;height:24px;font-size:11px">B</div>
-          <span class="fd" style="font-weight:800;font-size:15px">Bridge</span>
+          <div class="nav-brand" style="width:24px;height:24px;font-size:11px">E</div>
+          <span class="fd" style="font-weight:800;font-size:15px">Evarca</span>
         </div>
         <div style="flex:1"></div><button onclick="App._cmdk()" class="hidden md:flex" style="align-items:center;gap:8px;width:240px;padding:8px 12px;border-radius:12px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-3);font-size:12.5px;font-weight:500;cursor:text;box-shadow:inset 0 1px 2px rgba(16,24,40,.04)">${ic('search','w-4 h-4')}<span style="flex:1;text-align:left">Search anything…</span><span style="font-size:10px;font-weight:800;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:6px;padding:1px 6px;color:var(--c-text-3)">⌘K</span></button>
         <button onclick="App.go('notifications')" class="md:hidden" aria-label="Notifications" style="position:relative;width:38px;height:38px;border-radius:10px;border:none;background:transparent;color:var(--c-text);display:grid;place-items:center;cursor:pointer">${ic('bell','w-5 h-5')}${(()=>{const n=_notifCount();return n?`<span style="position:absolute;top:5px;right:5px">${countBadge(n,'danger')}</span>`:'';})()}</button>

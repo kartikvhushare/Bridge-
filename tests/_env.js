@@ -5,7 +5,9 @@
 function chain() {
   return new Proxy(function () {}, {
     get(_t, k) {
-      if (k === 'then') return (res) => res({ data: [], error: null });
+      // .then(cb) must stay chainable (`.then(...).catch(...)` is used by _pushRow/log/etc.),
+      // so invoke the callback but return another chain — like a real promise returns a promise.
+      if (k === 'then') return (res) => { try { res({ data: [], error: null }); } catch (e) {} return chain(); };
       if (k === 'catch') return () => chain();
       return () => chain();
     },

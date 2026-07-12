@@ -4,17 +4,17 @@ function loginView(){return`<div class="min-h-screen flex" style="background:var
   <div class="hidden lg:flex flex-col justify-between" style="width:44%;background:linear-gradient(160deg,#1C212B 0%,#13161D 100%);color:#fff;padding:56px;position:relative;overflow:hidden">
     <div style="position:absolute;right:-120px;top:-120px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(14,159,110,.4),transparent 70%);filter:blur(40px)"></div>
     <div style="position:absolute;left:-80px;bottom:-100px;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(2,132,199,.22),transparent 70%);filter:blur(50px)"></div>
-    <div class="flex items-center gap-3 relative"><div class="nav-brand" style="width:40px;height:40px;border-radius:12px;font-size:20px">B</div><span class="fd font-bold text-2xl">Bridge</span></div>
+    <div class="flex items-center gap-3 relative"><div class="nav-brand" style="width:40px;height:40px;border-radius:12px;font-size:20px">E</div><span class="fd font-bold text-2xl">Evarca</span></div>
     <div class="relative"><h1 class="fd text-4xl font-bold" style="line-height:1.12;letter-spacing:-1px">Every shift,<br>every check,<br><span style="color:var(--c-brand)">accounted for.</span></h1><p style="color:rgba(255,255,255,.65);margin-top:18px;line-height:1.6;font-size:14.5px;max-width:380px">Enterprise checklists with question-based responses, escalation routing, location tracking, and real-time approvals.</p>
       <div style="display:flex;gap:20px;margin-top:32px">
         <div><div class="fd" style="font-size:22px;font-weight:800">Clock-in</div><div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:2px">geofenced &amp; on-time</div></div>
         <div style="width:1px;background:rgba(255,255,255,.12)"></div>
         <div><div class="fd" style="font-size:22px;font-weight:800">Approvals</div><div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:2px">one unified inbox</div></div>
       </div></div>
-    <div style="font-size:12px;color:rgba(255,255,255,.4)">© 2026 Bridge</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.4)">© 2026 Evarca</div>
   </div>
   <div class="flex-1 flex items-center justify-center p-6"><div class="w-full max-w-sm fade">
-    <div class="lg:hidden flex items-center gap-2 mb-8 justify-center"><div class="nav-brand">B</div><span class="fd font-bold text-xl">Bridge</span></div>
+    <div class="lg:hidden flex items-center gap-2 mb-8 justify-center"><div class="nav-brand">E</div><span class="fd font-bold text-xl">Evarca</span></div>
     <h2 class="fd" style="font-size:26px;font-weight:800;letter-spacing:-.5px;margin-bottom:4px">Welcome back</h2>
     <p style="color:var(--c-text-2);font-size:14px;margin-bottom:24px">Sign in to your workspace.</p>
     <div style="display:flex;flex-direction:column;gap:14px">

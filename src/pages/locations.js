@@ -90,7 +90,11 @@ App.saveLoc=(id)=>{const n=$('#ln-n')?.value.trim();if(!n){toast('Name required'
     DB.hrmConfig.locationGeo[obj.id]={enabled:togV('ln-geo'),lat:(_lat!==''&&_lat!=null)?Number(_lat):null,lng:(_lng!==''&&_lng!=null)?Number(_lng):null,radius:Number($('#ln-rad')?.value)||200};
   }
   log(fullName(me()),id?'Edited location':'Created location',n);toast(id?'Updated':'Created');saveDB();closeModal();render();sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'}).then(({error})=>{if(error)_syncErr('location')(error);}).catch(_syncErr('location'));};
-App.delLoc=(id)=>{const l=locById(id);if(!l)return;if(!confirm('Delete "'+l.name+'"? Checklists using this location will keep it as reference.'))return;if(!DB.locations_deleted)DB.locations_deleted=[];if(!DB.locations_deleted.includes(id))DB.locations_deleted.push(id);DB.locations=DB.locations.filter(x=>x.id!==id);if(DB.hrmConfig?.locationGeo)delete DB.hrmConfig.locationGeo[id];
+App.delLoc=(id)=>{const l=locById(id);if(!l)return;
+// Referential-integrity guard: blocked while people are geofenced to it, checklists use it,
+// upcoming shifts happen there, or announcements target it.
+if(!guardDelete('location',id,'"'+l.name+'"'))return;
+if(!confirm('Delete "'+l.name+'"?'))return;if(!DB.locations_deleted)DB.locations_deleted=[];if(!DB.locations_deleted.includes(id))DB.locations_deleted.push(id);DB.locations=DB.locations.filter(x=>x.id!==id);if(DB.hrmConfig?.locationGeo)delete DB.hrmConfig.locationGeo[id];
 // DATA-4: clear the dangling locationId from every user pointing at the deleted location
 // (mirrors the dept-clear pattern; u.hrm syncs via the user_hrm table, so cleared ids propagate on next sync).
 // M4: _ensureHrm also self-heals a stale locationId on devices that haven't received this clear yet.

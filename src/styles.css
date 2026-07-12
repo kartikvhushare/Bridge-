@@ -1,4 +1,4 @@
-/* ════════ Bridge DESIGN TOKENS (2026 refresh) ════════
+/* ════════ Evarca DESIGN TOKENS (2026 refresh) ════════
    Single source of truth. Brand green is ONE token (--c-brand) so it's swappable.
    Literals elsewhere in the file are legacy; new components reference these vars. */
 :root{
@@ -36,7 +36,7 @@
   --fs-h1:27px; --fs-h2:19px; --fs-card:14.5px; --fs-body:14px; --fs-cap:11.5px;
   --ring:0 0 0 3.5px rgba(14,159,110,.20);
 }
-/* ─ Bridge base ─ */
+/* ─ Evarca base ─ */
 html,body{height:100%}
 body{font-family:"Hanken Grotesk",sans-serif;font-size:14px;line-height:1.5;background:var(--c-bg);color:var(--c-text);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;overscroll-behavior:none}
 .fd{font-family:"Schibsted Grotesk",sans-serif;letter-spacing:-.01em}
@@ -244,6 +244,21 @@ html,body{max-width:100%;overflow-x:hidden}
   #content{padding-left:28px!important;padding-right:28px!important}
   /* a single-column form inside a card shouldn't stretch full 1152px — cap inputs' parents */
   .form-narrow{max-width:560px}
+}
+/* ════════ RESPONSIVE POLISH (Wave 2 — Evarca mobile pass) ════════
+   Closes the gaps Wave 1 left: iOS focus-zoom, 3-across modal field grids, canvas overflow,
+   comfortable modal footers. Markup untouched — CSS only, so desktop is pixel-identical. */
+@media(max-width:767px){
+  /* iOS Safari zooms the whole page when focusing any control under 16px — pin controls to 16px. */
+  .ui-input,.ui-select,input.rf,select.rf,textarea.rf,#modal input,#modal select,#modal textarea{font-size:16px!important}
+  /* Field grids inside modals: 3-across is unusable at phone width — collapse to 2 columns. */
+  #modal .grid.grid-cols-3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* Charts and images never push the page wider than the viewport. */
+  #content canvas,#content img{max-width:100%}
+  /* Modal footer buttons: comfortable tap targets. */
+  #modal .ui-btn{min-height:44px}
+  /* Long unbroken strings (emails, serials, URLs) wrap instead of forcing horizontal scroll. */
+  #content td,#content th{word-break:normal;overflow-wrap:anywhere}
 }
 /* Safe-area aware sticky topbar on notched devices */
 .topbar{padding-top:env(safe-area-inset-top)}

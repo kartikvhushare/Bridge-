@@ -20,7 +20,7 @@ App._downloadAllQuestions=()=>{
     rows.push([q.text||'',q.type||'answer',o[0],o[1],o[2],o[3],o[4],
       q.photo?'TRUE':'FALSE',q.comment?'TRUE':'FALSE',q.approval?'TRUE':'FALSE',cond,val,val2]);
   });
-  _csvDownload(rows,'bridge_questions');
+  _csvDownload(rows,'evarca_questions');
   toast('Downloaded '+qs.length+' question'+(qs.length!==1?'s':''));
 };
 App._downloadQTemplate=()=>{
@@ -42,7 +42,7 @@ App._downloadQTemplate=()=>{
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='bridge_questions_template.csv';
+  a.download='evarca_questions_template.csv';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   URL.revokeObjectURL(a.href);
   toast('Template downloaded');
@@ -280,6 +280,8 @@ App._filterQuestions=(val)=>{
 
 App._delQuestion=(id)=>{
   const q=(DB.questions||[]).find(x=>x.id===id);if(!q)return;
+  // Referential-integrity guard: a question still used by checklists can't be deleted.
+  if(!guardDelete('question',id,'this question'))return;
   if(!confirm('Delete "'+q.text+'"?'))return;
   if(!DB.questions_deleted)DB.questions_deleted=[];
   if(!DB.questions_deleted.includes(id))DB.questions_deleted.push(id);
@@ -775,7 +777,7 @@ function _processEscalations(checklistId,date,responses){
       );
       if(existingOpenTicket){
         // Just update the notification so assignee knows it happened again
-        DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:'🔁 Repeat escalation: "'+q.text+'" answered "'+String(resp.response||'')+'" again by '+fullName(u)+' — ticket #'+existingOpenTicket.id.slice(-6)+' still open',time:new Date().toISOString(),read:false,type:'escalation',kind:'escalation'});
+        if(_inappOn('escalation'))DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:'🔁 Repeat escalation: "'+q.text+'" answered "'+String(resp.response||'')+'" again by '+fullName(u)+' — ticket #'+existingOpenTicket.id.slice(-6)+' still open',time:new Date().toISOString(),read:false,type:'escalation',kind:'escalation'});
         _invalidateNotifCache();
         return; // Skip creating a duplicate ticket
       }
@@ -824,10 +826,10 @@ function _processEscalations(checklistId,date,responses){
         else console.log('[ticket]',ticket.id,'inserted for',ticket.assignedTo);
       }).catch(e=>console.error('[ticket insert failed]',e.message));
       // In-app notification to assignee
-      DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation',kind:'escalation'});
+      if(_inappOn('escalation'))DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation',kind:'escalation'});
       // In-app notification to admin
       const adminU=DB.users.find(x=>x.role==='Admin');
-      if(adminU&&adminU.id!==escalateTo&&adminU.id!==S.uid){
+      if(adminU&&adminU.id!==escalateTo&&adminU.id!==S.uid&&_inappOn('escalation')){
         DB.notifications.unshift({id:uid('n'),userId:adminU.id,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation',kind:'escalation'});
       }
       // Email the escalation target

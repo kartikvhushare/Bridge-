@@ -196,7 +196,9 @@ App._decide=async(id,status)=>{
     :(status==='Approved'
       ?'✅ Submission approved — '+c?.name+' on '+fmtD(a.date)
       :'❌ Submission rejected — '+c?.name+'. '+(a.date?fmtD(a.date):''));
-  DB.notifications.unshift({id:uid('n'),userId:a.requesterId,text:msg,time:new Date().toISOString(),read:false,kind:'submission'});
+  // Gated: feature-level chip (HR Config → Alerts) + the matching event toggle (Settings → In-App).
+  const _evKey=a.type==='Edit Request'?'inapp_approval_decided':(status==='Approved'?'inapp_submission_approved':'inapp_submission_rejected');
+  if(_inappOn('checklist')&&(!_ns||_ns[_evKey]!==false))DB.notifications.unshift({id:uid('n'),userId:a.requesterId,text:msg,time:new Date().toISOString(),read:false,kind:'submission'});
   if(a.type==='Submission'){
     queueEmail(status==='Approved'?'submission_approved':'submission_rejected', a.requesterId, null, null, {checklist_name:c?.name||''});
   } else if(a.type==='Edit Request'){

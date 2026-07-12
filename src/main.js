@@ -107,9 +107,22 @@ document.addEventListener('visibilitychange',()=>{
   _lazyForRoute(S.route);
 });
 
+// ── Midnight auto clock-out (owner request) ──────────────────────────────────
+// A forgotten clock-out closes AT midnight (no geofence involved), not just on the next login:
+// any open tab fires _runAutoClose right after 00:00, stamps the record 'Didn’t clock out'
+// (status AutoClosed + forgot-clockout flag) and notifies the employee. Re-arms itself daily.
+(function _armMidnightAutoClose(){
+  const arm=()=>{
+    const now=new Date();
+    const next=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,0,40); // 00:00:40 — clock skew cushion
+    setTimeout(()=>{try{if(S.uid){_runAutoClose();if(Date.now()-_lastUserAction>3000)rr();}}catch(e){}arm();},Math.max(30000,next-now));
+  };
+  arm();
+})();
+
 // ── Checklist deadline → manager alert (client-side) ───────────────────────────
 // If a checklist isn't submitted by its deadline + grace, email the assignee's MANAGER once.
-// Frontend-only: this fires whenever an admin / sub-admin / manager has Bridge open. A shared dedup
+// Frontend-only: this fires whenever an admin / sub-admin / manager has Evarca open. A shared dedup
 // set (workspace_settings key 'cl_deadline_alerts', read-all-authenticated) keeps it to ONCE per
 // (date, checklist, employee) across devices, and a deterministic notification id is idempotent too.
 const DEADLINE_GRACE_MIN=15; // requirement: deadline + 15 minutes
@@ -153,7 +166,7 @@ async function _runDeadlineChecks(){
         // Email (sendEmail respects the global toggle, per-event toggle and the recipient's opt-out).
         if(mgr&&mgr.emailEnabled!==false)sendEmail('submission_late',mgrId,{checklist_name:c.name,employee_name:fullName(emp)});
         // In-app notification for the manager (deterministic id → idempotent upsert; respects in-app toggle).
-        if(!_ns||_ns.inapp_submission_late!==false){
+        if(_inappOn('checklist')&&(!_ns||_ns.inapp_submission_late!==false)){
           const nid='dlm_'+today.replace(/-/g,'')+'_'+c.id+'_'+aid;
           const txt='⏰ Overdue: '+fullName(emp)+' has not submitted "'+c.name+'" (due '+c.scheduleTime+')';
           const t=new Date().toISOString();

@@ -116,7 +116,7 @@ function homeDash(){
           <h1 class="fd" style="font-size:var(--fs-h1);font-weight:800;letter-spacing:-.6px;color:var(--c-text)">${greet}, ${esc(u.firstName||fullName(u))}</h1>
           <p style="font-size:13.5px;color:var(--c-text-2);margin-top:4px">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})} · Shift ${u.hrm?.schedule?.in||'09:00'}–${u.hrm?.schedule?.out||'18:00'}</p>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${(()=>{if(_onFullLeaveToday(S.uid,todayISO()))return `<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:20px;border:1.5px solid #FDE68A;background:#FFFBEB;color:#92400E;font-size:12px;font-weight:700">🌴 On leave today</span>`;const rec=(DB.attendance||[]).find(a=>a.userId===S.uid&&a.date===todayISO());const on=!!(rec&&(rec.flags||[]).includes('WFH'));const locked=!!(rec&&rec.clockIn);return `<button ${locked?'disabled title="Locked after clock-in"':'onclick="App._togWFH()"'} style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:20px;border:1.5px solid ${on?'#0EA5E9':'var(--c-border)'};background:${on?'#EFF6FF':'var(--c-surface)'};color:${on?'#0369A1':'var(--c-text-2)'};font-size:12px;font-weight:700;cursor:${locked?'not-allowed':'pointer'};opacity:${locked?'0.55':'1'}">🏠 ${on?'Working from home':'Mark today WFH'}${locked?' 🔒':''}</button>`;})()}<button onclick="App._howModal()" title="How this tab works" aria-label="How this tab works" style="width:30px;height:30px;border-radius:50%;border:1.5px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);font-size:13px;font-weight:800;cursor:pointer">?</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${(()=>{if(_onFullLeaveToday(S.uid,todayISO()))return `<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:20px;border:1.5px solid #FDE68A;background:#FFFBEB;color:#92400E;font-size:12px;font-weight:700">🌴 On leave today</span>`;if(me()?.hrm?.wfhEligible!==true)return'';const rec=(DB.attendance||[]).find(a=>a.userId===S.uid&&a.date===todayISO());const on=!!(rec&&(rec.flags||[]).includes('WFH'));const locked=!!(rec&&rec.clockIn);return `<button ${locked?'disabled title="Locked after clock-in"':'onclick="App._togWFH()"'} style="display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:20px;border:1.5px solid ${on?'#0EA5E9':'var(--c-border)'};background:${on?'#EFF6FF':'var(--c-surface)'};color:${on?'#0369A1':'var(--c-text-2)'};font-size:12px;font-weight:700;cursor:${locked?'not-allowed':'pointer'};opacity:${locked?'0.55':'1'}">🏠 ${on?'Working from home':'Mark today WFH'}${locked?' 🔒':''}</button>`;})()}<button onclick="App._howModal()" title="How this tab works" aria-label="How this tab works" style="width:30px;height:30px;border-radius:50%;border:1.5px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);font-size:13px;font-weight:800;cursor:pointer">?</button></div>
       </div>
     </div>
     ${_clockWidget()}
@@ -233,14 +233,24 @@ function _clFooter(c,date,sub,isPast,isFuture,u,hasEditReq,editApproved){
   if(!sub){
     if(isPast&&!u?.rules?.past)return '<span style="font-size:12px;color:#B36A00;font-weight:600">No permission for past dates</span><span></span>';
     if(isFuture&&!u?.rules?.future)return '<span style="font-size:12px;color:#9CA3AF">Scheduled for this date</span><button class="submit-pill no" disabled style="opacity:.4;cursor:not-allowed">Not yet</button>';
-    return '<span></span><button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="submit-pill go" data-cl="'+cid+'">\u2713 Submit</button>';
+    return '<span></span><span style="display:inline-flex;gap:8px"><button onclick="App._saveClDraft(\''+cid+'\',\''+date+'\')" style="font-size:13px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;cursor:pointer;padding:7px 14px">Save draft</button><button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="submit-pill go" data-cl="'+cid+'">\u2713 Submit</button></span>';
   }
   // Editing mode
   if(sub.status==='Editing'){
-    return '<span style="font-size:12px;font-weight:700;color:#0EA5E9">Editing\u2026</span><button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="submit-pill go" data-cl="'+cid+'">\u2713 Submit edit</button>';
+    return '<span style="font-size:12px;font-weight:700;color:#0EA5E9">Editing\u2026</span><span style="display:inline-flex;gap:8px"><button onclick="App._saveClDraft(\''+cid+'\',\''+date+'\')" style="font-size:13px;font-weight:700;color:#92400E;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;cursor:pointer;padding:7px 14px">Save draft</button><button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="submit-pill go" data-cl="'+cid+'">\u2713 Submit edit</button></span>';
   }
   return '';
 }
+/* PHASE4b: save the in-progress run as a server-backed draft (one per checklist+date, own rows only).
+   Photos are stripped; everything else (answers, numbers, options) resumes on any device. */
+App._saveClDraft=(clId,date)=>{
+  const run=RUN[clId];
+  if(!run||run.date!==date){toast('Nothing to save yet','warn');return;}
+  const answered=(run.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length;
+  if(!answered){toast('Answer at least one question before saving a draft','warn');return;}
+  _draftSave('checklist',clId,date,{questionResponses:run.questionResponses||[]});
+  toast('Draft saved \u2014 it will be here on any of your devices');rr();
+};
 // ── Multi-photo helpers ──
 // A question response may carry photos in r.photos[] (new) and/or r.photo (legacy single).
 // This returns a de-duped list of *displayable* photos (drops '[photo]' placeholders).
@@ -268,6 +278,13 @@ function _clCard(c,date){
     // Restore questionResponses from existing submission if available
     const _existSub=subForCl(c,S.uid,date);
     RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:[],questionResponses:JSON.parse(JSON.stringify(_existSub?.questionResponses||[]))};
+    // PHASE4b: no submission for this day → resume the saved server draft (works across devices).
+    if(!isSubmitted&&!(RUN[c.id].questionResponses||[]).length){
+      const _dr=_draftFor('checklist',c.id,date);
+      if(_dr&&_dr.payload&&Array.isArray(_dr.payload.questionResponses)&&_dr.payload.questionResponses.length){
+        RUN[c.id].questionResponses=JSON.parse(JSON.stringify(_dr.payload.questionResponses));
+      }
+    }
   }
   const run=RUN[c.id];
   const hasEditReq=DB.approvals.some(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===c.id&&a.date===date&&a.status==='Pending');
@@ -294,6 +311,7 @@ function _clCard(c,date){
             }
             return`<span style="font-size:11px;font-weight:600;color:${allAnswered?'#0E9F6E':'#9CA3AF'};flex-shrink:0">${answered}/${total} attempted</span>`;
           })()}
+          ${(!isSubmitted&&_draftFor('checklist',c.id,date))?`<span title="A saved draft exists — it loads automatically on any of your devices" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#FEF3C7;color:#92400E;flex-shrink:0">${ic('edit','w-3 h-3')}Draft</span>`:''}
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
@@ -533,14 +551,16 @@ App._submitRun=async(clId,date)=>{
   const _isPast=date<todayISO();const _isFut=date>todayISO();
   const dateAppr=(_isPast&&_ua.past)||(_isFut&&_ua.future);
   const needsAppr=dateAppr;
-  const isResub=run.status==='Editing';run.status=needsAppr?'Pending Approval':late?'Late':'On Time';run.submittedAt=new Date().toISOString();const u=me();const mgrId=u?.managerId;if(isResub){const ei=DB.submissions.findIndex(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);if(ei>-1){const ex=DB.submissions[ei];ex.tasks=JSON.parse(JSON.stringify(run.tasks));ex.questionResponses=JSON.parse(JSON.stringify(run.questionResponses||[]));ex.status=run.status;ex.submittedAt=run.submittedAt;ex.editCount=run.editCount||0;ex.editHistory=run.editHistory||[];}if(needsAppr){DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Resubmitted after edit #'+(run.editCount||1),createdAt:new Date().toISOString(),isResubmit:true});if(mgrId)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'Re-submitted: '+fullName(u)+' edited and resubmitted — needs re-approval',time:new Date().toISOString(),read:false,kind:'submission'});}}else{run.id=uid('s');DB.submissions.push(JSON.parse(JSON.stringify(run)));if(needsAppr){DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Awaiting approval',createdAt:new Date().toISOString()});_invalidateNotifCache();}}
+  const isResub=run.status==='Editing';run.status=needsAppr?'Pending Approval':late?'Late':'On Time';run.submittedAt=new Date().toISOString();const u=me();const mgrId=u?.managerId;if(isResub){const ei=DB.submissions.findIndex(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);if(ei>-1){const ex=DB.submissions[ei];ex.tasks=JSON.parse(JSON.stringify(run.tasks));ex.questionResponses=JSON.parse(JSON.stringify(run.questionResponses||[]));ex.status=run.status;ex.submittedAt=run.submittedAt;ex.editCount=run.editCount||0;ex.editHistory=run.editHistory||[];}if(needsAppr){DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Resubmitted after edit #'+(run.editCount||1),createdAt:new Date().toISOString(),isResubmit:true});if(mgrId&&_inappOn('checklist')&&(!_ns||_ns.inapp_submission_submitted!==false))DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'Re-submitted: '+fullName(u)+' edited and resubmitted — needs re-approval',time:new Date().toISOString(),read:false,kind:'submission'});}}else{run.id=uid('s');DB.submissions.push(JSON.parse(JSON.stringify(run)));if(needsAppr){DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Awaiting approval',createdAt:new Date().toISOString()});_invalidateNotifCache();}}
   if(needsAppr){
     const apprText='🔔 Approval needed: '+fullName(u)+' submitted "'+c.name+'" — awaiting your review';
-    if(mgrId)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:apprText,time:new Date().toISOString(),read:false,kind:'submission'});
+    const _subNotifOn=_inappOn('checklist')&&(!_ns||_ns.inapp_submission_submitted!==false);
+    if(mgrId&&_subNotifOn)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:apprText,time:new Date().toISOString(),read:false,kind:'submission'});
     const adminU2=DB.users.find(x=>x.role==='Admin');
-    if(adminU2&&adminU2.id!==mgrId)DB.notifications.unshift({id:uid('n'),userId:adminU2.id,text:apprText,time:new Date().toISOString(),read:false,kind:'submission'});
+    if(adminU2&&adminU2.id!==mgrId&&_subNotifOn)DB.notifications.unshift({id:uid('n'),userId:adminU2.id,text:apprText,time:new Date().toISOString(),read:false,kind:'submission'});
   }
   log(fullName(u),'Submitted '+run.status,c.name);
+  _draftDelete('checklist',clId,date); // PHASE4b: submitted → the draft leaves the drafts table
   toast(needsAppr?'Submitted — pending approval':'Submitted',late||needsAppr?'warn':'ok');
   // Process escalations — only on first submission, not resubmits
   if(!isResub)_processEscalations(clId,date,run.questionResponses||[]);
@@ -605,11 +625,12 @@ App._sendReq=(clId,date)=>{
   // Notify manager
   const mgrId=u?.managerId;
   const clName=clById(clId)?.name||'a checklist';
-  if(mgrId){DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'✏️ Edit request from '+fullName(u)+' for "'+clName+'" on '+fmtS(date),time:new Date().toISOString(),read:false,kind:'edit'});
+  const _edReqNotifOn=_inappOn('checklist')&&(!_ns||_ns.inapp_approval_requested!==false);
+  if(mgrId){if(_edReqNotifOn)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'✏️ Edit request from '+fullName(u)+' for "'+clName+'" on '+fmtS(date),time:new Date().toISOString(),read:false,kind:'edit'});
     if(typeof queueEmail==='function')queueEmail('approval_requested',mgrId,clId,date,{checklist_name:clName,employee_name:fullName(u)});} // FINAL-FIX
   // Notify admin if not same as manager
   const admin=DB.users.find(x=>x.role==='Admin');
-  if(admin&&admin.id!==mgrId)DB.notifications.unshift({id:uid('n'),userId:admin.id,text:'Edit request: '+fullName(u)+' — '+clName,time:new Date().toISOString(),read:false,kind:'edit'});
+  if(admin&&admin.id!==mgrId&&_edReqNotifOn)DB.notifications.unshift({id:uid('n'),userId:admin.id,text:'Edit request: '+fullName(u)+' — '+clName,time:new Date().toISOString(),read:false,kind:'edit'});
   _invalidateNotifCache();log(fullName(u),'Edit request',clName);
   toast('Edit request sent to your manager');saveDB();closeModal();render();
 };

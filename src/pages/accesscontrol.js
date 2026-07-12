@@ -366,8 +366,8 @@ App._rpDel=(id)=>{
   if(!can('accessControl','manage'))return toast('You need Access Control → Manage','err');
   const ex=DB.roleProfiles[id];if(!ex)return;
   if(ex.builtin)return toast('Built-in roles can\'t be deleted (duplicate them instead)','err');
-  const n=DB.users.filter(u=>u.hrm?.roleProfileId===id).length;
-  if(n)return toast(n+' people still have this role — assign them another role first','err');
+  // Referential-integrity guard (upgraded from the old toast): names who still holds the role.
+  if(!guardDelete('role',id,'role "'+ex.name+'"'))return;
   if(!confirm('Delete role "'+ex.name+'"?'))return;
   delete DB.roleProfiles[id];
   log(fullName(me()),'Role deleted',ex.name);

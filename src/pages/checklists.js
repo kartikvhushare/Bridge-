@@ -280,7 +280,7 @@ App._saveCl=(editing)=>{
   if(_existIdx>-1){DB.checklists[_existIdx]=CLD;}else{DB.checklists.push(CLD);}
   const newlyAssigned=(CLD.assignees||[]).filter(uid2=>!prevAssignees.includes(uid2)&&uid2!==S.uid);
   newlyAssigned.forEach(uid2=>{
-    DB.notifications.unshift({id:uid('n'),userId:uid2,text:'📋 Checklist assigned: "'+CLD.name+'"',time:new Date().toISOString(),read:false,kind:'checklist'});
+    if(_inappOn('checklist')&&(!_ns||_ns.inapp_checklist_assigned!==false))DB.notifications.unshift({id:uid('n'),userId:uid2,text:'📋 Checklist assigned: "'+CLD.name+'"',time:new Date().toISOString(),read:false,kind:'checklist'});
     queueEmail('checklist_assigned',uid2,null,null,{checklist_name:CLD.name});
   });
   if(newlyAssigned.length)_invalidateNotifCache();
@@ -338,12 +338,14 @@ App.dupCl=async(id)=>{
 
 App.delCl=(id)=>{
   const c=clById(id);if(!c)return;
+  // Referential-integrity guard: an assigned checklist can't be deleted — unassign everyone first.
+  if(!guardDelete('checklist',id,'"'+c.name+'"'))return;
   if(!confirm('Delete "'+c.name+'"?\n\nPast submissions will be preserved.'))return;
   // ── Remove locally immediately for instant UI ──
   DB.checklists=DB.checklists.filter(x=>x.id!==id);
   DB.submissions.filter(s=>s.checklistId===id).forEach(s=>s.checklistDeleted=true);
   const clAssignees=c.assignees||[];
-  clAssignees.forEach(uid2=>{if(uid2!==S.uid)DB.notifications.unshift({id:uid('n'),userId:uid2,text:'Checklist removed: "'+c.name+'" is no longer assigned to you',time:new Date().toISOString(),read:false,kind:'checklist'});});
+  clAssignees.forEach(uid2=>{if(uid2!==S.uid&&_inappOn('checklist'))DB.notifications.unshift({id:uid('n'),userId:uid2,text:'Checklist removed: "'+c.name+'" is no longer assigned to you',time:new Date().toISOString(),read:false,kind:'checklist'});});
   _invalidateNotifCache();log(fullName(me()),'Deleted cl',c.name);
   toast('Deleted','warn');saveDB();render();
   // ── Sync to Supabase in background ──

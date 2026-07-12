@@ -1,11 +1,23 @@
 
 
-/* ── unified notify: in-app always + email queued to notif_outbox (drained by an edge function
-      once an email provider is connected — the queue itself is fully self-contained) ── */
+/* ── unified notify: in-app (gated per feature by hrmConfig.inappKinds, default on) + email queued
+      to notif_outbox gated per feature by hrmConfig.emailKinds. Both switch sets live in
+      HR Config → Alerts and are independent of each other. ── */
+// One shared feature list drives BOTH chip rows in HR Config → Alerts (in-app + email).
+const NOTIF_KINDS=[['leave','Leave'],['attendance','Attendance'],['overtime','Overtime'],['shift','Shifts'],['okr','OKRs'],['lifecycle','Lifecycle'],['letter','Letters'],['discipline','Discipline'],['payroll','Payroll'],['survey','Surveys'],['document','Documents'],['benefit','Benefits'],['checklist','Checklists'],['general','Everything else']];
+// A notify() kind not in NOTIF_KINDS (e.g. 'hrm','ticket','review','announcement','expense','feedback')
+// maps to the 'general' switch — same rule the email gate has always used via EK[kind||'general'].
+const _kindKey=k=>NOTIF_KINDS.some(([kk])=>kk===k)?k:'general';
+// Shared gate for every in-app insert (notify(), _hrmNotify(), direct page pushes):
+// true unless the feature's in-app chip in HR Config → Alerts is switched off.
+const _inappOn=k=>((DB.hrmConfig&&DB.hrmConfig.inappKinds)||{})[_kindKey(k||'general')]!==false;
 function notify(userId,text,kind,route){
   if(!userId||!text)return;
   text=String(text).slice(0,500); // oversized-input guard
-  DB.notifications.unshift({id:uid('n'),userId:userId,text:text,time:new Date().toISOString(),read:false,kind:kind||'hrm',targetRoute:route||null});
+  const IK=(DB.hrmConfig&&DB.hrmConfig.inappKinds)||{};
+  if(IK[_kindKey(kind||'general')]!==false){ // feature-level in-app switch (HR Config → Alerts), default on
+    DB.notifications.unshift({id:uid('n'),userId:userId,text:text,time:new Date().toISOString(),read:false,kind:kind||'hrm',targetRoute:route||null});
+  }
   const u=uById(userId);
   const EK=(DB.hrmConfig&&DB.hrmConfig.emailKinds)||{};
   if(EK[kind||'general']===false)return; // feature-level email switch (HR Config → Alerts)
@@ -24,6 +36,7 @@ const _mgrOf=u=>u&&u.managerId?uById(u.managerId):null;
 function _seedHRMPlan(){
   const C=DB.hrmConfig=DB.hrmConfig||{};
   if(!C.emailKinds||typeof C.emailKinds!=='object')C.emailKinds={};
+  if(!C.inappKinds||typeof C.inappKinds!=='object')C.inappKinds={}; // in-app per-feature switches (default: all on)
   if(!C.branding||typeof C.branding!=='object')C.branding={header:'BloomingBox',sub:'',footer:'This is a system-generated document.',headerImg:null,footerImg:null,payslipNote:''};
   if(C.branding.headerImg===undefined)C.branding.headerImg=null;
   if(C.branding.footerImg===undefined)C.branding.footerImg=null;
@@ -197,4 +210,4 @@ App._flowForm=(fid,sid,val)=>{const f=(DB.flows||[]).find(x=>x.id===fid);if(!f)r
 App._flowDel=(fid)=>{if(!can('lifecycle','manage'))return;const f=(DB.flows||[]).find(x=>x.id===fid);if(!f)return;if(!confirm('Delete this flow?'))return;DB.flows=DB.flows.filter(x=>x.id!==fid);_delRow('flows',fid,'flow');log(fullName(me()),'Deleted flow',f.kind);saveDB();rr();};
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.notify=notify;window._notifyOnce=_notifyOnce;window._hrUsers=_hrUsers;window._mgrOf=_mgrOf;window._seedHRMPlan=_seedHRMPlan;window._runEventTriggers=_runEventTriggers;window._flowStart=_flowStart;
+window.notify=notify;window._notifyOnce=_notifyOnce;window.NOTIF_KINDS=NOTIF_KINDS;window._kindKey=_kindKey;window._inappOn=_inappOn;window._hrUsers=_hrUsers;window._mgrOf=_mgrOf;window._seedHRMPlan=_seedHRMPlan;window._runEventTriggers=_runEventTriggers;window._flowStart=_flowStart;

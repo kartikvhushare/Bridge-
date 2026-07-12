@@ -298,9 +298,11 @@ App.saveDept=(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required'
   log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated':'Created');saveDB();closeModal();render();
   sb.from('departments').upsert({id:obj.id,name:obj.name,parent_id:obj.parentId||null},{onConflict:'id'}).then(({error})=>{if(error)_syncErr('department')(error);}).catch(_syncErr('department'));};
 App.delDept=(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;
-  const kids=subDepts(id);
-  const msg=kids.length?('Delete "'+d.name+'" and its '+kids.length+' sub-department'+(kids.length!==1?'s':'')+'? Users and checklists will keep existing but lose this department.'):('Delete '+d.name+'? Users and checklists in this department will not be deleted but will have no department.');
-  if(!confirm(msg))return;
+  // Referential-integrity guard: a department with sub-departments, people, checklists or targeted
+  // announcements can't be deleted until those links are moved/removed (the old cascade is gone).
+  if(!guardDelete('department',id,'"'+d.name+'"'))return;
+  const kids=subDepts(id); // empty by now — kept so the tombstone loop below stays byte-compatible
+  if(!confirm('Delete "'+d.name+'"?'))return;
   if(!DB.departments_deleted)DB.departments_deleted=[];
   const toDelete=[id,...kids.map(k=>k.id)];
   toDelete.forEach(delId=>{if(!DB.departments_deleted.includes(delId))DB.departments_deleted.push(delId);});

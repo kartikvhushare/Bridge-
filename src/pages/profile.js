@@ -43,6 +43,19 @@ function profilePage(){
   </div>
   <!-- Personal documents -->
   ${(()=>{const sec=_personalDocsSection(u);return sec?`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 mb-4">${sec.replace('border-top:1px solid #ECEDF0;margin-top:14px;padding-top:14px','')}</div>`:'';})()}
+  <!-- Assets assigned to me (read-only — managed by admins in the user editor) -->
+  ${(()=>{
+    const assets=(u.hrm?.assets||[]).slice().sort((a,b)=>(b.assignedDate||'').localeCompare(a.assignedDate||''));
+    if(!assets.length)return'';
+    return '<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 mb-4">'
+      +'<h3 class="fd font-semibold text-sm mb-2">Assets assigned to me</h3>'
+      +assets.map(a=>{const ret=a.status==='Returned';return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F3F4F6;flex-wrap:wrap">'
+        +'<div style="flex:1;min-width:140px"><div style="font-size:13px;font-weight:600">'+esc(a.name)+'</div>'
+        +'<div style="font-size:11px;color:#9CA3AF">'+esc(a.category||'Other')+(a.serial?' · '+esc(a.serial):'')+' · assigned '+fmtD(a.assignedDate||'')+(ret&&a.returnDate?' · returned '+fmtD(a.returnDate):'')+'</div></div>'
+        +'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:'+(ret?'#F3F4F6':'#ECFDF5')+';color:'+(ret?'#6B7280':'#065F46')+'">'+(ret?'Returned':'Assigned')+'</span>'
+        +'</div>';}).join('')
+      +'<p style="font-size:10px;color:#B8B5AC;margin-top:8px">Something wrong here? Contact HR / your admin.</p></div>';
+  })()}
   <!-- Feedback history -->
   ${(()=>{
     const myFb=DB.feedback.filter(fb=>fb.userId===S.uid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,5);

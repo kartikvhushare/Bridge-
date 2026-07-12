@@ -4,10 +4,10 @@
    OKRs form a tree: multiple L0 roots (each assigned to a department) → L1 → L2 → … any depth.
    Every node has an owner, its own metric (number / percent / currency / yes-no), a check-in
    frequency (weekly on a day / monthly on a date / custom dates) and an optional period window.
-   PROGRESS ROLL-UP: a node WITH children = the simple average of its children's progress %
-   (so L2 inputs update L1, and L1 updates L0). A LEAF node is measured from its own latest
-   check-in value against start → target. All helpers here are read-only (no DOM, no writes),
-   except okrLog/_okrPush/_okrPushCheckin which are the TARGETED Supabase writers. */
+   INDEPENDENT LEVELS (owner request): every node — L0, L1, L2 — is measured ONLY from its
+   OWN check-ins against its OWN start → target. There is NO roll-up: children sit under the
+   parent for structure, but never feed the parent's progress or graph. All helpers here are
+   read-only (no DOM, no writes), except okrLog/_okrPush/_okrPushCheckin (targeted writers). */
 const OKR_METRICS=[['number','Number'],['percent','Percentage'],['currency','Currency'],['yesno','Yes / No (done or not)']];
 const OKR_STATUSES=['On track','Off track','Achieved','Not achieved'];
 const okrById=id=>(DB.okrs||[]).find(o=>o.id===id);
@@ -29,18 +29,16 @@ function _okrLeafPct(o){
   const pct=((v-s)/(t-s))*100;
   return Math.round(Math.max(0,Math.min(150,pct))*10)/10;
 }
-// Node progress %: children average (roll-up) if it has children, else its own check-ins. Cycle-safe.
+// Node progress %: OWN check-ins only — levels are independent (no children roll-up).
+// Signature keeps the old (o,_seen) shape so every call site stays valid.
 function okrProgress(o,_seen){
-  if(!o)return null;_seen=_seen||new Set();
-  if(_seen.has(o.id))return null;_seen.add(o.id);
-  const kids=okrChildren(o.id);
-  if(kids.length){
-    const vals=kids.map(k=>okrProgress(k,_seen)).filter(v=>v!==null&&isFinite(v));
-    if(!vals.length)return null;
-    return Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10;
-  }
+  if(!o)return null;
   return _okrLeafPct(o);
 }
+/* ── Relationship helpers (permissions): the owner chain above a node ── */
+function okrAncestors(o){const out=[];let cur=o,g=0;while(cur&&cur.parentId&&g++<15){const p=okrById(cur.parentId);if(!p)break;out.push(p);cur=p;}return out;}
+// True when uid2 (default: me) owns ANY level above this node — "owner of the upper level".
+function okrIsUpOwner(o,uid2){uid2=uid2||S.uid;return okrAncestors(o).some(a=>a.ownerId===uid2);}
 // Expected pace: % of the period window elapsed today (null when no window is set).
 function _okrExpectedPct(o){
   if(!o.periodStart||!o.periodEnd)return null;
@@ -122,4 +120,4 @@ function _okrPush(o){sb.from('okrs').upsert(_okrRow(o),{onConflict:'id'}).then((
 function _okrPushCheckin(c){sb.from('okr_checkins').upsert(_okrCheckinRow(c),{onConflict:'id'}).then(({error})=>{if(error)_syncErr('OKR update')(error);}).catch(_syncErr('OKR update'));}
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.OKR_METRICS=OKR_METRICS;window.OKR_STATUSES=OKR_STATUSES;window.okrById=okrById;window.okrChildren=okrChildren;window.okrLevel=okrLevel;window.okrDescendants=okrDescendants;window.okrRootOf=okrRootOf;window.okrCheckinsOf=okrCheckinsOf;window.okrLatestCheckin=okrLatestCheckin;window._okrLeafPct=_okrLeafPct;window.okrProgress=okrProgress;window._okrExpectedPct=_okrExpectedPct;window.okrStatusOf=okrStatusOf;window.OKR_ST_META=OKR_ST_META;window.okrStatusChip=okrStatusChip;window._okrBarColor=_okrBarColor;window._okrFmtVal=_okrFmtVal;window._okrFreqLabel=_okrFreqLabel;window.okrDueOn=okrDueOn;window.okrDueForUser=okrDueForUser;window.okrCheckinFor=okrCheckinFor;window.okrVisible=okrVisible;window.okrVisibleRoots=okrVisibleRoots;window.okrLog=okrLog;window._okrPush=_okrPush;window._okrPushCheckin=_okrPushCheckin;
+window.OKR_METRICS=OKR_METRICS;window.OKR_STATUSES=OKR_STATUSES;window.okrById=okrById;window.okrChildren=okrChildren;window.okrLevel=okrLevel;window.okrDescendants=okrDescendants;window.okrRootOf=okrRootOf;window.okrCheckinsOf=okrCheckinsOf;window.okrLatestCheckin=okrLatestCheckin;window._okrLeafPct=_okrLeafPct;window.okrProgress=okrProgress;window.okrAncestors=okrAncestors;window.okrIsUpOwner=okrIsUpOwner;window._okrExpectedPct=_okrExpectedPct;window.okrStatusOf=okrStatusOf;window.OKR_ST_META=OKR_ST_META;window.okrStatusChip=okrStatusChip;window._okrBarColor=_okrBarColor;window._okrFmtVal=_okrFmtVal;window._okrFreqLabel=_okrFreqLabel;window.okrDueOn=okrDueOn;window.okrDueForUser=okrDueForUser;window.okrCheckinFor=okrCheckinFor;window.okrVisible=okrVisible;window.okrVisibleRoots=okrVisibleRoots;window.okrLog=okrLog;window._okrPush=_okrPush;window._okrPushCheckin=_okrPushCheckin;

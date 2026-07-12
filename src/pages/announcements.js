@@ -85,6 +85,7 @@ App._delAnnouncement=(id)=>{
   DB.announcements=(DB.announcements||[]).filter(x=>x.id!==id);
   // DATA-5: prune the deleted id from every user's read-state so the array doesn't grow unbounded.
   DB.users.forEach(u=>{if(u.hrm&&Array.isArray(u.hrm.announcementsRead)&&u.hrm.announcementsRead.includes(id))u.hrm.announcementsRead=u.hrm.announcementsRead.filter(x=>x!==id);});
+  _delRow('announcements',id,'announcement'); // PHASE4b: server-backed now
   saveDB();toast('Announcement deleted');rr();
 };
 App.newAnnouncement=()=>{
@@ -111,6 +112,7 @@ App.postAnnouncement=()=>{
   const locTarget=$('#an-loc')?.value||null;
   const a={id:uid('ann'),title,body,deptTarget:deptTarget||null,locTarget:locTarget||null,createdBy:S.uid,createdAt:new Date().toISOString()};
   DB.announcements.unshift(a);
+  _pushRow('announcements',_annRow(a),'announcement'); // PHASE4b: server-backed now
   const recipients=_annRecipients(a);
   /* === EMAIL CONNECTION POINT (backend wires sendEmail) ===
      Notify every targeted recipient: in-app (gated by inapp_announcement) + email

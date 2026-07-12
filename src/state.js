@@ -32,7 +32,11 @@ window.DB={
   //    expense = one employee's reimbursement claim; the employee submits (status 'pending'), an
   //    approver (manager-of/HR/Admin) approves/rejects via the unified inbox. Mirrors leave_requests.
   //    {id,userId,date,category,amount,currency,description,receiptNote,status:'pending'|'approved'|'rejected',approverId,decidedBy,decidedAt,decisionNote,createdAt}
-  expenses:[]
+  expenses:[],
+  // ── Drafts (PHASE4b) — per-user, server-backed saves of in-progress checklist runs and OKR
+  //    check-ins (syncs to the `drafts` table; RLS = owner only). Photos are stripped from payloads.
+  //    {id,userId,kind:'checklist'|'okr',refId,date|null,payload,updatedAt}
+  drafts:[]
 };
 function log(a,b,c){
   if(!a||!b)return;
@@ -81,7 +85,7 @@ function saveDB(){
       });
       localStorage.setItem(LS_KEY,JSON.stringify(slim));
     }catch(e2){
-      console.error('[Bridge] localStorage quota exceeded — state not saved:',e2.message);
+      console.error('[Evarca] localStorage quota exceeded — state not saved:',e2.message);
       try{toast('Storage full — some data may not be saved','err');}catch(_){}
     }
   }
@@ -89,7 +93,7 @@ function saveDB(){
   clearTimeout(_syncTimer);
   _syncTimer=setTimeout(()=>{
     _sync().catch(e=>{
-      console.warn('[Bridge] Sync error:',e.message);
+      console.warn('[Evarca] Sync error:',e.message);
     });
   },1500);
 }
@@ -107,8 +111,10 @@ function loadDB(){
     if(!DB.roleProfiles||typeof DB.roleProfiles!=='object')DB.roleProfiles={};
     _seedRoleProfiles(); // idempotent — seeds built-in basic/manager/admin presets (frontend-only)
     try{_permsV3Migrate();}catch(e){console.warn('[perms] migrate skipped:',e.message);} // perms v3
-    // §4: HR email/notification prefs — DB-only key (FRONTEND-ONLY, never in workspace_settings/Supabase).
+    // §4: HR email/notification prefs — defaults merged under saved values. PHASE4b: also synced via
+    // workspace_settings (key 'hrm_notif_prefs') so refreshes/devices agree; loadFromSB merges server copy.
     DB.hrmNotifPrefs={..._hrmNotifPrefsDefault(),...(DB.hrmNotifPrefs&&typeof DB.hrmNotifPrefs==='object'?DB.hrmNotifPrefs:{})};
+    if(!Array.isArray(DB.drafts))DB.drafts=[]; // PHASE4b: drafts collection for older saved states
     try{_seedHRMPlan();}catch(e){}
     DB.users.forEach(u=>{
       if(!u.rules)u.rules={past:true,future:true,edit:true};

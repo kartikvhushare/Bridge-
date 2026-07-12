@@ -26,8 +26,8 @@ describe('seeding', () => {
   it('seeds all five built-in roles', () => {
     expect(['superadmin', 'admin', 'manager', 'hr', 'basic'].every(k => W.DB.roleProfiles[k])).toBe(true); // 1
   });
-  it('stamps built-ins with version 6 (v6 adds the Phase 4 reviews area)', () => {
-    expect(W.DB.roleProfiles.superadmin._v).toBe('6');                                                     // 2
+  it('stamps built-ins with version 7 (v7 adds granular OKR actions)', () => {
+    expect(W.DB.roleProfiles.superadmin._v).toBe('7');                                                     // 2
   });
   it('never clobbers a custom role on reseed', () => {
     W.DB.roleProfiles.custom1 = { id: 'custom1', name: 'Custom', perms: { tickets: { scope: 'self', actions: { view: true } } } };

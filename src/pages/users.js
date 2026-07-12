@@ -46,6 +46,7 @@ function _hrmUserSection(u){
     <div>${selF('Work week','u-ww',[['5','5-day week'],['6','6-day week']],String(s.workWeek||5))}</div>
     ${selF('Office location (geofence)','u-loc',[['','— None —'],...DB.locations.filter(l=>l.status==='Active').map(l=>[l.id,l.name])],h.locationId||'')}
     <div><label class="block text-xs font-semibold text-ink-500 mb-1.5">Weekly off-days</label><div style="display:flex;gap:6px;flex-wrap:wrap">${DAYS3.map(d=>`<button type="button" class="dchip${off.has(d)?' on':''}" onclick="this.classList.toggle('on')" data-day="${d}">${d}</button>`).join('')}</div></div>
+    ${mkTog('u-wfh',h.wfhEligible===true,'Eligible for Work-from-Home')}
     ${fld('Probation ends','u-probend',h.probationEnd||'','date')}
     ${can('payroll','view')?`<div style="border-top:1px dashed #E5E7EB;padding-top:10px"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Payroll (visible to payroll roles only)</p>
       <div class="grid grid-cols-3 gap-3">${fld('Basic salary','u-salb',(h.salary||{}).basic??0,'number')}${fld('Allowances','u-sala',(h.salary||{}).allow??0,'number')}${fld('Currency','u-salc',(h.salary||{}).currency||'AED')}</div>
@@ -68,6 +69,9 @@ function _readHrmFromForm(prev){
     profileId:$('#u-prof')?.value||(DB.hrmConfig?.activeProfile||'UAE'),
     roleProfileId:p.roleProfileId||null,
     probationEnd:$('#u-probend')?($('#u-probend').value||null):(p.probationEnd??null),
+    wfhEligible:$('#u-wfh')?togV('u-wfh'):(p.wfhEligible===true), // WFH eligibility (default: not eligible)
+    assets:Array.isArray(p.assets)?p.assets:[], // asset records are managed by their own buttons — preserve verbatim on save
+
     salary:$('#u-salb')?{basic:parseFloat($('#u-salb').value)||0,allow:parseFloat($('#u-sala')?.value)||0,currency:($('#u-salc')?.value||'AED').trim()||'AED'}:(p.salary||{basic:0,allow:0,currency:'AED'}),
     iban:$('#u-iban')?($('#u-iban').value||'').trim():(p.iban||''),
     payrollHold:p.payrollHold===true,
@@ -76,6 +80,70 @@ function _readHrmFromForm(prev){
     reportPerms:(p.reportPerms&&typeof p.reportPerms==='object')?p.reportPerms:undefined
   };
 }
+/* ── ASSETS — company equipment assigned to a person (laptop, phone, access card…).
+      Stored on u.hrm.assets (rides the user_hrm sync like personalDocs — no new table).
+      Managed inline in the user editor; the employee sees a read-only list on their Profile.
+      An 'Assigned' asset blocks user deletion (refcheck) until returned or removed. ── */
+const ASSET_CATS=['Laptop','Phone','Monitor','Access card','SIM','Vehicle','Uniform','Tools','Other'];
+function _assetsSection(u){
+  if(!u)return'';
+  if(!can('employees','edit')||!scopeFilter('employees')(u.id))return'';
+  _ensureHrm(u);if(!Array.isArray(u.hrm.assets))u.hrm.assets=[];
+  const list=u.hrm.assets.slice().sort((a,b)=>(b.assignedDate||'').localeCompare(a.assignedDate||''));
+  const rows=list.length?list.map(a=>{
+    const ret=a.status==='Returned';
+    return'<div style="display:flex;align-items:center;gap:10px;background:#F6F7F8;border-radius:10px;padding:10px;flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:140px"><div style="font-size:13px;font-weight:600">'+esc(a.name)+'</div>'
+      +'<div style="font-size:11px;color:#9CA3AF">'+esc(a.category||'Other')+(a.serial?' · '+esc(a.serial):'')+' · assigned '+fmtD(a.assignedDate||'')+(ret&&a.returnDate?' · returned '+fmtD(a.returnDate):'')+(a.notes?'<br>'+esc(a.notes):'')+'</div></div>'
+      +'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:'+(ret?'#F3F4F6':'#ECFDF5')+';color:'+(ret?'#6B7280':'#065F46')+';flex-shrink:0">'+(ret?'Returned':'Assigned')+'</span>'
+      +(!ret?'<button type="button" onclick="App._assetReturn(\''+u.id+'\',\''+a.id+'\')" style="padding:5px 10px;border-radius:8px;border:1px solid #E5E7EB;background:#fff;font-size:12px;font-weight:600;cursor:pointer;flex-shrink:0">Mark returned</button>':'')
+      +'<button type="button" onclick="App._assetDel(\''+u.id+'\',\''+a.id+'\')" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:#FEF2F2;color:#DC2626;cursor:pointer;flex-shrink:0">'+ic('trash','w-3.5 h-3.5')+'</button>'
+      +'</div>';
+  }).join(''):'<p style="font-size:12px;color:#9CA3AF;text-align:center;padding:10px">No assets on record.</p>';
+  return'<div id="assets-sec" style="border-top:1px solid #ECEDF0;margin-top:14px;padding-top:14px">'
+    +'<p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9CA3AF;margin-bottom:8px">Assets assigned</p>'
+    +'<div style="display:flex;flex-direction:column;gap:6px">'+rows+'</div>'
+    +'<div style="background:#F9FAFB;border:1px dashed #E5E7EB;border-radius:12px;padding:10px;margin-top:8px">'
+    +'<div class="grid grid-cols-1 sm:grid-cols-2 gap-2" style="margin-bottom:8px">'
+    +'<input id="ast-n" placeholder="Asset name (e.g. MacBook Pro 14)" class="ui-input" style="font-size:13px"/>'
+    +'<select id="ast-c" class="ui-select" style="font-size:13px">'+ASSET_CATS.map(c=>'<option>'+c+'</option>').join('')+'</select>'
+    +'<input id="ast-s" placeholder="Serial / tag no. (optional)" class="ui-input" style="font-size:13px"/>'
+    +'<input id="ast-d" type="date" value="'+todayISO()+'" class="ui-input" style="font-size:13px"/>'
+    +'</div>'
+    +'<input id="ast-no" placeholder="Condition & notes (optional)" class="ui-input" style="font-size:13px;margin-bottom:8px"/>'
+    +'<button type="button" onclick="App._assetAdd(\''+u.id+'\')" class="ui-btn ui-btn-ghost ui-btn-sm" style="width:100%">'+ic('plus','w-3.5 h-3.5')+'Add asset</button>'
+    +'</div></div>';
+}
+App._assetAdd=(userId)=>{
+  const u=uById(userId);if(!u)return;
+  if(!can('employees','edit')||!scopeFilter('employees')(userId)){toast('Not allowed','err');return;}
+  const name=($('#ast-n')?.value||'').trim();
+  if(!name){toast('Asset name required','err');return;}
+  _ensureHrm(u);if(!Array.isArray(u.hrm.assets))u.hrm.assets=[];
+  u.hrm.assets.push({id:uid('ast'),name,category:$('#ast-c')?.value||'Other',serial:($('#ast-s')?.value||'').trim(),assignedDate:$('#ast-d')?.value||todayISO(),notes:($('#ast-no')?.value||'').trim(),status:'Assigned',returnDate:null,assignedBy:S.uid,createdAt:new Date().toISOString()});
+  log(fullName(me()),'Asset assigned',name+' → '+fullName(u));
+  saveDB();toast('Asset added');
+  if(document.getElementById('u-role'))App.editUser(userId);else rr();
+};
+App._assetReturn=(userId,assetId)=>{
+  const u=uById(userId);if(!u)return;
+  if(!can('employees','edit')||!scopeFilter('employees')(userId)){toast('Not allowed','err');return;}
+  const a=(u.hrm?.assets||[]).find(x=>x.id===assetId);if(!a)return;
+  a.status='Returned';a.returnDate=todayISO();
+  log(fullName(me()),'Asset returned',a.name+' ← '+fullName(u));
+  saveDB();toast('Marked returned');
+  if(document.getElementById('u-role'))App.editUser(userId);else rr();
+};
+App._assetDel=(userId,assetId)=>{
+  const u=uById(userId);if(!u)return;
+  if(!can('employees','edit')||!scopeFilter('employees')(userId)){toast('Not allowed','err');return;}
+  const a=(u.hrm?.assets||[]).find(x=>x.id===assetId);if(!a)return;
+  if(!confirm('Remove "'+a.name+'" from '+fullName(u)+'\'s asset record?'))return;
+  u.hrm.assets=(u.hrm.assets||[]).filter(x=>x.id!==assetId);
+  log(fullName(me()),'Asset record removed',a.name+' ('+fullName(u)+')');
+  saveDB();toast('Removed','warn');
+  if(document.getElementById('u-role'))App.editUser(userId);else rr();
+};
 // City (location) scope checkboxes for the user modal — requirement #6.
 function _cityScopeChips(u){
   const active=(DB.locations||[]).filter(l=>l.status==='Active');
@@ -109,6 +177,7 @@ App.editUser=(id=null)=>{
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Notifications</p>${mkTog('u-em',u?.emailEnabled??true,'Receive email notifications')}</div>
     ${_hrmUserSection(u)}
     ${u?_personalDocsSection(u):''}
+    ${u?_assetsSection(u):''}
     <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap"><p style="flex:1;min-width:200px;font-size:11.5px;color:#1E40AF;line-height:1.5;margin:0"><strong>All access &amp; permissions</strong> — tabs, submission rules, approvals, HR powers, document/city access — are managed per person in <strong>Access Control</strong>.</p>${(u&&can('accessControl','view'))?`<button type="button" onclick="App.closeModal();S.filters.acUser='${u.id}';App.go('accesscontrol')" class="ui-btn ui-btn-ghost ui-btn-sm">${ic('shield','w-4 h-4')}Open Access Control</button>`:''}</div>
   </div>`,
   footer:btnG('Cancel','App.closeModal()')+`<button type="button" id="save-user-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent=this.textContent==='Save'?'Saving…':'Creating…';App.saveUser('${id||''}').catch(()=>{}).finally(()=>{const b=document.getElementById('save-user-btn');if(b){b.disabled=false;b.textContent='${u?'Save':'Create'}';}})" class="ui-btn ui-btn-primary">${u?'Save':'Create'}</button>`});
@@ -286,6 +355,10 @@ App.delUser=async(id)=>{
   if(!can('employees','delete')||!scopeFilter('employees')(id)){toast('Not allowed','err');return;}
   if(u.role==='Admin'&&!isAdmin()){toast('Not allowed','err');return;}
   const name=fullName(u);
+  // Referential-integrity guard: block while they still have live links (direct reports, assigned
+  // checklists/OKRs/assets, pending approvals/leave/letters/expenses, upcoming shifts, open flows,
+  // open payroll). Pure history never blocks — Disable is the way to retire someone.
+  if(!guardDelete('user',id,name))return;
   if(!confirm('Permanently delete '+name+'?\n\nThis will delete ALL their submissions and approvals. This cannot be undone.\n\nTo keep their data, use Disable instead.'))return;
   // Optimistic local cleanup first
   DB.users.filter(x=>x.managerId===id).forEach(x=>x.managerId=u.managerId);
@@ -337,4 +410,4 @@ App.delUser=async(id)=>{
 };
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._disableBtn=_disableBtn;window.usersPage=usersPage;window._hrmUserSection=_hrmUserSection;window._readHrmFromForm=_readHrmFromForm;window._cityScopeChips=_cityScopeChips;
+window._disableBtn=_disableBtn;window.usersPage=usersPage;window._hrmUserSection=_hrmUserSection;window._readHrmFromForm=_readHrmFromForm;window._cityScopeChips=_cityScopeChips;window.ASSET_CATS=ASSET_CATS;window._assetsSection=_assetsSection;

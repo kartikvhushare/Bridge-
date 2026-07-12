@@ -62,7 +62,7 @@ function overtimePage(){
     return `<div class="ui-card" style="padding:12px 14px;margin-bottom:7px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
       ${u?avatar(u,'w-8 h-8','text-[10px]'):''}
       <div style="flex:1;min-width:150px">
-        <div style="font-size:13px;font-weight:700;color:var(--c-text)">${u?esc(fullName(u)):'—'} · <span style="color:var(--c-brand-ink)">${o.hours}h</span> on ${fmtS(o.date)}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--c-text)">${u?esc(fullName(u)):'—'} · <span style="color:var(--c-brand-ink)">${fmtH(o.hours)}</span> on ${fmtS(o.date)}</div>
         <div style="font-size:11.5px;color:var(--c-text-2)">${esc(o.reason)}${o.comp?' · '+(o.comp==='lieu'?'time-in-lieu':'payment'):''}</div>
       </div>
       <span style="font-size:10.5px;font-weight:800;padding:3px 10px;border-radius:20px;background:${bg};color:${fg}">${o.status}</span>

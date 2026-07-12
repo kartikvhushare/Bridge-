@@ -278,7 +278,9 @@ function analyticsPage(){
     tickets:{labels:['Open','In Progress','Resolved'],data:[aTickets.filter(t=>t.status==='Open').length,aTickets.filter(t=>t.status==='In Progress').length,aTickets.filter(t=>t.status==='Resolved'||t.status==='Closed').length],colors:['#F59E0B','#0EA5E9','#0E9F6E']},
     compliance:{labels:['Compliant','Non-compliant'],data:[compliantN,nonCompliantN],colors:['#0E9F6E','#BE123C']},
     emp:{ids:_empRows.map(r=>r.id),labels:_empRows.map(r=>r.name),onTime:_empRows.map(r=>r.ot),late:_empRows.map(r=>r.late),pend:_empRows.map(r=>r.pend)},
-    top:{labels:topU.slice(0,8).map(x=>fullName(x.u)),data:topU.slice(0,8).map(x=>x.n)}
+    top:{labels:topU.slice(0,8).map(x=>fullName(x.u)),data:topU.slice(0,8).map(x=>x.n)},
+    // PRO-VIZ: submission volume by weekday (vertical gradient bars).
+    weekday:(()=>{const names=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];const n=[0,0,0,0,0,0,0];subs.forEach(s=>{if(!s.date)return;const d=new Date(s.date+'T00:00:00').getDay();n[(d+6)%7]++;});return{labels:names,data:n};})()
   };
   _AFiltered={subs:subs.slice(),tickets:aTickets.slice(),missed:_missedList,compliant:_comp,nonCompliant:_noncomp,dateMap:_dateMap};
   // Company hero: today's headline figures (permission-scoped: relevantUsers already honors report scope)
@@ -290,8 +292,8 @@ function analyticsPage(){
     const late=att.filter(x2=>(x2.flags||[]).includes('late')).length;
     const onLv=scope.filter(x=>_onLeaveToday(x.id,today)).length;
     const onT=byS['On Time'],ltN=byS['Late'];const rate=(onT+ltN)?Math.round(onT/(onT+ltN)*100):null;
-    const k=(v,l,c,icn,ibg,iik)=>`<div style="flex:1;min-width:150px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;padding:12px 14px;box-shadow:var(--sh-sm);display:flex;align-items:center;gap:11px"><span style="width:38px;height:38px;border-radius:11px;background:${ibg||'var(--c-surface-2)'};color:${iik||'var(--c-text-2)'};display:grid;place-items:center;flex-shrink:0">${ic(icn||'chart','w-5 h-5')}</span><span style="min-width:0"><span class="fd" style="display:block;font-size:22px;font-weight:800;letter-spacing:-.5px;line-height:1.05;color:${c||'var(--c-text)'}">${v}</span><span style="display:block;font-size:10.5px;font-weight:700;color:var(--c-text-2);margin-top:3px;white-space:nowrap">${l}</span></span></div>`;
-    return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${k(scope.length,'Active people',undefined,'users')}${k(present,'Clocked in today','var(--c-success-ink)','clock','var(--c-success-soft)','var(--c-success-ink)')}${k(wfh,'WFH today','#0369A1','user','#EFF6FF','#0369A1')}${k(onLv,'On leave','#B45309','approve','#FFFBEB','#B45309')}${k(late,'Late today',late?'var(--c-danger-ink)':undefined,'alert',late?'var(--c-danger-soft)':undefined,late?'var(--c-danger-ink)':undefined)}${rate!=null?k(rate+'%','Checklist on-time','var(--c-brand-ink)','check','var(--c-brand-soft)','var(--c-brand-ink)'):''}${k(tkOpen,'Open tickets',tkOpen?'#B45309':undefined,'ticket',tkOpen?'#FFF7ED':undefined,tkOpen?'#C2410C':undefined)}</div>`;
+    const k=(v,l,c,icn,ibg,iik,drill)=>`<div ${drill?`onclick="App._dashDrill('${drill}')" role="button" tabindex="0" title="Tap for the list"`:''} style="flex:1;min-width:150px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;padding:12px 14px;box-shadow:var(--sh-sm);display:flex;align-items:center;gap:11px;${drill?'cursor:pointer':''}"><span style="width:38px;height:38px;border-radius:11px;background:${ibg||'var(--c-surface-2)'};color:${iik||'var(--c-text-2)'};display:grid;place-items:center;flex-shrink:0">${ic(icn||'chart','w-5 h-5')}</span><span style="min-width:0"><span class="fd" style="display:block;font-size:22px;font-weight:800;letter-spacing:-.5px;line-height:1.05;color:${c||'var(--c-text)'}">${v}</span><span style="display:block;font-size:10.5px;font-weight:700;color:var(--c-text-2);margin-top:3px;white-space:nowrap">${l}</span></span></div>`;
+    return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">${k(scope.length,'Active people',undefined,'users',undefined,undefined,'activeusers')}${k(present,'Clocked in today','var(--c-success-ink)','clock','var(--c-success-soft)','var(--c-success-ink)','who-in')}${k(wfh,'WFH today','#0369A1','user','#EFF6FF','#0369A1','wfh')}${k(onLv,'On leave','#B45309','approve','#FFFBEB','#B45309','onleave')}${k(late,'Late today',late?'var(--c-danger-ink)':undefined,'alert',late?'var(--c-danger-soft)':undefined,late?'var(--c-danger-ink)':undefined,'who-late')}${rate!=null?k(rate+'%','Checklist on-time','var(--c-brand-ink)','check','var(--c-brand-soft)','var(--c-brand-ink)'):''}${k(tkOpen,'Open tickets',tkOpen?'#B45309':undefined,'ticket',tkOpen?'#FFF7ED':undefined,tkOpen?'#C2410C':undefined,'tickets')}</div>`;
   }catch(e){return'';}})();
   const _cc='background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);padding:18px';
   const _ct='font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:12px';
@@ -357,6 +359,9 @@ function analyticsPage(){
   <div style="${_cc};margin-bottom:14px"><div class="fd" style="${_ct};display:flex;align-items:center;justify-content:space-between">By employee${fArr('users').length?'<span style="font-size:11px;font-weight:600;color:var(--c-brand-ink);background:var(--c-brand-soft);padding:2px 9px;border-radius:99px">filtered</span>':'<span style="font-size:11px;font-weight:500;color:var(--c-text-3)">top 15 · click a bar for detail</span>'}</div><div style="position:relative;height:${Math.max(220,(_AData.emp.ids.length||1)*34+60)}px"><canvas id="aChartEmp" data-chart="by-employee"></canvas></div></div>
   <div class="achart-grid" style="margin-bottom:14px">
     <div style="${_cc}"><div class="fd" style="${_ct}">Compliance</div><div style="position:relative;height:210px"><canvas id="aChartCompliance" data-chart="compliance"></canvas></div></div>
+    <div style="${_cc}"><div class="fd" style="${_ct}">Submissions by weekday</div><div style="position:relative;height:210px"><canvas id="aChartWeekday" data-chart="weekday"></canvas></div></div>
+  </div>
+  <div class="achart-grid" style="margin-bottom:14px">
     <div style="${_cc}"><div class="fd" style="${_ct}">Top contributors</div>
       ${topU.slice(0,7).map(({u,n})=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;cursor:pointer" onclick="App._userDrill('${u.id}')">${avatar(u,'w-7 h-7','text-[10px]')}<div style="flex:1;font-size:13px;font-weight:500;color:var(--c-text);overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(fullName(u))}</div><span class="fd" style="font-size:15px;font-weight:800;color:var(--c-text)">${n}</span><span style="font-size:11px;color:var(--c-text-3)">&rsaquo;</span></div>`).join('')||'<p style="font-size:13px;color:var(--c-text-3)">No data yet</p>'}
     </div>
@@ -492,8 +497,8 @@ function hrmAnalyticsPage(){
     </div>
   </div>`;
   const tot=rows.reduce((a,r)=>({w:a.w+r.worked,l:a.l+r.lates,lv:a.lv+r.leavesTaken,ab:a.ab+r.absences}),{w:0,l:0,lv:0,ab:0});
-  const stats=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">${statCard('Total worked hrs',_r2(tot.w),'brand')}${statCard('Late check-ins',tot.l,'amber')}${statCard('Leave days taken',_r2(tot.lv),'sky')}${statCard('Absences',tot.ab,'rose')}</div>`;
-  const table=`<div style="background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);overflow:hidden"><div style="overflow-x:auto"><table class="w-full text-sm"><thead><tr style="border-bottom:1px solid var(--c-border);text-align:left"><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Employee</th><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Dept</th><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Worked hrs</th><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Lates</th><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Leaves taken</th><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Remaining</th><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Absences</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr style="border-bottom:1px solid var(--c-border)"><td class="px-4 py-2.5"><div class="flex items-center gap-2">${avatar(r.u,'w-7 h-7','text-[10px]')}<span style="font-weight:500;color:var(--c-text)">${esc(fullName(r.u))}</span></div></td><td class="px-4 py-2.5" style="font-size:12px;color:var(--c-text-2)">${esc(r.u.department||'')}</td><td class="px-4 py-2.5" style="font-weight:600;color:var(--c-text)">${r.worked}h</td><td class="px-4 py-2.5" style="${r.lates?'color:var(--c-warn);font-weight:600':'color:var(--c-text)'}">${r.lates}</td><td class="px-4 py-2.5" style="color:var(--c-text)">${r.leavesTaken}</td><td class="px-4 py-2.5" style="color:var(--c-success-ink)">${r.remaining}</td><td class="px-4 py-2.5" style="${r.absences?'color:var(--c-rose,#E11D48);font-weight:600':'color:var(--c-text)'}">${r.absences}</td></tr>`).join(''):`<tr><td colspan="7">${empty('chart','No data','Adjust filters or date range.')}</td></tr>`}</tbody></table></div></div>`;
+  const stats=`<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">${statCard('Total worked',fmtH(tot.w),'brand')}${statCard('Late check-ins',tot.l,'amber')}${statCard('Leave days taken',_r2(tot.lv),'sky')}${statCard('Absences',tot.ab,'rose')}</div>`;
+  const table=`<div style="background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);overflow:hidden"><div style="overflow-x:auto"><table class="w-full text-sm"><thead><tr style="border-bottom:1px solid var(--c-border);text-align:left"><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Employee</th><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Dept</th><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Worked hrs</th><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Lates</th><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Leaves taken</th><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Remaining</th><th class="px-4 py-2.5" style="font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em">Absences</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr style="border-bottom:1px solid var(--c-border)"><td class="px-4 py-2.5"><div class="flex items-center gap-2">${avatar(r.u,'w-7 h-7','text-[10px]')}<span style="font-weight:500;color:var(--c-text)">${esc(fullName(r.u))}</span></div></td><td class="px-4 py-2.5" style="font-size:12px;color:var(--c-text-2)">${esc(r.u.department||'')}</td><td class="px-4 py-2.5" style="font-weight:600;color:var(--c-text)">${fmtH(r.worked)}</td><td class="px-4 py-2.5" style="${r.lates?'color:var(--c-warn);font-weight:600':'color:var(--c-text)'}">${r.lates}</td><td class="px-4 py-2.5" style="color:var(--c-text)">${r.leavesTaken}</td><td class="px-4 py-2.5" style="color:var(--c-success-ink)">${r.remaining}</td><td class="px-4 py-2.5" style="${r.absences?'color:var(--c-rose,#E11D48);font-weight:600':'color:var(--c-text)'}">${r.absences}</td></tr>`).join(''):`<tr><td colspan="7">${empty('chart','No data','Adjust filters or date range.')}</td></tr>`}</tbody></table></div></div>`;
   const _cc='background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);padding:18px';
   const _ct='font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:12px';
   const _hv=S.hrmView==='details'?'details':'visuals';
@@ -503,9 +508,31 @@ function hrmAnalyticsPage(){
   const _scopeSuffix=isAdmin()?'':_rsc==='everyone'?' (all staff)':_rsc==='department'?' (your department)':_rsc==='location'?' (your branch)':_rsc==='team'?' (your team)':' (you)';
   const _hrmTop=rows.slice().sort((a,b)=>b.worked-a.worked).slice(0,12);
   _HRMData={ids:_hrmTop.map(r=>r.u.id),byId:Object.fromEntries(_hrmTop.map(r=>[r.u.id,r])),labels:_hrmTop.map(r=>fullName(r.u)),worked:_hrmTop.map(r=>r.worked),lates:_hrmTop.map(r=>r.lates),absences:_hrmTop.map(r=>r.absences),taken:_hrmTop.map(r=>r.leavesTaken),remaining:_hrmTop.map(r=>r.remaining)};
+  // PRO-VIZ: daily attendance trend (line) + leave-type mix (doughnut) across the filtered range.
+  _HRMData.trend=(()=>{
+    const days=[];let d=d1,guard=0;
+    while(d<=d2&&guard++<62){days.push(d);d=_isoAdd(d,1);}
+    const uid2s=new Set(users.map(u=>u.id));
+    const attIn=(DB.attendance||[]).filter(a=>uid2s.has(a.userId)&&a.date>=d1&&a.date<=d2);
+    return{labels:days.map(x=>x.slice(5)),
+      present:days.map(x=>attIn.filter(a=>a.date===x&&a.clockIn&&!(a.flags||[]).includes('WFH')).length),
+      wfh:days.map(x=>attIn.filter(a=>a.date===x&&(a.flags||[]).includes('WFH')).length),
+      leave:days.map(x=>users.filter(u=>(DB.leaveRequests||[]).some(r=>r.userId===u.id&&r.status==='Approved'&&r.start<=x&&x<=r.end)).length)};
+  })();
+  _HRMData.leaveMix=(()=>{
+    const uid2s=new Set(users.map(u=>u.id));const mix={};
+    (DB.leaveRequests||[]).filter(r=>uid2s.has(r.userId)&&r.status==='Approved'&&r.start<=d2&&r.end>=d1).forEach(r=>{
+      const nm=(ltById(r.leaveTypeId)||{}).name||'Other';mix[nm]=(mix[nm]||0)+(r.workingDays||0);});
+    const ks=Object.keys(mix).sort((a,b)=>mix[b]-mix[a]).slice(0,8);
+    return{labels:ks,data:ks.map(k=>_r2(mix[k]))};
+  })();
   const _stb=(v,lbl,icn)=>`<button onclick="S.hrmView='${v}';rr()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;border:1px solid ${_hv===v?'var(--c-text)':'var(--c-border)'};background:${_hv===v?'var(--c-text)':'var(--c-surface)'};color:${_hv===v?'#fff':'var(--c-text-2)'};font-size:13px;font-weight:700;cursor:pointer">${ic(icn,'w-4 h-4')}${lbl}</button>`;
   const _subTab=`<div style="display:flex;gap:8px;margin-bottom:16px">${_stb('visuals','Visuals','chart')}${_stb('details','Details','list')}</div>`;
   const visualsHTML=rows.length?`<div class="achart-grid" style="margin-bottom:14px">
+      <div style="${_cc}"><div class="fd" style="${_ct}">Attendance trend <span style="font-size:11px;font-weight:600;color:var(--c-text-3)">(present · WFH · on leave, per day)</span></div><div style="position:relative;height:250px"><canvas id="hrmChartTrend" data-chart="attendance-trend"></canvas></div></div>
+      <div style="${_cc}"><div class="fd" style="${_ct}">Leave mix <span style="font-size:11px;font-weight:600;color:var(--c-text-3)">(days by type in range)</span></div><div style="position:relative;height:250px"><canvas id="hrmChartLeaveMix" data-chart="leave-mix"></canvas></div></div>
+    </div>
+    <div class="achart-grid" style="margin-bottom:14px">
       <div style="${_cc}"><div class="fd" style="${_ct}">Worked hours by employee</div><div style="position:relative;height:360px"><canvas id="hrmChartWorked" data-chart="worked-hours"></canvas></div></div>
       <div style="${_cc}"><div class="fd" style="${_ct}">Lateness &amp; absences</div><div style="position:relative;height:360px"><canvas id="hrmChartLate" data-chart="lateness-absences"></canvas></div></div>
     </div>
@@ -560,13 +587,13 @@ App.downloadPayroll=()=>{
     rows.push([fullName(u),u.email||'',u.department||'',userProfileId(u),worked,lates,leavesTaken,remaining,absences,d1+' to '+d2]);
   });
   const csv=rows.map(r=>r.map(v=>{let c=String(v??'');if(/^[=+\-@\t\r]/.test(c))c="'"+c;return '"'+c.replace(/"/g,'""')+'"';}).join(',')).join('\n');
-  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='bridge_payroll_'+todayISO()+'.csv';a.click();
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='evarca_payroll_'+todayISO()+'.csv';a.click();
   hlog('Payroll exported',d1+' to '+d2+' ('+users.length+' staff)');
   toast('Exported '+users.length+' staff');
 };
 
 // Shared sanitized CSV writer — IDENTICAL guard to _exportCSV/downloadPayroll.
-// rows: array of arrays. filenamePrefix: e.g. 'bridge_report_attendance'.
+// rows: array of arrays. filenamePrefix: e.g. 'evarca_report_attendance'.
 function _csvDownload(rows,filenamePrefix){
   const csv=rows.map(r=>r.map(v=>{let c=String(v??'');
     // Neutralize CSV formula injection (= + - @ tab CR → text).
@@ -574,7 +601,7 @@ function _csvDownload(rows,filenamePrefix){
     return '"'+c.replace(/"/g,'""')+'"';}).join(',')).join('\n');
   const a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
-  a.download=(filenamePrefix||'bridge_report')+'_'+todayISO()+'.csv';
+  a.download=(filenamePrefix||'evarca_report')+'_'+todayISO()+'.csv';
   a.click();
 }
 

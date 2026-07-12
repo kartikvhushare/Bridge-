@@ -25,6 +25,7 @@ function _hrmNotify(userId,text,kind,targetRoute){
   // targetRoute pins ambiguous kinds (e.g. a DECIDED document/onboarding notif → its page, not
   // the Approvals inbox). _notifClick still has a leave-text fallback for legacy kind-less rows.
   if(!userId||!text)return; // PHASE3-FIX: empty-text guard (matches notify()) — one undefined-text row 400s the batched notifications upsert and blocks ALL notification sync
+  if(!_inappOn(kind))return; // feature-level in-app switch (HR Config → Alerts), default on
   const n={id:uid('n'),userId,text,time:new Date().toISOString(),read:false};
   if(kind)n.kind=kind;
   if(targetRoute)n.targetRoute=targetRoute;
@@ -60,6 +61,10 @@ App._hnpTog=(btn,key)=>{
   btn.classList.toggle('on',nowOn);btn.classList.toggle('off',!nowOn);
   btn.setAttribute('aria-checked',nowOn?'true':'false');
   DB.hrmNotifPrefs[key]=nowOn;saveDB();
+  // PHASE4b (full persistence): these prefs were localStorage-only — now they ride workspace_settings
+  // so a refresh/cache-clear/another device sees the same switches. The tab is gated on
+  // can('settings','edit'), which matches the workspace_settings RLS write rule.
+  if(can('settings','edit'))sb.from('workspace_settings').upsert({key:'hrm_notif_prefs',value:DB.hrmNotifPrefs,updated_at:new Date().toISOString()},{onConflict:'key'}).then(()=>{}).catch(()=>{});
 };
 
 /* ── Date helpers ── */
@@ -272,6 +277,9 @@ function _distM(lat1,lng1,lat2,lng2){
 function _runAutoClose(){
   const today=todayISO();let changed=false;
   (DB.attendance||[]).forEach(rec=>{
+    // Only close records THIS session can also persist (own rows, or attendance-edit powers) —
+    // otherwise the local close would never reach the server and flip back on the next load.
+    if(!(rec.userId===S.uid||can('attendance','edit')))return;
     if(rec.clockIn&&!rec.clockOut&&rec.date<today){
       const at=userProfile(uById(rec.userId)).autoCloseAt||'00:00'; // LV-6: user's profile, not global
       rec.clockOut=rec.date+'T'+at+':00';
@@ -369,7 +377,9 @@ function _hrmInit(){
 
 /* ── Attendance status colors ── */
 const ATT_COLOR={Present:'#10B981',Absent:'#F43F5E',Leave:'#8B5CF6',HalfDay:'#F59E0B',OffDay:'#9CA3AF',Holiday:'#0EA5E9',AutoClosed:'#EAB308',LeavePending:'#FBBF24'};
-const ATT_LABEL={Present:'Present',Absent:'Absent',Leave:'On leave',HalfDay:'Half-day',OffDay:'Off-day',Holiday:'Public holiday',AutoClosed:'Auto-closed',LeavePending:'Leave (pending)'};
+const ATT_LABEL={Present:'Present',Absent:'Absent',Leave:'On leave',HalfDay:'Half-day',OffDay:'Off-day',Holiday:'Public holiday',AutoClosed:'Didn’t clock out',LeavePending:'Leave (pending)'};
+// Friendly labels for attendance flag chips (raw flag keys stay in the data for filters/CSV).
+const FLAG_LABEL={'late':'Late in','early':'Early out','WFH':'WFH','auto-closed':'Auto-closed 12:00 AM','forgot-clockout':'Didn’t clock out','fence-changed':'No fence at clock-out'};
 // Soft tint + readable ink per status — gives the attendance calendar a calm heatmap look
 // instead of a wall of saturated colour. Present stays solid (it's the positive signal).
 const ATT_SOFT={Present:'#10B981',Absent:'#FDECEC',Leave:'#F1ECFE',HalfDay:'#FEF4E5',OffDay:'#F1F3F6',Holiday:'#E7F5FC',AutoClosed:'#FEF8E6',LeavePending:'#FEF6E0'};
@@ -500,4 +510,4 @@ function _withGeofence(verb,onPass,lenient,retryFn){
 }
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.HRM_SIXDAY_PRORATE=HRM_SIXDAY_PRORATE;window.HRM_ANNUAL_MID=HRM_ANNUAL_MID;window.hlog=hlog;window._hrmNotify=_hrmNotify;window._hrmNotifPrefsDefault=_hrmNotifPrefsDefault;window._hnp=_hnp;window._hnpEmail=_hnpEmail;window._isoAdd=_isoAdd;window._addMonths=_addMonths;window._monthsBetween=_monthsBetween;window._r2=_r2;window._leaveYearOf=_leaveYearOf;window._leaveYearStart=_leaveYearStart;window._seedProfiles=_seedProfiles;window._seedLeaveTypes=_seedLeaveTypes;window.ltById=ltById;window._typesFor=_typesFor;window._balanceFor=_balanceFor;window._balanceReadonly=_balanceReadonly;window._balRemaining=_balRemaining;window._compOffRemaining=_compOffRemaining;window._isCompOffLt=_isCompOffLt;window._ltRemaining=_ltRemaining;window._workingDaysBetween=_workingDaysBetween;window.computeHours=computeHours;window._applyFlags=_applyFlags;window.attFor=attFor;window._onFullLeaveToday=_onFullLeaveToday;window._distM=_distM;window._runAutoClose=_runAutoClose;window._runMonthlyAccrual=_runMonthlyAccrual;window._runCarryOver=_runCarryOver;window._birthdayOk=_birthdayOk;window._hrmInit=_hrmInit;window.ATT_COLOR=ATT_COLOR;window.ATT_LABEL=ATT_LABEL;window.ATT_SOFT=ATT_SOFT;window.ATT_INK=ATT_INK;window._m2hm=_m2hm;window._dayStatus=_dayStatus;window._activeGeofence=_activeGeofence;window._candidateGeofences=_candidateGeofences;window._withGeofence=_withGeofence;
+window.HRM_SIXDAY_PRORATE=HRM_SIXDAY_PRORATE;window.HRM_ANNUAL_MID=HRM_ANNUAL_MID;window.hlog=hlog;window._hrmNotify=_hrmNotify;window._hrmNotifPrefsDefault=_hrmNotifPrefsDefault;window._hnp=_hnp;window._hnpEmail=_hnpEmail;window._isoAdd=_isoAdd;window._addMonths=_addMonths;window._monthsBetween=_monthsBetween;window._r2=_r2;window._leaveYearOf=_leaveYearOf;window._leaveYearStart=_leaveYearStart;window._seedProfiles=_seedProfiles;window._seedLeaveTypes=_seedLeaveTypes;window.ltById=ltById;window._typesFor=_typesFor;window._balanceFor=_balanceFor;window._balanceReadonly=_balanceReadonly;window._balRemaining=_balRemaining;window._compOffRemaining=_compOffRemaining;window._isCompOffLt=_isCompOffLt;window._ltRemaining=_ltRemaining;window._workingDaysBetween=_workingDaysBetween;window.computeHours=computeHours;window._applyFlags=_applyFlags;window.attFor=attFor;window._onFullLeaveToday=_onFullLeaveToday;window._distM=_distM;window._runAutoClose=_runAutoClose;window._runMonthlyAccrual=_runMonthlyAccrual;window._runCarryOver=_runCarryOver;window._birthdayOk=_birthdayOk;window._hrmInit=_hrmInit;window.ATT_COLOR=ATT_COLOR;window.ATT_LABEL=ATT_LABEL;window.FLAG_LABEL=FLAG_LABEL;window.ATT_SOFT=ATT_SOFT;window.ATT_INK=ATT_INK;window._m2hm=_m2hm;window._dayStatus=_dayStatus;window._activeGeofence=_activeGeofence;window._candidateGeofences=_candidateGeofences;window._withGeofence=_withGeofence;

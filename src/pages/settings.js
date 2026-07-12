@@ -109,7 +109,7 @@ const EMAIL_EVENTS=[
 
 function _defaultTemplates(){
   return{
-    checklist_assigned:{subject:'📋 Checklist assigned: {{checklist_name}}',   body:'Hi {{user_name}},\n\nA checklist has been assigned to you: {{checklist_name}}\n\nOpen Bridge to complete it.\n\n{{action_url}}'},
+    checklist_assigned:{subject:'📋 Checklist assigned: {{checklist_name}}',   body:'Hi {{user_name}},\n\nA checklist has been assigned to you: {{checklist_name}}\n\nOpen Evarca to complete it.\n\n{{action_url}}'},
     submission_late:  {subject:'⏰ Overdue checklist: {{checklist_name}}',        body:'Hi {{user_name}},\n\n{{employee_name}} has not submitted "{{checklist_name}}" and the deadline has now passed. Please follow up.\n\n{{action_url}}'},
     submission_approved:{subject:'✅ Submission approved: {{checklist_name}}',  body:'Hi {{user_name}},\n\nYour submission for {{checklist_name}} has been approved.\n\n{{action_url}}'},
     submission_rejected:{subject:'❌ Submission rejected: {{checklist_name}}',  body:'Hi {{user_name}},\n\nYour submission for {{checklist_name}} has been rejected. Please review and resubmit.\n\n{{action_url}}'},
@@ -117,19 +117,19 @@ function _defaultTemplates(){
     approval_decided: {subject:'Approval update: {{checklist_name}}',          body:'Hi {{user_name}},\n\nYour approval request for {{checklist_name}} has been decided.\n\n{{action_url}}'},
     feedback_received:{subject:'💬 New feedback received',                      body:'Hi {{user_name}},\n\nYou have received new feedback on {{checklist_name}}.\n\n{{action_url}}'},
     deadline_reminder:{subject:'⏳ Reminder: {{checklist_name}} deadline soon', body:'Hi {{user_name}},\n\nYour checklist {{checklist_name}} deadline is approaching soon. Please complete it before the cutoff.\n\n{{action_url}}'},
-    escalation:{subject:'⚠️ Escalation: {{checklist_name}}',                    body:'An escalation was raised on {{checklist_name}}.\n\nQuestion: {{question}}\nAnswer: {{answer}}\nRaised by: {{submitter}}\n\nOpen Bridge to follow up.\n\n{{action_url}}'},
+    escalation:{subject:'⚠️ Escalation: {{checklist_name}}',                    body:'An escalation was raised on {{checklist_name}}.\n\nQuestion: {{question}}\nAnswer: {{answer}}\nRaised by: {{submitter}}\n\nOpen Evarca to follow up.\n\n{{action_url}}'},
     announcement:{subject:'📣 {{title}}',                                       body:'{{body}}\n\n{{action_url}}'},
     // ── HRM templates — consistent subject + clean body with resolved variables. ──
     hrm_leave_submitted:{subject:'🔔 Leave approval needed: {{user_name}} — {{leave_type}}',
-      body:'Hi {{approver_name}},\n\n{{user_name}} has requested {{leave_type}} and needs your approval.\n\nDates: {{start_date}} → {{end_date}} ({{working_days}})\nReason: {{reason}}\n\nReview and decide in Bridge.\n\n{{action_url}}'},
+      body:'Hi {{approver_name}},\n\n{{user_name}} has requested {{leave_type}} and needs your approval.\n\nDates: {{start_date}} → {{end_date}} ({{working_days}})\nReason: {{reason}}\n\nReview and decide in Evarca.\n\n{{action_url}}'},
     hrm_leave_approved:{subject:'✅ Leave approved: {{leave_type}} ({{start_date}} → {{end_date}})',
       body:'Hi {{user_name}},\n\nYour {{leave_type}} request has been approved.\n\nDates: {{start_date}} → {{end_date}} ({{working_days}})\nApproved by: {{approver_name}}\nRemaining balance: {{balance}}\n\n{{action_url}}'},
     hrm_leave_rejected:{subject:'❌ Leave rejected: {{leave_type}} ({{start_date}} → {{end_date}})',
       body:'Hi {{user_name}},\n\nYour {{leave_type}} request for {{start_date}} → {{end_date}} was not approved.\n\nDecided by: {{approver_name}}\nReason: {{reason}}\n\nPlease reach out to your approver if you have questions.\n\n{{action_url}}'},
     review_cycle_opened:{subject:'⭐ Review cycle open: {{cycle_name}}',
-      body:'Hi {{user_name}},\n\nThe review cycle "{{cycle_name}}" is open — please fill in your review(s) before {{end_date}}.\n\nOpen Bridge: {{action_url}}'},
+      body:'Hi {{user_name}},\n\nThe review cycle "{{cycle_name}}" is open — please fill in your review(s) before {{end_date}}.\n\nOpen Evarca: {{action_url}}'},
     review_results_ready:{subject:'⭐ Your review results are ready — {{cycle_name}}',
-      body:'Hi {{user_name}},\n\nYour results for "{{cycle_name}}" are now visible in the Reviews tab.\n\nOpen Bridge: {{action_url}}'},
+      body:'Hi {{user_name}},\n\nYour results for "{{cycle_name}}" are now visible in the Reviews tab.\n\nOpen Evarca: {{action_url}}'},
     hrm_leave_escalated:{subject:'⚠️ Leave needs review: {{user_name}} — {{leave_type}}',
       body:'Hi,\n\n{{user_name}}\'s {{leave_type}} request ({{start_date}} → {{end_date}}, {{working_days}}) has no configured approver and has been escalated to HR / Admin for review.\n\n{{action_url}}'},
     hrm_late:{subject:'⚠️ Late clock-in on {{date}}',
@@ -144,7 +144,7 @@ function _defaultTemplates(){
 }
 
 function _nsDefault(){return{
-  email_enabled:false,email_from_name:'Bridge',email_from_address:'',email_reminder_minutes:15,
+  email_enabled:false,email_from_name:'Evarca',email_from_address:'',email_reminder_minutes:15,
   inapp_checklist_assigned:true,inapp_submission_submitted:true,
   inapp_submission_late:true,inapp_submission_approved:true,inapp_submission_rejected:true,
   inapp_approval_requested:true,inapp_approval_decided:true,
@@ -185,7 +185,7 @@ function _fillTemplate(str, vars){
 
 // ── Render plain text body as HTML — {{action_url}} line becomes a CTA button ──
 function _bodyToHtml(fromName, bodyText, actionUrl=''){
-  const safeName=String(fromName||'Bridge').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+  const safeName=String(fromName||'Evarca').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
   const rawLines = bodyText.split('\n').map(l=>l.trim());
   // ctaUrl is passed in as 3rd arg — already the resolved URL
   let ctaUrl = actionUrl||'';
@@ -200,7 +200,7 @@ function _bodyToHtml(fromName, bodyText, actionUrl=''){
     :ctaUrl.includes('analytics')?'View Analytics'
     :ctaUrl.includes('leave')?'View Leave'
     :ctaUrl.includes('attendance')?'View Attendance'
-    :'Open Bridge';
+    :'Open Evarca';
   return`<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F7F6F2;font-family:sans-serif">
   <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden">
     <div style="background:#15171C;padding:20px 28px;display:flex;align-items:center;gap:10px">
@@ -248,7 +248,7 @@ async function sendEmail(eventType, userId, vars){
     hrm_late:'attendance', hrm_early:'attendance', hrm_auto_closed:'attendance',
   };
   const actionUrl = appUrl + '/#' + (routeMap[eventType]||'');
-  const allVars = {user_name:fullName(user), from_name:_ns.email_from_name||'Bridge', app_url:appUrl, action_url:actionUrl, ...vars};
+  const allVars = {user_name:fullName(user), from_name:_ns.email_from_name||'Evarca', app_url:appUrl, action_url:actionUrl, ...vars};
   const defaults = _defaultTemplates();
   const tpl = {
     subject:(_ns.templates?.[eventType]?.subject)||defaults[eventType]?.subject||eventType,
@@ -257,7 +257,7 @@ async function sendEmail(eventType, userId, vars){
   const subject  = _fillTemplate(tpl.subject, allVars);
   const bodyHtml = _bodyToHtml(_ns.email_from_name, _fillTemplate(tpl.body, allVars), actionUrl);
   sb.functions.invoke('send-notification',{body:{
-    to:user.email, from_name:_ns.email_from_name||'Bridge', subject, html:bodyHtml,
+    to:user.email, from_name:_ns.email_from_name||'Evarca', subject, html:bodyHtml,
   }}).catch(e=>console.warn('sendEmail invoke failed:',e.message));
 }
 
@@ -285,7 +285,7 @@ App._nsSaveEmail=async()=>{
   const mins=parseInt($('#ns-reminder-mins')?.value||'15',10)||15;
   if(!addr){toast('Enter a from email address','err');return;}
   if(!addr.includes('@')){toast('Enter a valid email address','err');return;}
-  _ns.email_from_name=name||'Bridge';_ns.email_from_address=addr;
+  _ns.email_from_name=name||'Evarca';_ns.email_from_address=addr;
   _ns.email_reminder_minutes=Math.max(5,Math.min(120,mins));
   await _saveNS();toast('Saved');
 };
@@ -299,10 +299,10 @@ App._testEmail=async()=>{
     const appUrl=window.location.origin;
     const {error}=await sb.functions.invoke('send-notification',{body:{
       to: u.email,
-      from_name: _ns.email_from_name||'Bridge',
-      subject: '✅ Bridge test email',
-      html: _bodyToHtml(_ns.email_from_name||'Bridge',
-        'Hi '+u.firstName+',\n\nThis is a test email from Bridge.\n\nIf you received this, your email setup is working correctly. SMTP is connected and emails will be delivered to users based on their profile email address.',
+      from_name: _ns.email_from_name||'Evarca',
+      subject: '✅ Evarca test email',
+      html: _bodyToHtml(_ns.email_from_name||'Evarca',
+        'Hi '+u.firstName+',\n\nThis is a test email from Evarca.\n\nIf you received this, your email setup is working correctly. SMTP is connected and emails will be delivered to users based on their profile email address.',
         appUrl+'/#mychecklists'),
     }});
     if(error)throw new Error(error.message||'Function error');
@@ -317,29 +317,21 @@ App._testEmail=async()=>{
 
 
 function settingsPage(){
-  const stab=S.filters.stab||'workflow';
+  // Workflow tab removed — its 4 toggles were never read by any code. Approval/edit behavior is
+  // governed per-checklist and by Access Control. Stale stab==='workflow' falls back to 'inapp'.
+  const stab=(S.filters.stab&&S.filters.stab!=='workflow')?S.filters.stab:'inapp';
   if(!_ns){_loadNS().then(()=>rr());return`<div class="fade">${hdr('Settings','')}${loadingState('Loading settings…')}</div>`;}
   const ns=_ns;
-  const TABS=[['workflow','Workflow'],['inapp','In-App'],['email','Email']];
+  const TABS=[['inapp','In-App'],['email','Email']];
   if(can('settings','edit'))TABS.push(['hrmemail','HR Email']); // §4 (FRONTEND-ONLY prefs)
   TABS.push(['templates','Templates']);
   const tabBar=`<div class="ui-tabs" style="margin-bottom:20px">${TABS.map(([k,ll])=>`<button class="ui-tab${stab===k?' on':''}" onclick="App._setSTab('${k}')">${ll}</button>`).join('')}</div>`;
-
-  const workflowTab=`<div class="space-y-4">
-    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
-      <h3 class="fd font-semibold text-sm mb-3">Approval & Submission</h3>
-      ${_nsTogRow('workflow_approval_flow','Enable approval flow','Submissions can require manager approval')}
-      ${_nsTogRow('workflow_late_marking','Mark submissions late after cutoff','Late status applied after schedule time')}
-      ${_nsTogRow('workflow_allow_edit','Allow users to request edits','Users can request to edit a submitted checklist')}
-      ${_nsTogRow('workflow_edit_approval','Require approval for edited submissions','Resubmissions go back for approval')}
-    </div>
-  </div>`;
 
   const inappTab=`<div class="space-y-4">
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
       <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9">
         <div style="font-size:14px;font-weight:700">In-app notifications</div>
-        <div style="font-size:12px;color:#9CA3AF;margin-top:2px">Bell icon — shown only to the relevant user</div>
+        <div style="font-size:12px;color:#9CA3AF;margin-top:2px">Bell icon — shown only to the relevant user. Per-feature master switches (Leave, Payroll, OKRs…) live in <strong>HR Config → Alerts</strong>, like email.</div>
       </div>
       <div style="padding:4px 20px 12px">
         <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Checklists</div>
@@ -372,7 +364,7 @@ function settingsPage(){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div>
             <label for="ns-from-name" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From name</label>
-            <input id="ns-from-name" value="${esc(ns.email_from_name||'Bridge')}" placeholder="Bridge"
+            <input id="ns-from-name" value="${esc(ns.email_from_name||'Evarca')}" placeholder="Evarca"
               style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
           </div>
           <div>
@@ -522,7 +514,7 @@ function settingsPage(){
     </div>
   </div>`;
 
-  const content=stab==='workflow'?workflowTab:stab==='inapp'?inappTab:stab==='email'?emailTab:stab==='hrmemail'?hrmEmailTab:stab==='templates'?templatesTab:dataTab;
+  const content=stab==='inapp'?inappTab:stab==='email'?emailTab:stab==='hrmemail'?hrmEmailTab:stab==='templates'?templatesTab:dataTab;
   return`<div class="fade">${hdr('Settings','')}${tabBar}${content}</div>`;
 }
 
@@ -545,7 +537,7 @@ App._exportCSV=()=>{
     // are prefixed with a single quote so spreadsheet apps treat them as text.
     if(/^[=+\-@\t\r]/.test(cell))cell="'"+cell;
     return '"'+cell.replace(/"/g,'""')+'"';}).join(',')).join('\n');
-  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='bridge_export_'+todayISO()+'.csv';a.click();
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='evarca_export_'+todayISO()+'.csv';a.click();
   toast('Exported '+subs.length+' submissions ('+(qRows.length-1)+' question responses)');
 };
 

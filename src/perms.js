@@ -30,7 +30,7 @@ const PERM_AREAS=[
   {key:'documentsPersonal',label:'Personal documents',desc:'Files on a person\'s profile',actions:['view','create','delete','download'],scoped:true,group:'Work & Content'},
   {key:'analytics',label:'Dashboard — Company',desc:'Operational analytics dashboard (checklists, compliance, tickets)',actions:['view'],scoped:false,group:'Dashboards & Inbox'},
   {key:'reports',label:'Dashboard — HRM Analytics',desc:'HR analytics dashboard & CSV exports',actions:['view','download'],scoped:true,group:'Dashboards & Inbox'},
-  {key:'okr',label:'OKRs',desc:'Hierarchical objectives (L0 → L1 → L2) with owners, targets & scheduled check-ins',actions:['view','create','edit','manage'],scoped:false,group:'Dashboards & Inbox'},
+  {key:'okr',label:'OKRs',desc:'Hierarchical objectives (L0 → L1 → L2), each level measured independently. Level owners + upper-level owners always keep their built-in rights; these toggles grant the same powers to a role on top.',actions:['view','create','edit','manage','editEntries','changeOwner','deleteLogs'],scoped:false,group:'Dashboards & Inbox'},
   {key:'announcements',label:'Announcements',desc:'Company-wide messages',actions:['view','create'],scoped:false,group:'Work & Content'},
   {key:'locations',label:'Locations',desc:'Offices and GPS boundary',actions:['view','create','edit','manage'],scoped:false,group:'Administration'},
   {key:'departments',label:'Departments',desc:'Department list',actions:['view','create','edit'],scoped:false,group:'Administration'},
@@ -48,7 +48,7 @@ const PERM_AREAS=[
   {key:'accessControl',label:'Access Control',desc:'The role-profile system itself',actions:['view','manage'],scoped:false,group:'Administration'},
 ];
 // Plain-language labels used by the Access Control editor + live summary.
-const PERM_ACTION_LABEL={view:'View',create:'Create',edit:'Edit',delete:'Delete',deactivate:'Deactivate',approve:'Approve',download:'Download / Export',manage:'Manage',manageSettings:'Manage settings',assign:'Assign',assignRole:'Assign role profile',assignManager:'Assign manager',grant:'Grant / Remove',submit:'Submit',upload:'Upload',manageGeofence:'Manage geofence',issue:'Issue',verify:'Verify',run:'Run',finalize:'Finalize',rollback:'Roll back'};
+const PERM_ACTION_LABEL={view:'View',create:'Create',edit:'Edit',delete:'Delete',deactivate:'Deactivate',approve:'Approve',download:'Download / Export',manage:'Manage',manageSettings:'Manage settings',assign:'Assign',assignRole:'Assign role profile',assignManager:'Assign manager',grant:'Grant / Remove',submit:'Submit',upload:'Upload',manageGeofence:'Manage geofence',issue:'Issue',verify:'Verify',run:'Run',finalize:'Finalize',rollback:'Roll back',editEntries:'Edit / delete inputs (any OKR)',changeOwner:'Change owner (any OKR)',deleteLogs:'Delete log entries (any OKR)'};
 const SCOPE_ORDER=['none','self','team','department','location','everyone'];
 const SCOPE_LABEL={none:'None',self:'Only their own',team:'Their team',department:'Their department',location:'Their office',everyone:'Everyone'};
 const _areaByKey=k=>PERM_AREAS.find(a=>a.key===k);
@@ -132,7 +132,7 @@ function _seedRoleProfiles(){
       reviews:A('self','view','submit'),
     }},
   };
-  const V='6'; // v6: adds Phase 4 'reviews' area to the built-in roles // v5: reports scoped (HRM analytics shows team/everyone), surveys
+  const V='7'; // v7: OKR granular actions (editEntries/changeOwner/deleteLogs) // v6: Phase 4 'reviews' area // v5: reports scoped, surveys
   Object.values(presets).forEach(p=>{
     const cur=DB.roleProfiles[p.id];
     if(!cur||(cur.builtin&&cur._v!==V)){p._v=V;DB.roleProfiles[p.id]=p;} // upgrade built-ins once; never touch custom roles

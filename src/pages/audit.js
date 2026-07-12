@@ -20,16 +20,10 @@ function auditPage(){
     if(s2.includes('announcement'))return 'Announcements';
     if(s2.includes('setting'))return 'Settings';
     return 'Other';};
-  // ONE audit surface: system audit + per-OKR activity + HRM (leave/attendance) audit, merged.
-  const _okrAudit=(DB.okrLogs||[]).map(l=>{
-    const u=uById(l.actorId);const o=okrById(l.okrId);const dd=l.details||{};
-    let det='';
-    if(Array.isArray(dd.changes)&&dd.changes.length)det=dd.changes.map(c=>c.field+': '+String(c.from??'—')+' → '+String(c.to??'—')).join(' · ');
-    else if(dd.to)det='→ '+String(dd.to);
-    else if(dd.date)det=String(dd.date)+(dd.value!==null&&dd.value!==undefined?' · '+String(dd.value):'');
-    return{actor:u?fullName(u):'—',action:l.action+' (OKR)',target:(o?o.title:'')+(det?' — '+det:''),time:l.createdAt};
-  });
-  const all=[...(DB.audit||[]),..._okrAudit,...(DB.hrmAudit||[])].sort((a,b)=>String(b.time||'').localeCompare(String(a.time||'')));
+  // Audit surface: system audit + HRM (leave/attendance) audit. OKR activity intentionally
+  // does NOT appear here anymore (owner request #6) — each level's log lives in its own popup
+  // on the OKR page (card → Logs).
+  const all=[...(DB.audit||[]),...(DB.hrmAudit||[])].sort((a,b)=>String(b.time||'').localeCompare(String(a.time||'')));
   const actors=[...new Set(all.map(l=>l.actor).filter(Boolean))].sort();
   const cats=[...new Set(all.map(cat))].sort();
   const deptOfActor=name=>{const u=DB.users.find(x=>fullName(x)===name);return u?u.department:null;};

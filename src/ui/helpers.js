@@ -312,7 +312,7 @@ const HOW={
   accesscontrol:{t:'One rule runs everything: a ROLE is a bundle of switches (which tabs, which buttons) — give each person ONE role, done. “Personal” only holds personal facts: past/future submission rights, HR-approver stage, cities and document folders.',d:['Edit a role → everyone with it changes instantly.','You can never remove the last person holding Access Control.'],l:[['users','Users'],['audit','Audit']]},
   hrmconfig:{t:'Company-wide policy in one place: leave rules & holidays, alert thresholds (late, SLA, expiries), overtime caps, payroll cut-off, and the step templates for onboarding / probation / exit. Changes apply to everyone instantly.',l:[['payroll','Payroll'],['lifecycle','Lifecycle'],['leave','Leave']]},
   surveys:{t:'HR creates a survey with a run date → on that day the right people are notified: everyone rates the company, each person rates their manager, and managers rate each team member. Scores aggregate per person in HR Config → Surveys.',l:[['hrmconfig','HR Config']]},
-  okr:{t:'Create an objective with a target and a check-in day → the owner gets it as a task on that day → their numbers roll up the tree (L2 → L1 → L0) and the graph shows planned pace vs reality.',d:['Green = on pace, red = off pace, computed against the period; you can also mark status manually.','Every input and edit is kept in the objective\'s activity log.'],l:[['mychecklists','My Checklists'],['dashboard','Dashboard']]},
+  okr:{t:'Create an objective with a target and a check-in day → the owner gets it as a task on that day. Every level (L0 / L1 / L2) is measured on its OWN inputs — sub-objectives sit underneath for structure but never change the parent\'s number or graph.',d:['The graph shows two lines: Actual (your inputs) vs Ideal (the straight start→target pace), across every date of the period.','Every input and edit is kept in that level\'s own activity log (card → Logs).'],l:[['mychecklists','My Checklists'],['dashboard','Dashboard']]},
 };
 
 App._howModal=()=>{
@@ -340,7 +340,116 @@ function _howBar(key){
   </div>`;
 }
 
+/* ════════ REFERENTIAL-INTEGRITY DELETE GUARDS ════════
+   guardDelete(type,id,label) → true when the record has no LIVE links and deletion may proceed.
+   Otherwise it opens a modal naming every link (grouped, first 5 names + count) and returns false.
+   Wire it at the TOP of a delete handler, before the confirm() prompt.
+   Live links only: pure history (past submissions, decided approvals, finished leave) never
+   blocks — for people, 'Disable' remains the way to retire someone while keeping history. */
+function _refLinks(type,id){
+  const L=[];const today=todayISO();
+  const add=(label,names,hint)=>{const nn=(names||[]).filter(Boolean);if(nn.length)L.push({label,names:nn,hint:hint||''});};
+  if(type==='user'){
+    const u=uById(id);
+    add('Manages people',DB.users.filter(x=>x.managerId===id).map(x=>fullName(x)),'Reassign their manager in the user editor first');
+    add('Assigned to checklists',DB.checklists.filter(c=>(c.assignees||[]).includes(id)).map(c=>c.name),'Unassign them in the checklist editor');
+    add('Owns OKRs',(DB.okrs||[]).filter(o=>o.ownerId===id).map(o=>o.title||'Untitled OKR'),'Change the OKR owner or delete the OKR');
+    add('Pending approvals',(DB.approvals||[]).filter(a=>a.requesterId===id&&a.status==='Pending').map(a=>(a.type||'Approval')+(a.date?' · '+fmtS(a.date):'')),'Decide them in the Approvals inbox');
+    add('Pending or upcoming leave',(DB.leaveRequests||[]).filter(r=>r.userId===id&&(r.status==='Pending'||(r.status==='Approved'&&String(r.end||'')>=today))).map(r=>((ltById(r.leaveTypeId)||{}).name||'Leave')+' · '+fmtS(r.start)+' → '+fmtS(r.end)),'Cancel or decide the leave request');
+    add('Upcoming shifts',(DB.shifts||[]).filter(s=>s.userId===id&&String(s.date||'')>=today).map(s=>fmtS(s.date)+(s.start?' '+s.start:'')),'Remove them from the roster');
+    add('Assets not returned',((u&&u.hrm&&u.hrm.assets)||[]).filter(a=>a.status!=='Returned').map(a=>a.name),'Mark the asset returned (or remove the record) in the user editor');
+    add('Active lifecycle flows',(DB.flows||[]).filter(f=>f.userId===id&&f.status!=='Completed').map(f=>f.kind||'Flow'),'Complete or remove the flow in Lifecycle');
+    add('Open tickets assigned',(DB.tickets||[]).filter(t=>t.assignedTo===id&&t.status==='Open').map(t=>t.title||('#'+String(t.id||'').slice(-6))),'Resolve or reassign the ticket');
+    add('Letters awaiting action',(DB.letters||[]).filter(l=>l.userId===id&&l.status==='Requested').map(l=>l.title||l.type),'Decide the letter request first');
+    add('Pending expense claims',(DB.expenses||[]).filter(x=>x.userId===id&&x.status==='pending').map(x=>(x.category||'Expense')+(x.amount?' · '+x.amount:'')),'Approve or reject the claim');
+    add('Active SOP / onboarding instances',(DB.sopInstances||[]).filter(i=>i.userId===id&&i.status!=='Completed').map(i=>{const t=(DB.sopTemplates||[]).find(x=>x.id===i.templateId);return(t&&t.name)||'SOP';}),'Complete or remove the instance');
+    add('In an open payroll run',(DB.payrollItems||[]).filter(p=>p.userId===id&&(DB.payrollRuns||[]).some(r=>r.id===p.runId&&r.status!=='Finalized')).map(p=>{const r=(DB.payrollRuns||[]).find(x=>x.id===p.runId);return(r&&r.month)||'Payroll run';}),'Finalize or roll back the run first');
+  }else if(type==='department'){
+    const d=DB.departments.find(x=>x.id===id);const nm=d?d.name:'';
+    add('Sub-departments',subDepts(id).map(k=>k.name),'Delete or re-parent them first');
+    add('People in this department',DB.users.filter(x=>x.department===nm).map(x=>fullName(x)),'Move them to another department');
+    add('Checklists targeting it',DB.checklists.filter(c=>c.department===nm).map(c=>c.name),'Edit the checklist’s department');
+    add('Announcements targeting it',(DB.announcements||[]).filter(a=>a.deptTarget===nm).map(a=>a.title),'Delete or retarget the announcement');
+  }else if(type==='location'){
+    add('People geofenced to it',DB.users.filter(x=>x.hrm&&x.hrm.locationId===id).map(x=>fullName(x)),'Change their office in the user editor');
+    add('Checklists using it',DB.checklists.filter(c=>(c.locationIds||[]).includes(id)).map(c=>c.name),'Edit the checklist’s locations');
+    add('Upcoming shifts there',(DB.shifts||[]).filter(s=>s.locationId===id&&String(s.date||'')>=today).map(s=>{const su=uById(s.userId);return(su?fullName(su):'Shift')+' · '+fmtS(s.date);}),'Move or delete the shifts');
+    add('Announcements targeting it',(DB.announcements||[]).filter(a=>a.locTarget===id).map(a=>a.title),'Delete or retarget the announcement');
+  }else if(type==='checklist'){
+    const c=clById(id);
+    add('Assigned to people',((c&&c.assignees)||[]).map(x=>{const au=uById(x);return au?fullName(au):null;}),'Unassign everyone in the checklist editor first');
+  }else if(type==='question'){
+    add('Used by checklists',DB.checklists.filter(c=>(c.questionIds||[]).includes(id)).map(c=>c.name),'Remove the question from the checklist first');
+  }else if(type==='folder'){
+    const kids=[];(function rec(fid){(DB.folders||[]).filter(x=>x.parentId===fid).forEach(k=>{kids.push(k);rec(k.id);});})(id);
+    add('Sub-folders inside',kids.map(k=>k.name),'Delete or empty them first');
+    const fids=[id,...kids.map(k=>k.id)];
+    add('Documents inside',(DB.documents||[]).filter(x=>fids.includes(x.folderId)).map(x=>x.name),'Delete or move the files first');
+  }else if(type==='okr'){
+    add('Sub-objectives under it',(DB.okrs||[]).filter(o=>o.parentId===id).map(o=>o.title||'Untitled'),'Delete or re-parent the sub-objectives first');
+  }else if(type==='letterTemplate'){
+    add('Letter requests using it',(DB.letters||[]).filter(l=>l.type===id&&l.status==='Requested').map(l=>{const lu=uById(l.userId);return(l.title||l.type)+(lu?' · '+fullName(lu):'');}),'Decide those requests first');
+  }else if(type==='role'){
+    add('People assigned this role',DB.users.filter(x=>x.hrm&&x.hrm.roleProfileId===id).map(x=>fullName(x)),'Give them another role in Access Control → People');
+  }
+  return L;
+}
+function guardDelete(type,id,label){
+  const links=_refLinks(type,id);
+  if(!links.length)return true;
+  const body='<div style="display:flex;flex-direction:column;gap:10px">'
+    +'<p style="font-size:13px;color:var(--c-text-2);line-height:1.55;margin:0">This can’t be deleted while other records still point to it. Remove or reassign everything below, then delete it.</p>'
+    +links.map(l=>{
+      const shown=l.names.slice(0,5).map(n=>esc(String(n))).join(', ');
+      const more=l.names.length>5?' <span style="color:var(--c-text-3)">+'+(l.names.length-5)+' more</span>':'';
+      return '<div style="background:#FFF1F2;border:1px solid #FECDD3;border-radius:12px;padding:10px 12px">'
+        +'<div style="font-size:12.5px;font-weight:800;color:#BE123C">'+esc(l.label)+' ('+l.names.length+')</div>'
+        +'<div style="font-size:12.5px;color:var(--c-text);margin-top:3px">'+shown+more+'</div>'
+        +(l.hint?'<div style="font-size:11px;color:var(--c-text-3);margin-top:4px">→ '+esc(l.hint)+'</div>':'')
+        +'</div>';
+    }).join('')
+    +'</div>';
+  modalShell({title:'Can’t delete '+(label||'this'),sub:'It’s still linked to other records',body,footer:btnP('OK, got it','App.closeModal()')});
+  return false;
+}
+
+/* ════════ DRAFTS (PHASE4b) — per-user, server-backed saves for checklist runs & OKR check-ins.
+   One draft per (kind, refId, date). Saved to the `drafts` table immediately (targeted write, not
+   the debounced batch) so a phone-saved draft appears on the desktop. Deleted on submit. Photos
+   are stripped from payloads (same rule as saveDB) so rows stay small. ════════ */
+function _draftStrip(payload){
+  const p=JSON.parse(JSON.stringify(payload||{}));
+  (p.questionResponses||[]).forEach(r=>{
+    if(r.photo&&String(r.photo).startsWith('data:'))r.photo='[photo]';
+    if(Array.isArray(r.photos))r.photos=r.photos.map(x=>(typeof x==='string'&&x.startsWith('data:'))?'[photo]':x);
+  });
+  if(Array.isArray(p.photos))p.photos=[]; // OKR check-in photos never ride a draft
+  return p;
+}
+function _draftFor(kind,refId,date){
+  return(DB.drafts||[]).find(d=>d.userId===S.uid&&d.kind===kind&&d.refId===refId&&((date||null)===(d.date||null)));
+}
+function _draftSave(kind,refId,date,payload){
+  if(!Array.isArray(DB.drafts))DB.drafts=[];
+  const id='dr_'+S.uid+'_'+kind+'_'+refId+(date?'_'+String(date).replace(/-/g,''):'');
+  let d=DB.drafts.find(x=>x.id===id);
+  const clean=_draftStrip(payload);
+  if(d){d.payload=clean;d.updatedAt=new Date().toISOString();}
+  else{d={id,userId:S.uid,kind,refId,date:date||null,payload:clean,updatedAt:new Date().toISOString()};DB.drafts.push(d);}
+  saveDB();
+  _pushRow('drafts',_draftRow(d),'draft');
+  return d;
+}
+function _draftDelete(kind,refId,date){
+  const d=_draftFor(kind,refId,date);if(!d)return;
+  DB.drafts=(DB.drafts||[]).filter(x=>x.id!==d.id);
+  saveDB();
+  _delRow('drafts',d.id,'draft');
+}
+
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
+window._draftStrip=_draftStrip;window._draftFor=_draftFor;window._draftSave=_draftSave;window._draftDelete=_draftDelete;
+window._refLinks=_refLinks;window.guardDelete=guardDelete;
 window.$=$;window.$$=$$;window.uid=uid;window.esc=esc;window.todayISO=todayISO;window.nowHM=nowHM;window.hm2m=hm2m;window.WKDAYS=WKDAYS;window.DAYS3=DAYS3;window.fmtD=fmtD;window.fmtS=fmtS;window.initials=initials;window.fullName=fullName;window.dayAbbr=dayAbbr;window.clOn=clOn;window.toast=toast;window.toastAction=toastAction;window.I=I;window.ic=ic;window._fileIcon=_fileIcon;window.CHIP_STYLE=CHIP_STYLE;window.CHIP_DOT_C=CHIP_DOT_C;window.chip=chip;window.PAL=PAL;window.avatar=avatar;window.hdr=hdr;window.pageHeader=pageHeader;window.btn=btn;window.btnP=btnP;window.btnG=btnG;window.btnDanger=btnDanger;window.fld=fld;window.selF=selF;window.mkTog=mkTog;window.card=card;window.COUNT_TONE=COUNT_TONE;window.countBadge=countBadge;window.BADGE_TONE=BADGE_TONE;window.badge=badge;window.chipBar=chipBar;window.togV=togV;window.STAT_C=STAT_C;window.statCard=statCard;window.empty=empty;window.emptyState=emptyState;window.emptyCTA=emptyCTA;window.loadingState=loadingState;window.errorState=errorState;window.openModal=openModal;window.closeModal=closeModal;window.modalShell=modalShell;window.confirmModal=confirmModal;window.App=App;window._notifCount=_notifCount;window._invalidateNotifCache=_invalidateNotifCache;window._recoverEditingSubmissions=_recoverEditingSubmissions;window.HOW=HOW;window._howBar=_howBar;
 
 /* Human hours: 2.83 → "2h 50m" (decimals confuse people; payroll/CSV keep numbers). */

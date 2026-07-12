@@ -36,18 +36,20 @@ App.clockOut=()=>{
   // LV-2: a pre-written Leave/HalfDay row (no actual clock-in) is not "clocked in" — require a real clock-in.
   if(!rec||(rec.clockIn==null&&rec.inMin==null)){toast('Clock in first','warn');return;}
   if(rec.clockOut){toast('Already clocked out','warn');return;}
-  // H4: lenient gate — a real clock-in already exists, so a mid-shift geofence change must never trap
-  //   the out-punch (which would force a corrupted auto-close). Fence still enforced when active+GPS ok.
+  // Clock-out now enforces the geofence EXACTLY like clock-in (owner request — replaces the old
+  //   lenient H4 gate): you must be inside an office fence to punch out, with the same Retry
+  //   affordance. If someone truly can't return, the midnight auto-close still books a capped,
+  //   flagged day — nothing corrupts.
   _withGeofence('out',(geo)=>{
     const m=nowHM();
     rec.clockOut=new Date().toISOString();rec.outMin=m;rec.hours=computeHours(rec);
     if(geo)rec.outGeo=geo;
-    else{rec.outGeo=null;if(!(rec.flags||[]).includes('fence-changed'))rec.flags=[...(rec.flags||[]),'fence-changed'];} // H4 audit
+    else{rec.outGeo=null;if(!(rec.flags||[]).includes('fence-changed'))rec.flags=[...(rec.flags||[]),'fence-changed'];} // unreachable in strict mode; kept as a safety audit
     _applyFlags(rec);saveDB();
     if(rec.flags.includes('early')){_hrmNotify(uId,'⚠️ You clocked out early at '+_m2hm(m)+' on '+fmtD(date)+'.','attendance');
       if(_hnpEmail('email_hrm_early'))queueEmail('hrm_early',uId,null,date,{date:fmtD(date)});} // FINAL-FIX: wire dormant template
     toast('Clocked out — '+fmtH(rec.hours)+' worked ('+_m2hm(rec.inMin)+' → '+_m2hm(rec.outMin)+')');rr();
-  },true); // H4: lenient — a real clock-in exists, never trap the out-punch on a mid-shift fence change
+  },false,'App.clockOut()'); // strict + Retry — same geofence rule as clock-in
 };
 
 function _clockWidget(){
@@ -134,7 +136,7 @@ App._attDay=(userId,date)=>{
   const label=ATT_LABEL[status]||status;
   const rec=st&&!st.virtual?st:null; // a real attendance record (has in/out)
   const row=(k,v)=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #F3F4F6"><span style="font-size:12px;font-weight:600;color:#9CA3AF">'+k+'</span><span style="font-size:14px;font-weight:700;color:#15171C">'+v+'</span></div>';
-  const flags=(rec&&(rec.flags||[]).length)?(rec.flags||[]).map(f=>'<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:#FEF2F2;color:#B91C1C;margin-right:4px">'+esc(f)+'</span>').join(''):'';
+  const flags=(rec&&(rec.flags||[]).length)?(rec.flags||[]).map(f=>'<span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:#FEF2F2;color:#B91C1C;margin-right:4px">'+esc(FLAG_LABEL[f]||f)+'</span>').join(''):'';
   let body='';
   if(rec){
     body=row('Clock in',_m2hm(rec.inMin))
@@ -182,7 +184,7 @@ function attendancePage(){
       <select onchange="S.filters.attSort=this.value;rr()" class="bg-white border border-ink-200 rounded-lg px-2 py-1 text-xs rf"><option value="date"${sortKey==='date'?' selected':''}>Newest first</option><option value="hours"${sortKey==='hours'?' selected':''}>Most hours</option></select>
     </div>
     <div style="overflow-x:auto"><table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-4 py-2.5 font-semibold">Date</th><th class="px-4 py-2.5 font-semibold">In</th><th class="px-4 py-2.5 font-semibold">Out</th><th class="px-4 py-2.5 font-semibold">Hours</th><th class="px-4 py-2.5 font-semibold">Status</th><th class="px-4 py-2.5 font-semibold">Flags</th></tr></thead>
-    <tbody class="divide-y divide-ink-50">${rows.length?rows.map(r=>`<tr class="hover:bg-ink-50/50"><td class="px-4 py-2.5 font-medium">${fmtD(r.date)}</td><td class="px-4 py-2.5">${_m2hm(r.inMin)}</td><td class="px-4 py-2.5">${_m2hm(r.outMin)}</td><td class="px-4 py-2.5 font-semibold">${r.hours!=null?r.hours+'h':'—'}</td><td class="px-4 py-2.5"><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${ATT_COLOR[r.status]}22;color:${ATT_COLOR[r.status]}">${ATT_LABEL[r.status]||r.status}</span></td><td class="px-4 py-2.5 text-xs">${(r.flags||[]).map(f=>`<span style="display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:#FEF2F2;color:#B91C1C;margin-right:3px">${esc(f)}</span>`).join('')||'—'}</td></tr>`).join(''):`<tr><td colspan="6">${empty('clock','No attendance records','')}</td></tr>`}</tbody></table></div>
+    <tbody class="divide-y divide-ink-50">${rows.length?rows.map(r=>`<tr class="hover:bg-ink-50/50"><td class="px-4 py-2.5 font-medium">${fmtD(r.date)}</td><td class="px-4 py-2.5">${_m2hm(r.inMin)}</td><td class="px-4 py-2.5">${_m2hm(r.outMin)}</td><td class="px-4 py-2.5 font-semibold">${r.hours!=null?fmtH(r.hours):'—'}</td><td class="px-4 py-2.5"><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${ATT_COLOR[r.status]}22;color:${ATT_COLOR[r.status]}">${ATT_LABEL[r.status]||r.status}</span></td><td class="px-4 py-2.5 text-xs">${(r.flags||[]).map(f=>`<span style="display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:#FEF2F2;color:#B91C1C;margin-right:3px">${esc(FLAG_LABEL[f]||f)}</span>`).join('')||'—'}</td></tr>`).join(''):`<tr><td colspan="6">${empty('clock','No attendance records','')}</td></tr>`}</tbody></table></div>
   </div>`;
   return `<div class="fade">${hdr('Attendance','Clock in / out and view your attendance calendar')}
     ${selUser===S.uid?_clockWidget():''}

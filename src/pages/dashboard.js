@@ -13,17 +13,19 @@ function _whoIsInWidget(){
     if((u.hrm?.schedule?.offDays||[]).includes(dy)){OFF.push(u);return;}
     OUT.push(u);
   });
-  const cell=(label,arr,bg,fg)=>`<div style="flex:1;min-width:105px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px 12px">
+  const cell=(label,arr,bg,fg,drill)=>`<div ${drill?`onclick="App._dashDrill('${drill}')" role="button" tabindex="0" title="Tap for the list"`:''} style="flex:1;min-width:105px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px 12px;${drill?'cursor:pointer':''}">
     <div style="display:flex;align-items:baseline;gap:6px"><span class="fd" style="font-size:19px;font-weight:800;color:${fg}">${arr.length}</span><span style="font-size:11px;font-weight:700;color:var(--c-text-2)">${label}</span></div>
     <div style="display:flex;margin-top:6px">${arr.slice(0,6).map(u=>`<span style="margin-right:-6px" title="${esc(fullName(u))}">${avatar(u,'w-6 h-6','text-[9px]')}</span>`).join('')||'<span style="font-size:11px;color:var(--c-text-3)">—</span>'}${arr.length>6?`<span style="margin-left:10px;font-size:10px;color:var(--c-text-3);align-self:center">+${arr.length-6}</span>`:''}</div>
   </div>`;
   return `<div class="ui-card" style="padding:14px;margin-bottom:16px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div class="fd" style="font-size:13.5px;font-weight:800;color:var(--c-text)">Today — who's in</div><span style="font-size:11px;color:var(--c-text-3)">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})}</span></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">${cell('In office',IN,'','var(--c-success-ink)')}${cell('WFH',WFH,'','#0369A1')}${cell('On leave',LEAVE,'','#B45309')}${cell('Day off',OFF,'','var(--c-text-3)')}${cell('Not in yet',OUT,'','var(--c-danger-ink)')}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${cell('In office',IN,'','var(--c-success-ink)','who-in')}${cell('WFH',WFH,'','#0369A1','wfh')}${cell('On leave',LEAVE,'','#B45309','onleave')}${cell('Day off',OFF,'','var(--c-text-3)','who-off')}${cell('Not in yet',OUT,'','var(--c-danger-ink)','who-out')}</div>
   </div>`;
 }
 /* WFH tag — flips today's attendance flag (creates the record if you clock in later, flag persists) */
 App._togWFH=()=>{
+  // WFH eligibility: per-user toggle (u.hrm.wfhEligible, set in the user editor). Default: not eligible.
+  if(me()?.hrm?.wfhEligible!==true){toast('You’re not eligible for Work-from-Home — ask an admin to enable it on your profile','err');return;}
   const d=todayISO();let rec=(DB.attendance||[]).find(a=>a.userId===S.uid&&a.date===d);
   if(_onFullLeaveToday(S.uid,d)){toast("You're on leave today — WFH doesn't apply",'err');return;}
   // WFH-HARDEN (b): the tag freezes once you've clocked in — no retro-editing the day's story.
@@ -95,11 +97,83 @@ function _dashRangeBounds(){
 }
 const _inDashRange=date=>{const b=_dashRangeBounds();if(!b)return true;return !!date&&date>=b.from&&date<=b.to;};
 
+/* ── DRILL-DOWNS (owner request): every dashboard card opens the LIST behind its number.
+      Each list is permission-scoped with the same resolver the target page uses (scopeFilter/can),
+      and the modal offers a jump to the full page. ── */
+App._dashDrill=(kind)=>{
+  const t=todayISO();
+  const row=(av,main,sub,right)=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--c-border)">${av||''}<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${main}</div>${sub?`<div style="font-size:11.5px;color:var(--c-text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sub}</div>`:''}</div>${right||''}</div>`;
+  const uRow=(u,sub,right)=>u?row(avatar(u,'w-8 h-8','text-[10px]'),esc(fullName(u)),sub,right):'';
+  const actives=DB.users.filter(u=>u.status==='Active');
+  const attScope=u=>u&&(u.id===S.uid||scopeFilter('attendance')(u.id));
+  const attToday=(DB.attendance||[]).filter(a=>a.date===t);
+  let title='',rows=[],route=null,routeLbl='';
+  if(kind==='approvals'){
+    title='Pending approvals';route='approvals';routeLbl='Open Approvals';
+    rows=(DB.approvals||[]).filter(a=>a.status==='Pending').map(a=>{const u=uById(a.requesterId);const c=a.checklistId?clById(a.checklistId):null;return uRow(u,esc(a.type||'Approval')+(c?' · '+esc(c.name):'')+(a.date?' · '+fmtS(a.date):''));});
+  }else if(kind==='leave'){
+    title='Leave waiting for a decision';route='leave';routeLbl='Open Leave';
+    rows=(DB.leaveRequests||[]).filter(r=>r.status==='Pending'&&attScope(uById(r.userId))).map(r=>{const u=uById(r.userId);const lt=ltById(r.leaveTypeId);return uRow(u,esc((lt&&lt.name)||'Leave')+' · '+fmtS(r.start)+' → '+fmtS(r.end)+' · '+(r.workingDays||0)+'d');});
+  }else if(kind==='overtime'){
+    title='Overtime to review';route='overtime';routeLbl='Open Overtime';
+    rows=(DB.overtime||[]).filter(o=>o.status==='Pending').map(o=>{const u=uById(o.userId);return uRow(u,fmtH(o.hours)+' on '+fmtS(o.date)+(o.reason?' · '+esc(o.reason):''));});
+  }else if(kind==='tickets'){
+    title='Open tickets';route='tickets';routeLbl='Open Tickets';
+    rows=(DB.tickets||[]).filter(x=>x.status==='Open'||x.status==='In Progress').map(x=>{const u=x.assignedTo?uById(x.assignedTo):null;return row('',esc(x.title||('#'+String(x.id||'').slice(-6))),(u?esc(fullName(u)):'Unassigned')+(x.priority?' · '+esc(x.priority):'')+(x.status==='In Progress'?' · In progress':''));});
+  }else if(kind==='onleave'){
+    title='On leave today';route='attendance';routeLbl='Open Attendance';
+    rows=(DB.leaveRequests||[]).filter(r=>r.status==='Approved'&&r.start<=t&&t<=r.end&&attScope(uById(r.userId))).map(r=>{const u=uById(r.userId);const lt=ltById(r.leaveTypeId);return uRow(u,esc((lt&&lt.name)||'Leave')+' · back after '+fmtS(r.end));});
+  }else if(kind==='wfh'){
+    title='Working from home today';route='attendance';routeLbl='Open Attendance';
+    rows=attToday.filter(a=>(a.flags||[]).includes('WFH')&&attScope(uById(a.userId))).map(a=>uRow(uById(a.userId),a.clockIn?('clocked in '+_m2hm(a.inMin)):'not clocked in yet'));
+  }else if(kind==='who-in'){
+    title='Clocked in today';route='attendance';routeLbl='Open Attendance';
+    rows=attToday.filter(a=>a.clockIn&&!(a.flags||[]).includes('WFH')&&attScope(uById(a.userId))).map(a=>uRow(uById(a.userId),'in '+_m2hm(a.inMin)+(a.clockOut?' · out '+_m2hm(a.outMin)+' · '+fmtH(a.hours):'')));
+  }else if(kind==='who-late'){
+    title='Late today';route='attendance';routeLbl='Open Attendance';
+    rows=attToday.filter(a=>(a.flags||[]).includes('late')&&attScope(uById(a.userId))).map(a=>uRow(uById(a.userId),'clocked in '+_m2hm(a.inMin)));
+  }else if(kind==='who-off'){
+    title='Day off today';
+    const dy=dayAbbr(t);
+    rows=actives.filter(u=>(u.hrm?.schedule?.offDays||[]).includes(dy)&&attScope(u)).map(u=>uRow(u,'weekly off-day'));
+  }else if(kind==='who-out'){
+    title='Not in yet';route='attendance';routeLbl='Open Attendance';
+    rows=actives.filter(u=>{
+      if(!attScope(u)||u.role==='Admin')return false;
+      const rec=attToday.find(a=>a.userId===u.id);
+      if(rec&&rec.clockIn)return false;
+      if(_onLeaveToday(u.id,t))return false;
+      if((u.hrm?.schedule?.offDays||[]).includes(dayAbbr(t)))return false;
+      return true;
+    }).map(u=>uRow(u,'expected '+(u.hrm?.schedule?.in||'09:00')));
+  }else if(kind==='flows'){
+    title='Active lifecycle flows';route='lifecycle';routeLbl='Open Lifecycle';
+    rows=(DB.flows||[]).filter(f=>f.status!=='Completed').map(f=>{const u=uById(f.userId);const done=(f.steps||[]).filter(s=>s.done).length;return uRow(u,esc(f.kind||'Flow')+' · '+done+'/'+(f.steps||[]).length+' steps done');});
+  }else if(kind==='letters'){
+    title='Letters awaiting action';route='letters';routeLbl='Open Letters';
+    rows=(DB.letters||[]).filter(l=>l.status==='Requested').map(l=>uRow(uById(l.userId),esc(l.title||l.type||'Letter')));
+  }else if(kind==='surveys'){
+    title='Surveys running';route='surveys';routeLbl='Open Surveys';
+    rows=(DB.surveys||[]).filter(s=>s.status==='Active').map(s=>row('',esc(s.title||'Survey'),((DB.surveyAnswers||[]).filter(a=>a.surveyId===s.id).length)+' response(s)'));
+  }else if(kind==='activeusers'){
+    title='Active people';route='users';routeLbl='Open Users';
+    rows=actives.filter(u=>scopeFilter('employees')(u.id)).map(u=>uRow(u,esc(u.position||'—')+(u.department?' · '+esc(u.department):'')));
+  }else if(kind==='latesubs'){
+    title='Late submissions'+((S.filters.dashRange&&S.filters.dashRange!=='all')?' (filtered range)':'');
+    rows=DB.submissions.filter(s=>s.status==='Late'&&_inDashRange(s.date)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,80).map(s=>{const u=uById(s.userId);const c=clById(s.checklistId);return uRow(u,esc(c?c.name:'[deleted checklist]')+' · '+fmtS(s.date));});
+  }
+  rows=rows.filter(Boolean);
+  modalShell({title:title||'Details',sub:rows.length+' record'+(rows.length===1?'':'s'),size:'max-w-md',
+    body:rows.length?`<div>${rows.join('')}</div>`:`<div style="text-align:center;padding:26px 10px;color:var(--c-text-3);font-size:13px">Nothing here right now 🎉</div>`,
+    footer:btnG('Close','App.closeModal()')+(route?btnP(routeLbl||'Open page',`App.closeModal();App.go('${route}')`):'')});
+};
+
 /* ── FINAL-UX: "Pulse" strip — live counts across every module, permission-gated, one tap to act ── */
 function _pulseStrip(){
   const t=todayISO();
   const cards=[];
-  const add=(show,label,n,route,accent,sub)=>{if(!show)return;cards.push(`<button onclick="App.go('${route}')" style="flex:1;min-width:132px;background:#fff;border:1px solid var(--c-border);border-left:3px solid ${accent};border-radius:14px;padding:10px 14px;cursor:pointer;text-align:left">
+  // Cards open a DETAIL modal (owner request) — the modal itself links to the full page.
+  const add=(show,label,n,drill,accent,sub)=>{if(!show)return;cards.push(`<button onclick="App._dashDrill('${drill}')" title="Tap for the list" style="flex:1;min-width:132px;background:#fff;border:1px solid var(--c-border);border-left:3px solid ${accent};border-radius:14px;padding:10px 14px;cursor:pointer;text-align:left">
     <div style="font-size:20px;font-weight:800;color:${n>0?'var(--c-text)':'var(--c-text-3)'}">${n}</div>
     <div style="font-size:11px;font-weight:700;color:var(--c-text-2)">${label}</div>
     ${sub?`<div style="font-size:10px;color:var(--c-text-3)">${sub}</div>`:''}</button>`);};
@@ -107,8 +181,8 @@ function _pulseStrip(){
   add(can('leaveRequests','approve'),'Leave to decide',(DB.leaveRequests||[]).filter(r=>r.status==='Pending').length,'leave','#0EA5E9','pending requests');
   add(can('overtime','approve'),'Overtime to review',(DB.overtime||[]).filter(o=>o.status==='Pending').length,'overtime','#8B5CF6','pending hours');
   add(can('tickets','view'),'Open tickets',(DB.tickets||[]).filter(x=>x.status==='Open').length,'tickets','#EF4444','need attention');
-  add(true,'On leave today',(DB.leaveRequests||[]).filter(r=>r.status==='Approved'&&r.start<=t&&t<=r.end).length,'attendance','#10B981','approved absences');
-  add(true,'WFH today',(DB.attendance||[]).filter(a=>a.date===t&&(a.flags||[]).includes('WFH')).length,'attendance','#0EA5E9','self-marked');
+  add(true,'On leave today',(DB.leaveRequests||[]).filter(r=>r.status==='Approved'&&r.start<=t&&t<=r.end).length,'onleave','#10B981','approved absences');
+  add(true,'WFH today',(DB.attendance||[]).filter(a=>a.date===t&&(a.flags||[]).includes('WFH')).length,'wfh','#0EA5E9','self-marked');
   if(can('reviews','view')&&typeof _rcActive==='function'){
     const act=_rcActive();
     if(act.length){const c=act[0];const done=_rcSubmitted(c),tot=_rcParticipants(c);
@@ -172,17 +246,17 @@ function adminDash(){
   const recent=fSubs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,8);
   return`<div class="fade">${_setupGuideWidget()}${_whoIsInWidget()}${(()=>{
   const t=[];const month=todayISO().slice(0,7);
-  if(can('overtime','approve')){const n=(DB.overtime||[]).filter(o=>o.status==='Pending').length;t.push(['Overtime to review',n,'overtime','clock',n?'#FFF7ED':'var(--c-surface-2)',n?'#C2410C':'var(--c-text-2)']);}
-  if(can('lifecycle','view')){const n=(DB.flows||[]).filter(f=>f.status==='Active').length;t.push(['Active flows',n,'lifecycle','users','var(--c-surface-2)','var(--c-text-2)']);}
-  if(can('letters','approve')){const n=(DB.letters||[]).filter(l=>l.status==='Requested').length;t.push(['Letters awaiting',n,'letters','doc',n?'#FFFBEB':'var(--c-surface-2)',n?'#B45309':'var(--c-text-2)']);}
-  if(can('payroll','view')){const run=(DB.payrollRuns||[]).find(r=>r.month===month&&r.status!=='RolledBack');t.push(['Payroll '+month,run?run.status:'Not started','payroll','chart','var(--c-surface-2)','var(--c-text-2)']);}
-  if(can('surveys','manage')){const n=(DB.surveys||[]).filter(s=>s.status==='Active').length;t.push(['Surveys running',n,'surveys','msg','var(--c-surface-2)','var(--c-text-2)']);}
-  return t.length?'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">'+t.map(x=>`<button onclick="App.go('${x[2]}')" style="flex:1;min-width:130px;display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;border:1px solid var(--c-border);background:var(--c-surface);cursor:pointer;text-align:left"><span style="width:34px;height:34px;border-radius:9px;background:${x[4]};color:${x[5]};display:grid;place-items:center;flex-shrink:0">${ic(x[3],'w-4 h-4')}</span><span style="min-width:0"><span class="fd" style="display:block;font-size:16px;font-weight:800;color:var(--c-text)">${x[1]}</span><span style="display:block;font-size:10.5px;color:var(--c-text-2)">${x[0]}</span></span></button>`).join('')+'</div>':'';
+  if(can('overtime','approve')){const n=(DB.overtime||[]).filter(o=>o.status==='Pending').length;t.push(['Overtime to review',n,'overtime','clock',n?'#FFF7ED':'var(--c-surface-2)',n?'#C2410C':'var(--c-text-2)','overtime']);}
+  if(can('lifecycle','view')){const n=(DB.flows||[]).filter(f=>f.status==='Active').length;t.push(['Active flows',n,'lifecycle','users','var(--c-surface-2)','var(--c-text-2)','flows']);}
+  if(can('letters','approve')){const n=(DB.letters||[]).filter(l=>l.status==='Requested').length;t.push(['Letters awaiting',n,'letters','doc',n?'#FFFBEB':'var(--c-surface-2)',n?'#B45309':'var(--c-text-2)','letters']);}
+  if(can('payroll','view')){const run=(DB.payrollRuns||[]).find(r=>r.month===month&&r.status!=='RolledBack');t.push(['Payroll '+month,run?run.status:'Not started','payroll','chart','var(--c-surface-2)','var(--c-text-2)',null]);}
+  if(can('surveys','manage')){const n=(DB.surveys||[]).filter(s=>s.status==='Active').length;t.push(['Surveys running',n,'surveys','msg','var(--c-surface-2)','var(--c-text-2)','surveys']);}
+  return t.length?'<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">'+t.map(x=>`<button onclick="${x[6]?`App._dashDrill('${x[6]}')`:`App.go('${x[2]}')`}" title="${x[6]?'Tap for the list':'Open'}" style="flex:1;min-width:130px;display:flex;align-items:center;gap:10px;padding:12px;border-radius:12px;border:1px solid var(--c-border);background:var(--c-surface);cursor:pointer;text-align:left"><span style="width:34px;height:34px;border-radius:9px;background:${x[4]};color:${x[5]};display:grid;place-items:center;flex-shrink:0">${ic(x[3],'w-4 h-4')}</span><span style="min-width:0"><span class="fd" style="display:block;font-size:16px;font-weight:800;color:var(--c-text)">${x[1]}</span><span style="display:block;font-size:10.5px;color:var(--c-text-2)">${x[0]}</span></span></button>`).join('')+'</div>':'';
 })()}${hdr('Dashboard',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
   ${_dashFilterBar()}
   ${_pulseStrip()}
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-    ${statCard('Active users',active,'sky',"App.go('users')")}${statCard('Pending approvals',pendA,'amber',"App.go('approvals')")}${statCard('Late submissions',late,'rose',"S.filters={stats:['Late']};App.go('dashboard')")}
+    ${statCard('Active users',active,'sky',"App._dashDrill('activeusers')")}${statCard('Pending approvals',pendA,'amber',"App._dashDrill('approvals')")}${statCard('Late submissions',late,'rose',"App._dashDrill('latesubs')")}
   </div>
   <div class="grid lg:grid-cols-3 gap-4">
     <div class="lg:col-span-2 bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">

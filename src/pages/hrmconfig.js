@@ -27,9 +27,12 @@ function _alertsCfgHTML(){
     ${num('otMultiplier','Overtime is paid at (× hourly rate)','×')}
     ${num('payrollCutoff','Attendance is verified up to day','of month')}
     <div style="border-top:1px dashed var(--c-border);margin:12px 0 6px"></div>
+    <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">In-app alerts per feature</div>
+    <p style="font-size:11px;color:var(--c-text-3);margin-bottom:8px">Which features show bell (in-app) notifications. Switching a feature off silences its bell alerts for everyone — email switches below are unaffected.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${NOTIF_KINDS.map(([k,l])=>{const on=(DB.hrmConfig.inappKinds||{})[k]!==false;return `<button ${canEdit?'':'disabled'} onclick="DB.hrmConfig.inappKinds['${k}']=${on?'false':'true'};saveDB();rr()" style="display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;border:1.5px solid ${on?'#0E9F6E':'var(--c-border)'};background:${on?'#ECFDF5':'var(--c-surface)'};color:${on?'#0B7A55':'var(--c-text-3)'};font-size:11.5px;font-weight:700;cursor:${canEdit?'pointer':'not-allowed'}">${l}</button>`;}).join('')}</div>
     <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Email per feature</div>
-    <p style="font-size:11px;color:var(--c-text-3);margin-bottom:8px">Bell alerts always show in-app. These switches decide which features ALSO queue an email (sent once an email provider is connected). People who turned email off on their profile never get emails either way.</p>
-    <div style="display:flex;flex-wrap:wrap;gap:6px">${[['leave','Leave'],['attendance','Attendance'],['overtime','Overtime'],['shift','Shifts'],['okr','OKRs'],['lifecycle','Lifecycle'],['letter','Letters'],['discipline','Discipline'],['payroll','Payroll'],['survey','Surveys'],['document','Documents'],['benefit','Benefits'],['checklist','Checklists'],['general','Everything else']].map(([k,l])=>{const on=(DB.hrmConfig.emailKinds||{})[k]!==false;return `<button ${canEdit?'':'disabled'} onclick="DB.hrmConfig.emailKinds['${k}']=${on?'false':'true'};saveDB();rr()" style="display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;border:1.5px solid ${on?'#0E9F6E':'var(--c-border)'};background:${on?'#ECFDF5':'var(--c-surface)'};color:${on?'#0B7A55':'var(--c-text-3)'};font-size:11.5px;font-weight:700;cursor:${canEdit?'pointer':'not-allowed'}">${l}</button>`;}).join('')}</div>
+    <p style="font-size:11px;color:var(--c-text-3);margin-bottom:8px">These switches decide which features ALSO queue an email (sent once an email provider is connected). People who turned email off on their profile never get emails either way.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${NOTIF_KINDS.map(([k,l])=>{const on=(DB.hrmConfig.emailKinds||{})[k]!==false;return `<button ${canEdit?'':'disabled'} onclick="DB.hrmConfig.emailKinds['${k}']=${on?'false':'true'};saveDB();rr()" style="display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;border:1.5px solid ${on?'#0E9F6E':'var(--c-border)'};background:${on?'#ECFDF5':'var(--c-surface)'};color:${on?'#0B7A55':'var(--c-text-3)'};font-size:11.5px;font-weight:700;cursor:${canEdit?'pointer':'not-allowed'}">${l}</button>`;}).join('')}</div>
   </div>`;
 }
 function _flowTplCfgHTML(){
@@ -150,7 +153,7 @@ function _letterTplCfgHTML(){
       ${canEd?`<button class="ui-tab-pill" onclick="const n=prompt('New template name');if(n){const k='tpl_'+Date.now();DB.hrmConfig.letterTemplates[k]={name:n,body:'Dear {name},\\n\\n\\n\\nHR Department\\n{company} · {date}'};S.filters.ltKey=k;saveDB();rr()}">+ New</button>`:''}</div>
     <input ${canEd?'':'disabled'} value="${esc(tpl.name)}" onchange="DB.hrmConfig.letterTemplates['${key}'].name=this.value;saveDB()" class="ui-input rf" style="margin-bottom:8px"/>
     <textarea ${canEd?'':'disabled'} rows="10" class="ui-input rf" style="font-family:Georgia,serif;font-size:13px;line-height:1.6;resize:vertical" oninput="DB.hrmConfig.letterTemplates['${key}'].body=this.value;clearTimeout(App._ltcT);App._ltcT=setTimeout(saveDB,800)">${esc(tpl.body)}</textarea>
-    ${canEd&&Object.keys(T).length>1?`<button onclick="if(confirm('Delete this template?')){delete DB.hrmConfig.letterTemplates['${key}'];S.filters.ltKey='';saveDB();rr()}" class="ui-btn ui-btn-ghost ui-btn-sm" style="margin-top:8px;color:var(--c-danger-ink)">${ic('trash','w-3.5 h-3.5')}Delete template</button>`:''}
+    ${canEd&&Object.keys(T).length>1?`<button onclick="App._delLetterTpl('${key}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="margin-top:8px;color:var(--c-danger-ink)">${ic('trash','w-3.5 h-3.5')}Delete template</button>`:''}
     <div style="border-top:1px dashed var(--c-border);margin-top:14px;padding-top:12px">
       <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;margin-bottom:4px">Payslip template — exactly what gets printed</div>
       <p style="font-size:11.5px;color:var(--c-text-3);margin-bottom:8px">Numbers fill in automatically per person. Placeholders: {name} {position} {department} {month} {currency} {basic} {allowances} {ot_hours} {ot_amount} {unpaid_days} {per_day} {deductions} {net} {present} {wfh} {leave} {absent} {working} {leave_balance} {note} {status} {date}</p>
@@ -544,5 +547,17 @@ App._compSave=()=>{
   (DB.locations||[]).forEach(l=>{const el=document.getElementById('cmp-loc-'+l.id);if(el)c.locationCountry[l.id]=el.value;});
   log(fullName(me()),'Compliance settings saved','');
   saveDB();toast('Compliance settings saved');rr();
+};
+/* Guarded letter-template delete (replaces the old inline confirm) — blocked while any
+   letter request with status 'Requested' still uses this template. */
+App._delLetterTpl=(key)=>{
+  if(!can('hrSettings','edit')){toast('Not allowed','err');return;}
+  const T=DB.hrmConfig.letterTemplates||{};const tpl=T[key];if(!tpl)return;
+  if(Object.keys(T).length<=1){toast('At least one template must remain','err');return;}
+  if(!guardDelete('letterTemplate',key,'template "'+tpl.name+'"'))return;
+  if(!confirm('Delete this template?'))return;
+  delete DB.hrmConfig.letterTemplates[key];S.filters.ltKey='';saveDB();
+  log(fullName(me()),'Letter template deleted',tpl.name);
+  toast('Template deleted','warn');rr();
 };
 window._complianceCfgHTML=_complianceCfgHTML;

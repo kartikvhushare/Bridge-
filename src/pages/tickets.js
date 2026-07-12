@@ -226,7 +226,7 @@ App._confirmResolve=(id)=>{
   t.status='Resolved';t.resolvedAt=new Date().toISOString();t.resolveNote=note;
   // Notify the submitter
   if(t.submitterId&&t.submitterId!==S.uid){
-    DB.notifications.unshift({id:uid('n'),userId:t.submitterId,text:'✅ Ticket resolved: "'+t.title+'"'+(note?' — '+note.slice(0,60):''),time:new Date().toISOString(),read:false,kind:'ticket'});
+    if(_inappOn('ticket'))DB.notifications.unshift({id:uid('n'),userId:t.submitterId,text:'✅ Ticket resolved: "'+t.title+'"'+(note?' — '+note.slice(0,60):''),time:new Date().toISOString(),read:false,kind:'ticket'});
     _invalidateNotifCache();
   }
   closeModal();saveDB();rr();
