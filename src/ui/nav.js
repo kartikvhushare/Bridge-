@@ -68,8 +68,8 @@ function _hubTabsAllowed(k){return (HUB_DEF[k]?HUB_DEF[k].tabs:[]).filter(t=>{tr
 function _hubHome(k){const t=_hubTabsAllowed(k);return t.length?t[0][0]:null;}
 function _hubStrip(k){
   const tabs=_hubTabsAllowed(k);if(tabs.length<2)return'';
-  return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:16px;padding:5px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:14px;width:fit-content;max-width:100%">${tabs.map(([r,l])=>{const on=S.route===r;
-    return `<button onclick="App.go('${r}')" style="padding:8px 15px;border-radius:10px;border:none;background:${on?'var(--c-surface)':'transparent'};box-shadow:${on?'0 1px 3px rgba(21,23,28,.1)':'none'};color:${on?'var(--c-text)':'var(--c-text-2)'};font-size:13px;font-weight:${on?'800':'600'};cursor:pointer;transition:background .15s,color .15s">${l}</button>`;}).join('')}</div>`;
+  return `<div class="hscroll" style="gap:4px;margin-bottom:16px;padding:5px;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:14px;width:fit-content;max-width:100%">${tabs.map(([r,l])=>{const on=S.route===r;
+    return `<button onclick="App.go('${r}')" style="flex-shrink:0;padding:8px 15px;border-radius:10px;border:none;background:${on?'var(--c-surface)':'transparent'};box-shadow:${on?'0 1px 3px rgba(21,23,28,.1)':'none'};color:${on?'var(--c-text)':'var(--c-text-2)'};font-size:13px;font-weight:${on?'800':'600'};cursor:pointer;transition:background .15s,color .15s;white-space:nowrap">${l}</button>`;}).join('')}</div>`;
 }
 const navFor=()=>NAV_ALL.filter(n=>{try{return !!n[3]();}catch(e){return false;}}).map(n=>[n[0],n[1],n[2]]);
 /* ───── Grouped nav (presentation only) ─────

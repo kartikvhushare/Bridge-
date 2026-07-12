@@ -45,6 +45,10 @@ function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',request
 const _DAY_MS=24*60*60*1000;
 function _cutoff30ISO(){return new Date(Date.now()-30*_DAY_MS).toISOString();}
 function _cutoff30Date(){return _cutoff30ISO().slice(0,10);}
+// R7 EGRESS ("cold archive"): boot fetches only the HOT window (last 7 days) for the heavy
+// tables; anything older loads on demand when its tab is opened (_lazyCold below).
+function _cutoff7ISO(){return new Date(Date.now()-7*_DAY_MS).toISOString();}
+function _cutoff7Date(){return _cutoff7ISO().slice(0,10);}
 function _mapTk(rows){return(rows||[]).map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assignedTo:t.assigned_to||null,createdBy:t.created_by||null,checklistId:t.checklist_id||null,questionId:t.question_id||null,questionText:t.question_text||'',answerGiven:t.answer_given||'',submitterId:t.submitter_id||null,date:t.date||null,createdAt:t.created_at,resolvedAt:t.resolved_at||null,resolveNote:t.resolve_note||'',viewedBy:t.viewed_by||[]}));}
 /* ── OKR v2 mappers + row builders (hierarchy nodes / check-ins / activity logs) ── */
 function _mOKR(rows){return(rows||[]).map(o=>({id:o.id,parentId:o.parent_id||null,title:_unesc(o.title)||'',description:_unesc(o.description)||'',departmentId:o.department_id||null,subDepartmentId:o.sub_department_id||null,ownerId:o.owner_id||null,metricType:o.metric_type||'number',startValue:(o.start_value===null||o.start_value===undefined)?0:Number(o.start_value),targetValue:(o.target_value===null||o.target_value===undefined)?null:Number(o.target_value),unit:_unesc(o.unit)||'',direction:o.direction||'up',frequency:(o.frequency&&typeof o.frequency==='object')?o.frequency:{},periodStart:o.period_start||null,periodEnd:o.period_end||null,statusMode:o.status_mode||'auto',statusManual:o.status_manual||null,sort:o.sort||0,createdBy:o.created_by||null,createdAt:o.created_at,updatedAt:o.updated_at||null}));}
@@ -67,14 +71,16 @@ function _applySubmissions(subs,{merge=false}={}){
 }
 function _applyApprovals(appr){
   const {_uid,_isAdmin,_isSubAdmin,_isMgr,_teamIds}=_roleCtx();
-  const allAppr=_mA(appr||[]);
+  const _dead=new Set(DB.approvals_deleted||[]); // R7: deleted approval records never resurrect
+  const allAppr=_mA(appr||[]).filter(a=>!_dead.has(a.id));
   if(_isAdmin||_isSubAdmin){DB.approvals=allAppr;}
   else if(_isMgr){DB.approvals=allAppr.filter(a=>_teamIds.has(a.requesterId)||a.requesterId===_uid);}
   else{DB.approvals=allAppr.filter(a=>a.requesterId===_uid);}
 }
 function _applyNotifications(notifs){
   const _uid=S.uid;
-  DB.notifications=(notifs||[]).filter(n=>n.user_id===_uid).map(n=>{const o={id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.created_at};if(n.kind)o.kind=n.kind;if(n.target_route)o.targetRoute=n.target_route;return o;});
+  const _dead=new Set(DB.notifications_deleted||[]); // R7: locally-deleted alerts never resurrect
+  DB.notifications=(notifs||[]).filter(n=>n.user_id===_uid&&!_dead.has(n.id)).map(n=>{const o={id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.created_at};if(n.kind)o.kind=n.kind;if(n.target_route)o.targetRoute=n.target_route;return o;});
 }
 function _applyFeedback(feedbackRows){
   if(!feedbackRows){DB.feedback=DB.feedback||[];return;}
@@ -169,8 +175,10 @@ function _applyLeaveTypes(rows){if(!rows)return;const mapped=_mLT(rows);if(mappe
 function _mLR(rows){return(rows||[]).map(r=>({id:r.id,userId:r.user_id,leaveTypeId:r.leave_type_id,leaveYear:r.leave_year,start:r.start_date,end:r.end_date,halfDay:r.half_day||false,halfDaySession:r.half_day_session||null,workingDays:r.working_days,reason:r.reason||'',unpaid:r.unpaid||false,flow:r.flow||[],stageIndex:r.stage_index??0,stage:r.stage||'manager',status:r.status||'Pending',needsAdmin:r.needs_admin||false,mgrDecision:r.mgr_decision||null,mgrNote:r.mgr_note||'',mgrAt:r.mgr_at||null,hrDecision:r.hr_decision||null,hrNote:r.hr_note||'',hrAt:r.hr_at||null,createdAt:r.created_at}));}
 function _applyLeaveRequests(rows){
   if(!rows)return;
-  const mapped=_mLR(rows);const fromSB=new Set(mapped.map(r=>r.id));
-  const localOnly=(DB.leaveRequests||[]).filter(r=>!fromSB.has(r.id));
+  const _dead=new Set(DB.leaveRequests_deleted||[]); // R7: deleted leave records never resurrect
+  const mapped=_mLR(rows).filter(r=>!_dead.has(r.id));
+  const fromSB=new Set(mapped.map(r=>r.id));
+  const localOnly=(DB.leaveRequests||[]).filter(r=>!fromSB.has(r.id)&&!_dead.has(r.id));
   DB.leaveRequests=[...mapped,...localOnly];
 }
 function _mLB(rows){return(rows||[]).map(b=>({id:b.id,userId:b.user_id,leaveTypeId:b.leave_type_id,leaveYear:b.leave_year,entitled:b.entitled||0,accrued:b.accrued||0,carriedIn:b.carried_in||0,carriedExpiry:b.carried_expiry||null,used:b.used||0,pending:b.pending||0,lastAccruedMonth:b.last_accrued_month||null,...(b._carried?{_carried:true}:{})}));}
@@ -249,6 +257,37 @@ async function _lazyLoadDate(view){
   }catch(e){console.warn('[lazyLoadDate]',e.message);}
   finally{_tabLoading[key]=false;_syncBar(_anyLoading());}
 }
+/* R7 EGRESS ("cold archive"): older-than-a-week data loads ONLY when its tab is opened.
+   Each cold load runs once per session (guarded), shows the sync bar, and MERGES into local
+   state (never clobbers newer local rows). A few seconds on first open is expected + fine. */
+const _coldDone={};
+async function _lazyCold(kind){
+  if(!S.uid||_coldDone[kind]||_tabLoading['cold:'+kind])return;
+  _tabLoading['cold:'+kind]=true;_syncBar(true);
+  try{
+    if(kind==='audit'){
+      const{data,error}=await sb.from('audit_logs').select('*').order('created_at',{ascending:false}).limit(300);
+      if(!error){DB.audit=(data||[]).map(l=>({id:l.id,actor:l.actor||'',action:l.action||'',target:l.target||'',time:l.created_at}));_coldDone[kind]=1;}
+    }else if(kind==='okrlogs'){
+      const{data,error}=await sb.from('okr_logs').select('*').order('created_at',{ascending:false}).limit(400);
+      if(!error){DB.okrLogs=_mOKRLog(data);_coldDone[kind]=1;}
+    }else if(kind==='subs30'){
+      const{data,error}=await sb.from('submissions').select('*').gte('date',_cutoff30Date()).order('submitted_at',{ascending:false});
+      if(!error){_applySubmissions(data,{merge:true});_coldDone[kind]=1;}
+    }else if(kind==='att90'){
+      let q=sb.from('attendance').select('*').gte('date',new Date(Date.now()-90*_DAY_MS).toISOString().slice(0,10));
+      if(!(can('attendance','edit')||scopeOf('attendance')!=='self'))q=q.eq('user_id',S.uid);
+      const{data,error}=await q.order('date',{ascending:false});
+      if(!error){_applyAttendance(data);_coldDone[kind]=1;}
+    }else if(kind==='notif90'){
+      const{data,error}=await sb.from('notifications').select('*').gte('created_at',new Date(Date.now()-90*_DAY_MS).toISOString()).order('created_at',{ascending:false});
+      if(!error){_applyNotifications(data);_invalidateNotifCache();_coldDone[kind]=1;}
+    }
+  }catch(e){console.warn('[cold]',kind,e.message);}
+  finally{_tabLoading['cold:'+kind]=false;_syncBar(_anyLoading());}
+  saveDB();rr();
+}
+App._loadOlderAlerts=()=>{_lazyCold('notif90');};
 // Refresh only the active route's data — used on navigation and when the tab regains focus.
 function _lazyForRoute(r){
   if(document.visibilityState==='hidden'||!S.uid)return;
@@ -259,7 +298,12 @@ function _lazyForRoute(r){
   else if(r==='mychecklists')_lazyLoadDate('mychecklists');
   else if(r==='teamview')_lazyLoadDate('teamview');
   else if(r==='allcl')_lazyLoadDate('allcl');
-  else if(r==='dashboard'){_lazyLoad('tickets');_lazyLoadDate('mychecklists');}
+  else if(r==='dashboard'){_lazyLoad('tickets');_lazyLoadDate('mychecklists');_lazyCold('subs30');}
+  // R7 EGRESS: cold windows fetch on first open of the tab that needs them.
+  else if(r==='audit')_lazyCold('audit');
+  else if(r==='okr')_lazyCold('okrlogs');
+  else if(r==='analytics'){_lazyCold('subs30');_lazyCold('att90');}
+  else if(r==='attendance'||r==='hrmanalytics'||r==='payroll'||r==='reports')_lazyCold('att90');
 }
 
 /* ── Realtime (Phase 1 leftover): new notifications for ME appear instantly, no reload.
@@ -299,10 +343,10 @@ async function loadFromSB(){
       sb.from('departments').select('*').order('name'),
       sb.from('locations').select('*').order('name'),
       sb.from('checklists').select('*').order('created_at',{ascending:false}),
-      sb.from('submissions').select('*').gte('date',_c30d).order('submitted_at',{ascending:false}),
+      sb.from('submissions').select('*').gte('date',_cutoff7Date()).order('submitted_at',{ascending:false}), // R7 EGRESS: 7-day hot window; 30d loads when Dashboard/Analytics opens
       sb.from('approvals').select('*').gte('created_at',_c30).order('created_at',{ascending:false}),
-      sb.from('audit_logs').select('*').order('created_at',{ascending:false}).limit(300),
-      sb.from('notifications').select('*').gte('created_at',_c30).order('created_at',{ascending:false}),
+      Promise.resolve({data:[]}), // R7 EGRESS: audit log loads when the Audit tab opens (_lazyCold)
+      sb.from('notifications').select('*').gte('created_at',_cutoff7ISO()).order('created_at',{ascending:false}), // R7 EGRESS: 7-day hot; older via "Load older" on Alerts
       sb.from('profiles').select('*').order('first_name'),
       sb.from('feedback').select('*').gte('created_at',_c30).order('created_at',{ascending:false}),
       sb.from('doc_folders').select('*').order('created_at',{ascending:false}),
@@ -438,9 +482,10 @@ async function loadFromSB(){
       if(error){console.warn('[OKR] check-ins load skipped:',error.message);return;}
       DB.okrCheckins=_mOKRCheckin(data);saveDB();rr();
     }).catch(e=>console.warn('[OKR] check-ins fetch failed:',e.message));
-  sb.from('okr_logs').select('*').order('created_at',{ascending:false}).limit(800)
+  // R7 EGRESS: okr_logs no longer load at boot — they fetch when the OKR tab opens (_lazyCold('okrlogs')).
+  Promise.resolve({data:null,error:null})
     .then(({data,error})=>{
-      if(error){console.warn('[OKR] logs load skipped:',error.message);return;}
+      if(error||!data){return;} // boot no-op (kept for structure)
       DB.okrLogs=_mOKRLog(data);saveDB();rr();
     }).catch(e=>console.warn('[OKR] logs fetch failed:',e.message));
   // ── HRM plan tables (same defensive targeted-load pattern) ──
@@ -469,7 +514,7 @@ async function loadFromSB(){
   // RLS restricts rows server-side; the client maps whatever comes back. Runs async (non-blocking)
   // so a missing/locked HRM table never stalls the rest of the app. The _savedHrm snapshot above
   // already protects per-user u.hrm; user_hrm is loaded separately below and re-merged the same way.
-  const _attCut=new Date(Date.now()-90*_DAY_MS).toISOString().slice(0,10);
+  const _attCut=_cutoff7Date(); // R7 EGRESS: 7-day hot window; 90d loads when Attendance/Analytics/Payroll opens
   Promise.allSettled([
     sb.from('hrm_config').select('*').eq('id',_HRM_CFG_ID).maybeSingle(),
     sb.from('leave_types').select('*'),
@@ -554,8 +599,9 @@ async function _sync(){try{
        batch. Split: own rows upsert normally (read-flags sync); foreign rows insert with DO NOTHING on
        conflict (delivery works, re-pushes are no-ops, never evaluates the UPDATE policy). */
     (()=>{const _nRow=n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString(),kind:n.kind||null,target_route:n.targetRoute||null});
-      const mine=DB.notifications.filter(n=>n.userId===S.uid||isAdmin());
-      const foreign=DB.notifications.filter(n=>!(n.userId===S.uid||isAdmin()));
+      const _dead=new Set(DB.notifications_deleted||[]); // R7: never re-push a deleted alert
+      const mine=DB.notifications.filter(n=>!_dead.has(n.id)&&(n.userId===S.uid||isAdmin()));
+      const foreign=DB.notifications.filter(n=>!_dead.has(n.id)&&!(n.userId===S.uid||isAdmin()));
       const ps=[];if(mine.length)ps.push(_safeUp('notifications',_dedupeById(mine.map(_nRow)),{onConflict:'id'}));
       if(foreign.length)ps.push(_safeUp('notifications',_dedupeById(foreign.map(_nRow)),{onConflict:'id',ignoreDuplicates:true}));
       return _syncMerge(ps);})(),
@@ -592,7 +638,7 @@ async function _sync(){try{
       updated_at:new Date().toISOString()}],{onConflict:'id'}):Promise.resolve({})):Promise.resolve()),
     ((isHR()||isAdmin())&&DB.leaveTypes&&DB.leaveTypes.length?_safeUp('leave_types',(can('hrSettings','edit')?DB.leaveTypes:[]).map(t=>({id:t.id,profile_id:t.profileId,key:t.key||null,name:t.name||'',enabled:t.enabled!==false,unit:t.unit||'calendar',entitlement:t.entitlement||0,accrual_per_month:t.accrualPerMonth||0,eligibility_months:t.eligibilityMonths||0,paid_tiers:t.paidTiers||null,unpaid:t.unpaid||false,half_day_allowed:t.halfDayAllowed!==false,carry_over:t.carryOver||{enabled:false,maxDays:0,expiryMonths:0},once_per_employment:t.oncePerEmployment||false,birthday_month_only:t.birthdayMonthOnly||false,max_per_year:t.maxPerYear??null,nursing_breaks:t.nursingBreaks||false,notes:t.notes||'',approval_flow:Array.isArray(t.approvalFlow)?t.approvalFlow:null})),{onConflict:'id'}):Promise.resolve()),
     ((isHR()||isAdmin())&&DB.holidays&&DB.holidays.length?_safeUp('holidays',(can('hrSettings','edit')?DB.holidays:[]).map(h=>({id:h.id,profile_id:h.profileId,date:h.date,name:h.name||'',location_id:h.locationId||null})),{onConflict:'id'}):Promise.resolve()),
-    ((DB.leaveRequests&&DB.leaveRequests.length)?_safeUp('leave_requests',DB.leaveRequests.filter(x=>x.userId===S.uid||can('leaveRequests','approve')).map(r=>({id:r.id,user_id:r.userId,leave_type_id:r.leaveTypeId,leave_year:r.leaveYear||null,start_date:r.start,end_date:r.end,half_day:r.halfDay||false,half_day_session:r.halfDaySession||null,working_days:r.workingDays,reason:r.reason||'',unpaid:r.unpaid||false,flow:r.flow||[],stage_index:r.stageIndex??0,stage:r.stage||'manager',status:r.status||'Pending',needs_admin:r.needsAdmin||false,mgr_decision:r.mgrDecision||null,mgr_note:r.mgrNote||'',mgr_at:r.mgrAt||null,hr_decision:r.hrDecision||null,hr_note:r.hrNote||'',hr_at:r.hrAt||null,created_at:r.createdAt||new Date().toISOString()})),{onConflict:'id'}):Promise.resolve()),
+    ((DB.leaveRequests&&DB.leaveRequests.length)?_safeUp('leave_requests',DB.leaveRequests.filter(x=>!(DB.leaveRequests_deleted||[]).includes(x.id)&&(x.userId===S.uid||can('leaveRequests','approve'))).map(r=>({id:r.id,user_id:r.userId,leave_type_id:r.leaveTypeId,leave_year:r.leaveYear||null,start_date:r.start,end_date:r.end,half_day:r.halfDay||false,half_day_session:r.halfDaySession||null,working_days:r.workingDays,reason:r.reason||'',unpaid:r.unpaid||false,flow:r.flow||[],stage_index:r.stageIndex??0,stage:r.stage||'manager',status:r.status||'Pending',needs_admin:r.needsAdmin||false,mgr_decision:r.mgrDecision||null,mgr_note:r.mgrNote||'',mgr_at:r.mgrAt||null,hr_decision:r.hrDecision||null,hr_note:r.hrNote||'',hr_at:r.hrAt||null,created_at:r.createdAt||new Date().toISOString()})),{onConflict:'id'}):Promise.resolve()),
     ((DB.leaveBalances&&DB.leaveBalances.length)?_safeUp('leave_balances',DB.leaveBalances.filter(x=>x.userId===S.uid||can('leaveBalances','edit')||can('leaveBalances','grant')).map(b=>({id:b.id,user_id:b.userId,leave_type_id:b.leaveTypeId,leave_year:b.leaveYear,entitled:b.entitled||0,accrued:b.accrued||0,carried_in:b.carriedIn||0,carried_expiry:b.carriedExpiry||null,used:b.used||0,pending:b.pending||0,last_accrued_month:b.lastAccruedMonth||null})),{onConflict:'id'}):Promise.resolve()),
     ((DB.attendance&&DB.attendance.length)?_safeUp('attendance',DB.attendance.filter(x=>x.userId===S.uid||can('attendance','edit')).map(a=>({id:a.id,user_id:a.userId,date:a.date,clock_in:a.clockIn||null,clock_out:a.clockOut||null,in_min:a.inMin??null,out_min:a.outMin??null,hours:a.hours??null,status:a.status||'Present',leave_type:a.leaveType||null,flags:a.flags||[],in_geo:a.inGeo||null,out_geo:a.outGeo||null,auto_closed:a.autoClosed||false,note:a.note||'',created_at:a.createdAt||new Date().toISOString()})),{onConflict:'id'}):Promise.resolve()),
     // user_hrm: per-user blob. Strip base64 personalDocs.dataUrl (mirrors saveDB's photo stripping) so the row stays small.
@@ -660,4 +706,4 @@ function queueEmail(eventKey,userId,clId,date,vars){
 }
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._safeUp=_safeUp;window._isRlsErr=_isRlsErr;window._syncErr=_syncErr;window._opErr=_opErr;window._reportSyncResults=_reportSyncResults;window.SB_URL=SB_URL;window.SB_ANON=SB_ANON;window.sb=sb;window._unesc=_unesc;window._mU=_mU;window._mC=_mC;window._mS=_mS;window._mA=_mA;window._DAY_MS=_DAY_MS;window._cutoff30ISO=_cutoff30ISO;window._cutoff30Date=_cutoff30Date;window._mapTk=_mapTk;window._mOKR=_mOKR;window._mOKRCheckin=_mOKRCheckin;window._mOKRLog=_mOKRLog;window._okrRow=_okrRow;window._okrCheckinRow=_okrCheckinRow;window._roleCtx=_roleCtx;window._applySubmissions=_applySubmissions;window._applyApprovals=_applyApprovals;window._applyNotifications=_applyNotifications;window._applyFeedback=_applyFeedback;window._applyFolders=_applyFolders;window._applyDocuments=_applyDocuments;window._applyTickets=_applyTickets;window._HRM_CFG_ID=_HRM_CFG_ID;window._applyHrmConfig=_applyHrmConfig;window._mAtt=_mAtt;window._applyAttendance=_applyAttendance;window._attId=_attId;window._mLT=_mLT;window._applyLeaveTypes=_applyLeaveTypes;window._mLR=_mLR;window._applyLeaveRequests=_applyLeaveRequests;window._mLB=_mLB;window._applyLeaveBalances=_applyLeaveBalances;window._mHol=_mHol;window._applyHolidays=_applyHolidays;window._mShift=_mShift;window._applyShifts=_applyShifts;window._mExpense=_mExpense;window._applyExpenses=_applyExpenses;window._hrmStrip=_hrmStrip;window._syncBar=_syncBar;window._anyLoading=_anyLoading;window._isLoading=_isLoading;window._tabLoading=_tabLoading;window._lazyLoad=_lazyLoad;window._lazyLoadDate=_lazyLoadDate;window._lazyForRoute=_lazyForRoute;window._startRealtime=_startRealtime;window.loadFromSB=loadFromSB;window._sync=_sync;window._mFlow=_mFlow;window._flowRow=_flowRow;window._mLetter=_mLetter;window._letterRow=_letterRow;window._mDisc=_mDisc;window._discRow=_discRow;window._mOT=_mOT;window._otRow=_otRow;window._mPRun=_mPRun;window._pRunRow=_pRunRow;window._mPItem=_mPItem;window._pItemRow=_pItemRow;window._pushRow=_pushRow;window._delRow=_delRow;window._mSv=_mSv;window._svRow=_svRow;window._mSvA=_mSvA;window._svARow=_svARow;window._mAnn=_mAnn;window._annRow=_annRow;window._mDraft=_mDraft;window._draftRow=_draftRow;window.queueEmail=queueEmail;
+window._safeUp=_safeUp;window._isRlsErr=_isRlsErr;window._syncErr=_syncErr;window._opErr=_opErr;window._reportSyncResults=_reportSyncResults;window.SB_URL=SB_URL;window.SB_ANON=SB_ANON;window.sb=sb;window._unesc=_unesc;window._mU=_mU;window._mC=_mC;window._mS=_mS;window._mA=_mA;window._DAY_MS=_DAY_MS;window._cutoff30ISO=_cutoff30ISO;window._cutoff30Date=_cutoff30Date;window._mapTk=_mapTk;window._mOKR=_mOKR;window._mOKRCheckin=_mOKRCheckin;window._mOKRLog=_mOKRLog;window._okrRow=_okrRow;window._okrCheckinRow=_okrCheckinRow;window._roleCtx=_roleCtx;window._applySubmissions=_applySubmissions;window._applyApprovals=_applyApprovals;window._applyNotifications=_applyNotifications;window._applyFeedback=_applyFeedback;window._applyFolders=_applyFolders;window._applyDocuments=_applyDocuments;window._applyTickets=_applyTickets;window._HRM_CFG_ID=_HRM_CFG_ID;window._applyHrmConfig=_applyHrmConfig;window._mAtt=_mAtt;window._applyAttendance=_applyAttendance;window._attId=_attId;window._mLT=_mLT;window._applyLeaveTypes=_applyLeaveTypes;window._mLR=_mLR;window._applyLeaveRequests=_applyLeaveRequests;window._mLB=_mLB;window._applyLeaveBalances=_applyLeaveBalances;window._mHol=_mHol;window._applyHolidays=_applyHolidays;window._mShift=_mShift;window._applyShifts=_applyShifts;window._mExpense=_mExpense;window._applyExpenses=_applyExpenses;window._hrmStrip=_hrmStrip;window._syncBar=_syncBar;window._anyLoading=_anyLoading;window._isLoading=_isLoading;window._tabLoading=_tabLoading;window._lazyLoad=_lazyLoad;window._lazyLoadDate=_lazyLoadDate;window._lazyForRoute=_lazyForRoute;window._lazyCold=_lazyCold;window._startRealtime=_startRealtime;window.loadFromSB=loadFromSB;window._sync=_sync;window._mFlow=_mFlow;window._flowRow=_flowRow;window._mLetter=_mLetter;window._letterRow=_letterRow;window._mDisc=_mDisc;window._discRow=_discRow;window._mOT=_mOT;window._otRow=_otRow;window._mPRun=_mPRun;window._pRunRow=_pRunRow;window._mPItem=_mPItem;window._pItemRow=_pItemRow;window._pushRow=_pushRow;window._delRow=_delRow;window._mSv=_mSv;window._svRow=_svRow;window._mSvA=_mSvA;window._svARow=_svARow;window._mAnn=_mAnn;window._annRow=_annRow;window._mDraft=_mDraft;window._draftRow=_draftRow;window.queueEmail=queueEmail;

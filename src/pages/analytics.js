@@ -299,7 +299,7 @@ function analyticsPage(){
   const _ct='font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:12px';
   const _view=S.dashView==='details'?'details':'visuals';
   const _stb=(v,lbl,icn)=>`<button onclick="S.dashView='${v}';rr()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;border:1px solid ${_view===v?'var(--c-text)':'var(--c-border)'};background:${_view===v?'var(--c-text)':'var(--c-surface)'};color:${_view===v?'#fff':'var(--c-text-2)'};font-size:13px;font-weight:700;cursor:pointer">${ic(icn,'w-4 h-4')}${lbl}</button>`;
-  const _subTab=`<div style="display:flex;gap:8px;margin-bottom:14px">${_stb('visuals','Visuals','chart')}${_stb('details','Details','list')}</div>`;
+  const _subTab=`<div class="hscroll" style="gap:8px;margin-bottom:14px">${_stb('visuals','Visuals','chart')}${_stb('details','Details','list')}</div>`;
 
   return`<div class="fade" onclick="(function(e){if(S.afOpen&&!e.target.closest('[data-af]')){S.afOpen=null;rr();}})(event)">
   ${hdr('Company',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
@@ -527,7 +527,7 @@ function hrmAnalyticsPage(){
     return{labels:ks,data:ks.map(k=>_r2(mix[k]))};
   })();
   const _stb=(v,lbl,icn)=>`<button onclick="S.hrmView='${v}';rr()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;border:1px solid ${_hv===v?'var(--c-text)':'var(--c-border)'};background:${_hv===v?'var(--c-text)':'var(--c-surface)'};color:${_hv===v?'#fff':'var(--c-text-2)'};font-size:13px;font-weight:700;cursor:pointer">${ic(icn,'w-4 h-4')}${lbl}</button>`;
-  const _subTab=`<div style="display:flex;gap:8px;margin-bottom:16px">${_stb('visuals','Visuals','chart')}${_stb('details','Details','list')}</div>`;
+  const _subTab=`<div class="hscroll" style="gap:8px;margin-bottom:16px">${_stb('visuals','Visuals','chart')}${_stb('details','Details','list')}</div>`;
   const visualsHTML=rows.length?`<div class="achart-grid" style="margin-bottom:14px">
       <div style="${_cc}"><div class="fd" style="${_ct}">Attendance trend <span style="font-size:11px;font-weight:600;color:var(--c-text-3)">(present · WFH · on leave, per day)</span></div><div style="position:relative;height:250px"><canvas id="hrmChartTrend" data-chart="attendance-trend"></canvas></div></div>
       <div style="${_cc}"><div class="fd" style="${_ct}">Leave mix <span style="font-size:11px;font-weight:600;color:var(--c-text-3)">(days by type in range)</span></div><div style="position:relative;height:250px"><canvas id="hrmChartLeaveMix" data-chart="leave-mix"></canvas></div></div>

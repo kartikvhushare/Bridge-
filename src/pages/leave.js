@@ -457,8 +457,15 @@ App.decideLeave=(id,action,expectedStageIndex)=>{
       footer:btnG('Cancel','App.closeModal()')+btnDanger('Reject',`App._doReject('${id}',${curIdx})`)});
     return;
   }
-  // approve — §2: advance through the snapshot flow by stageIndex
-  const flow=_reqFlow(r);const si=(r.stageIndex!=null?r.stageIndex:0);const curStage=flow[si];
+  // approve — §2: advance through the snapshot flow by stageIndex.
+  // ONE-CLICK FIX (owner report: "I need to click twice to approve"): when the SAME decider is
+  // also a valid approver for the following stage(s) — e.g. a Super Admin covering both the
+  // manager and the HR stage — all their consecutive stages approve in THIS single click.
+  // A stage owned by a DIFFERENT person still hands off with the usual notifications.
+  const flow=_reqFlow(r);
+  let _hop=0;
+  while(r.status==='Pending'&&_hop++<10){
+  const si=(r.stageIndex!=null?r.stageIndex:0);const curStage=flow[si];
   const nextStage=flow[si+1];
   // Keep legacy mgr/hr decision fields populated for back-compat display.
   if(curStage&&curStage.type==='manager'){r.mgrDecision='Approved';r.mgrAt=new Date().toISOString();}
@@ -466,6 +473,7 @@ App.decideLeave=(id,action,expectedStageIndex)=>{
   if(nextStage){
     r.stageIndex=si+1;r.stage=nextStage.type;
     hlog('Leave approved (stage '+(si+1)+': '+_stageLabel(curStage)+')',fullName(emp)+': '+(lt?lt.name:''));
+    if(_canActOn(r))continue; // same decider is valid for the next stage too → approve it in this click
     const pred=_stageApprover(r,si+1);
     const nextApprovers=DB.users.filter(x=>x.status==='Active'&&x.id!==emp.id&&pred(x.id));
     // Bug 5 (binding decision #5): if the NEXT stage has no designated approver, escalate to HR +
@@ -478,6 +486,7 @@ App.decideLeave=(id,action,expectedStageIndex)=>{
     // C3: email the NEXT-stage approver(s) with structured detail (mirrors submit-stage email).
     if(_hnpEmail('email_hrm_leave_submitted'))nextApprovers.forEach(a=>queueEmail('hrm_leave_submitted',a.id,null,r.start,{approver_name:fullName(a),user_name:fullName(emp),leave_type:lt?lt.name:'leave',start_date:fmtD(r.start),end_date:fmtD(r.end),working_days:r.workingDays+(r.workingDays===1?' day':' days'),reason:r.reason||'—'}));
     _hrmNotify(emp.id,'✓ Your '+(lt?lt.name:'leave')+' passed '+_stageLabel(curStage)+' — pending '+_stageLabel(nextStage)+'.','leave'); // progress note (informational)
+    break; // handed off to a different approver — this click is done
   }else{
     r.stage='done';r.status='Approved';
     // DATA-2: touch the SAME balance row the reservation was placed on (persisted at submit).
@@ -490,6 +499,7 @@ App.decideLeave=(id,action,expectedStageIndex)=>{
     // C3: email the employee with structured detail incl. approver + remaining balance.
     if(_hnpEmail('email_hrm_leave_approved')){const _bal=r.unpaid?'—':(_balRemaining(_balanceReadonly(emp.id,r.leaveTypeId,r.leaveYear||_leaveYearOf(emp,r.start)))+' day(s)');queueEmail('hrm_leave_approved',emp.id,null,r.start,{user_name:fullName(emp),leave_type:lt?lt.name:'leave',start_date:fmtD(r.start),end_date:fmtD(r.end),working_days:r.workingDays+(r.workingDays===1?' day':' days'),approver_name:fullName(me()),balance:_bal});}
   }
+  } // end one-click multi-stage loop
   saveDB();toast('Approved');rr();
 };
 App._doReject=(id,expectedStageIndex)=>{

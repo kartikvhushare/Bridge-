@@ -23,6 +23,7 @@ function _feedbackTabContent(uid){
       +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
       +(!fb.acknowledged?'<button onclick="App._ackFb(this.dataset.id)" data-id="'+fb.id+'" style="padding:6px 14px;border-radius:8px;background:#1D4ED8;color:#fff;font-size:12px;font-weight:600;border:none;cursor:pointer">Acknowledge</button>':'<span style="font-size:12px;font-weight:600;color:#0E9F6E">&#10003; Acknowledged</span>')
       +(!fb.reply?'<button onclick="App._replyFb(this.dataset.id)" data-id="'+fb.id+'" style="padding:6px 14px;border-radius:8px;background:#F3F4F6;color:#374151;font-size:12px;font-weight:600;border:none;cursor:pointer">Reply</button>':'')
+      +((fb.managerId===S.uid||isAdmin()||isHR())?'<button onclick="App._delFeedback(this.dataset.id)" data-id="'+fb.id+'" title="Delete this feedback" style="padding:6px 14px;border-radius:8px;background:#FFF1F2;color:#BE123C;font-size:12px;font-weight:600;border:none;cursor:pointer">Delete</button>':'')
       +'</div></div>';
   }).join('')+'</div>';
 }
@@ -83,7 +84,12 @@ function notificationsPage(){
 
   return '<div class="fade">'+hdr('Alerts','Updates, reminders and everything sent to you')
     // A1: explicit "Mark all read" — the ONLY whole-list flip. Shown only when unread exist.
-    +(hadUnread?'<div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="ui-btn ui-btn-subtle ui-btn-sm" onclick="App._markAllNotifsRead()">'+ic('approve','w-4 h-4')+'Mark all read</button></div>':'')
+    // Owner request: "Clear all" deletes every alert (own rows only; confirmed).
+    +'<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
+      +'<button class="ui-btn ui-btn-subtle ui-btn-sm" title="Fetch alerts older than a week (cold archive)" onclick="App._loadOlderAlerts()">'+ic('clock','w-4 h-4')+'Load older</button>'
+      +(hadUnread?'<button class="ui-btn ui-btn-subtle ui-btn-sm" onclick="App._markAllNotifsRead()">'+ic('approve','w-4 h-4')+'Mark all read</button>':'')
+      +(notifs.length?'<button class="ui-btn ui-btn-subtle ui-btn-sm" style="color:var(--c-danger-ink)" onclick="App._clearAllNotifs()">'+ic('trash','w-4 h-4')+'Clear all</button>':'')
+      +'</div>'
     // Tabs
     +'<div class="ui-tabs" style="margin-bottom:16px">'
     +TABS.map(t=>{
@@ -111,6 +117,7 @@ function notificationsPage(){
                 +'<p style="font-size:11px;color:#B8B5AC;margin-top:3px">'+(n.time?new Date(n.time).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')+' · '+type.charAt(0).toUpperCase()+type.slice(1)+'</p>'
                 +'</div>'
                 +(isNew?'<div style="width:7px;height:7px;border-radius:50%;background:#0E9F6E;flex-shrink:0;margin-top:6px"></div>':'')
+                +'<button onclick="event.stopPropagation();App._delNotif(this.dataset.id)" data-id="'+n.id+'" title="Delete this alert" aria-label="Delete this alert" style="width:26px;height:26px;display:grid;place-items:center;border-radius:7px;border:none;background:transparent;color:#C8C5BD;cursor:pointer;flex-shrink:0" onmouseover="this.style.color=\'#BE123C\'" onmouseout="this.style.color=\'#C8C5BD\'">'+ic('x','w-3.5 h-3.5')+'</button>'
                 +'</div>';
             }).join('')
           +'</div></div>'
@@ -120,6 +127,34 @@ function notificationsPage(){
     +'</div>';
 }
 App._setNTab=(t)=>{S.filters.ntab=t;rr();};
+/* Owner request: delete one alert / clear all my alerts (server rows removed too — RLS: own rows). */
+const _tomb=(key,ids)=>{DB[key]=DB[key]||[];ids.forEach(i=>{if(!DB[key].includes(i))DB[key].push(i);});if(DB[key].length>800)DB[key]=DB[key].slice(-800);};
+App._delNotif=(id)=>{
+  const n=(DB.notifications||[]).find(x=>x.id===id);if(!n||n.userId!==S.uid)return;
+  DB.notifications=DB.notifications.filter(x=>x.id!==id);
+  _tomb('notifications_deleted',[id]); // R7: never resurrect from a concurrent fetch/push
+  _invalidateNotifCache();saveDB();rr();
+  sb.from('notifications').delete().eq('id',id).then(()=>{}).catch(()=>{});
+};
+App._clearAllNotifs=()=>{
+  const mine=(DB.notifications||[]).filter(n=>n.userId===S.uid);
+  if(!mine.length)return;
+  if(!confirm('Delete all '+mine.length+' of your alerts? This cannot be undone.'))return;
+  _tomb('notifications_deleted',mine.map(n=>n.id)); // R7
+  DB.notifications=DB.notifications.filter(n=>n.userId!==S.uid);
+  _invalidateNotifCache();saveDB();toast('All alerts cleared','warn');rr();
+  sb.from('notifications').delete().eq('user_id',S.uid).then(()=>{}).catch(()=>{});
+};
+/* Owner request: delete a feedback record — sender (manager), HR or admin only. Logged. */
+App._delFeedback=(id)=>{
+  const fb=(DB.feedback||[]).find(x=>x.id===id);if(!fb)return;
+  if(!(fb.managerId===S.uid||isAdmin()||isHR())){toast('Only the sender, HR or an admin can delete feedback','err');return;}
+  if(!confirm('Delete this feedback for both sides? This cannot be undone.'))return;
+  DB.feedback=DB.feedback.filter(x=>x.id!==id);
+  log(fullName(me()),'Deleted feedback',(uById(fb.userId)?fullName(uById(fb.userId)):'')+(fb.title?' · '+fb.title:''));
+  saveDB();toast('Feedback deleted','warn');rr();
+  sb.from('feedback').delete().eq('id',id).then(()=>{}).catch(()=>{});
+};
 // A1: mark ONE notification read with a targeted server write — never re-upsert the whole array.
 function _markNotifRead(id){
   const n=DB.notifications.find(x=>x.id===id);if(!n||n.read)return;

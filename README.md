@@ -42,6 +42,35 @@ Suite: **134 tests green**, build clean.
 
 Suite: **144 tests green**, build clean, fresh dist.
 
+## Phase 4 — round 5: polish & fixes (July 2026)
+
+1. **Compact mobile pass (Wave 3)** — `.hscroll` one-line scrolling strips for every tab bar (hub strip, Visuals/Details, ui-tabs never stack); ≤767px: smaller h1, tighter card padding, compact table cells (7px/12px), 36px buttons.
+2. **Compact OKR page** — bulky cards → slim one-line rows (chevron · L-chip · title · bar · % · current→target · status · ⋯). Row click opens Progress & Updates; ⋯ opens the action menu (update / rules / progress / logs / add sub / edit / delete). Children collapsed by default; hundreds of OKRs now fit.
+3. **Demo data seeded** (owner request — graphs were empty from sparse data): ~200 attendance rows, ~200 submissions (mixed statuses over 30 days), 6 leave requests, 6 tickets, 2 demo OKRs with 8 check-ins. ALL tagged: ids `demo…` / attendance `note='demo'`. Wipe with: `DELETE FROM attendance WHERE note='demo'; DELETE FROM submissions WHERE id LIKE 'demo_%'; DELETE FROM leave_requests WHERE id LIKE 'demo_%'; DELETE FROM tickets WHERE id LIKE 'demo_%'; DELETE FROM okr_checkins WHERE id LIKE 'demo_%'; DELETE FROM okrs WHERE id LIKE 'demo_%';`
+4. **In-App tab = every event** — the HR in-app switches (leave ×3, late, didn't-clock-out, WFH, announcements, review opened/results) moved from the HR Email tab into Settings → In-App; HR Email tab is email-only now.
+5. **BUGFIX: invisible locations** — the city-scope filter was applied to admins, so an admin with old city chips couldn't see locations created afterwards (including their own). Admins now always see all locations; non-admin creators auto-gain their new location in their city scope.
+6. **Deep check** — new smoke section renders every route as a basic employee (catches role-scoped crashes).
+
+Suite: **148 tests green**, build clean, fresh dist.
+
+## Phase 4 — round 6: delete options on every feed (July 2026)
+
+- **Alerts (notifications)** — ✕ on every row + a confirmed **Clear all** (own rows only; server rows deleted too — RLS `n_d` already allowed it).
+- **Approvals inbox** — trash button per record: decided submission/edit approvals deletable (requester / approver / admin, logged); leave: Pending → **Cancel request** (existing `cancelLeave` releases the reserved balance), Rejected/Cancelled → delete record, **Approved never** (balances already applied); overtime: Rejected → remove (existing handler). Documents decide/delete in Documents.
+- **Feedback** — Delete on each card (sender / HR / admin, logged, removes for both sides).
+- Deliberately NOT deletable: the Audit log (tamper evidence) and approved leave/overtime records (payroll/balance integrity).
+
+Suite: **151 tests green**, build clean, fresh dist.
+
+## Phase 4 — round 7: sync integrity, one-click approvals, egress & security (July 2026)
+
+1. **One-click approvals** — `decideLeave` now loops consecutive stages when the SAME decider is valid for the next stage (Super Admin covering manager+HR no longer clicks Approve twice). Different-person stages still hand off with notifications. (Root cause of the owner's report: demo leave rows had `flow:[]` → fell back to the 2-stage chain; pending demo leave was also removed from the DB and remaining demo rows got a proper 1-stage flow.)
+2. **Resurrection tombstones (R7)** — deleted alerts / approval records / leave records can no longer come back after logout/login: `notifications_deleted` / `approvals_deleted` / `leaveRequests_deleted` tombstones (capped 800) filter every `_apply*` AND every `_sync` re-push.
+3. **Egress "cold archive"** — boot now fetches only a **7-day hot window** for the heavy tables (submissions, notifications, attendance); audit_logs and okr_logs don't load at boot at all. Opening the tab that needs more triggers `_lazyCold` (once per session, sync bar shown, merge-safe): Audit → 300 audit rows, OKR → 400 logs, Dashboard/Analytics → 30-day submissions, Attendance/HRM-Analytics/Payroll → 90-day attendance, Alerts → "Load older" button (90-day notifications).
+4. **Security headers** (vercel.json): X-Frame-Options DENY + CSP frame-ancestors 'none' (no clickjacking), nosniff, strict Referrer-Policy, HSTS, Permissions-Policy (geolocation/camera self-only — needed for geofence + check-in photos). No script CSP (Tailwind CDN + inline handlers are load-bearing).
+
+Suite: **156 tests green**, build clean, fresh dist.
+
 ## Commands
 
 ```

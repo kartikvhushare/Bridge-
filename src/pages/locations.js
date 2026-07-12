@@ -8,8 +8,9 @@ function locsPage(){
   if(sel){
     const l=DB.locations.find(x=>x.id===sel);
     if(!l){S.filters.locSel=null;return locsPage();}
-    // Requirement #6: block opening a city outside the user's city scope.
-    {const _mc=myCityScope();if(_mc.length&&!_mc.includes(l.id)){S.filters.locSel=null;toast('You do not have access to this city','warn');return locsPage();}}
+    // Requirement #6: block opening a city outside the user's city scope — but NEVER for admins
+    // (BUGFIX: an admin with old city chips couldn't open a location they had just created).
+    if(!isAdmin()){const _mc=myCityScope();if(_mc.length&&!_mc.includes(l.id)){S.filters.locSel=null;toast('You do not have access to this city','warn');return locsPage();}}
     const lCls=DB.checklists.filter(c=>(c.locationIds||[]).includes(l.id));
     const TABS=[['docs',ic('folder','w-4 h-4')+'Documents'],['checklists',ic('check','w-4 h-4')+'Checklists'],['info',ic('info','w-4 h-4')+'Info']];
     return'<div class="fade">'
@@ -43,12 +44,16 @@ function locsPage(){
   // ── List view ──
   // Filter locations by user's access if not admin
   // Requirement #6: city scope. If the current user has cities selected, restrict to them (empty = all cities).
+  // BUGFIX (owner report: "created a location but it's not showing"): the city-scope filter was
+  // applied to ADMINS too, so an admin whose profile carried old city chips could not see any
+  // location created after those chips were set — including ones they created themselves.
+  // Admins now always see every location; city scope keeps applying to everyone else.
   const _myCities=myCityScope();
   const _cityOK=l=>!_myCities.length||_myCities.includes(l.id);
-  const visibleLocs=(isAdmin()?DB.locations:DB.locations.filter(l=>{
+  const visibleLocs=isAdmin()?DB.locations.slice():DB.locations.filter(l=>{
     const da=(me()?.docAccess)||{};
     return Object.keys(da.locations||{}).includes(l.id);
-  })).filter(_cityOK);
+  }).filter(_cityOK);
   return'<div class="fade">'+hdr('Locations','Physical sites & areas',can('locations','create')?btnP('Add location','App.editLoc()','plus'):'')
     +'<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">'
     +visibleLocs.map(l=>{
@@ -89,6 +94,9 @@ App.saveLoc=(id)=>{const n=$('#ln-n')?.value.trim();if(!n){toast('Name required'
     const _lat=$('#ln-lat')?.value,_lng=$('#ln-lng')?.value;
     DB.hrmConfig.locationGeo[obj.id]={enabled:togV('ln-geo'),lat:(_lat!==''&&_lat!=null)?Number(_lat):null,lng:(_lng!==''&&_lng!=null)?Number(_lng):null,radius:Number($('#ln-rad')?.value)||200};
   }
+  // BUGFIX companion: a non-admin creator with city chips would lose sight of their own new
+  // location — add it to their city scope on create so it stays visible to them.
+  if(!id){const _cu=me();if(_cu&&Array.isArray(_cu.cities)&&_cu.cities.length&&!_cu.cities.includes(obj.id)){_cu.cities.push(obj.id);sb.from('profiles').update({cities:_cu.cities}).eq('id',_cu.id).then(()=>{}).catch(()=>{});}}
   log(fullName(me()),id?'Edited location':'Created location',n);toast(id?'Updated':'Created');saveDB();closeModal();render();sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'}).then(({error})=>{if(error)_syncErr('location')(error);}).catch(_syncErr('location'));};
 App.delLoc=(id)=>{const l=locById(id);if(!l)return;
 // Referential-integrity guard: blocked while people are geofenced to it, checklists use it,

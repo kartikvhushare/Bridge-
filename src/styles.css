@@ -260,6 +260,35 @@ html,body{max-width:100%;overflow-x:hidden}
   /* Long unbroken strings (emails, serials, URLs) wrap instead of forcing horizontal scroll. */
   #content td,#content th{word-break:normal;overflow-wrap:anywhere}
 }
+/* ════════ RESPONSIVE POLISH (Wave 3 — compact mobile pass) ════════
+   Owner feedback: tables cramped, cards/buttons misaligned, text wrapping, sub-tabs on 2 lines.
+   `.hscroll` = ONE-LINE horizontally scrollable strip (tab bars, chip rows) — no wrapping ever. */
+.hscroll{display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;max-width:100%}
+.hscroll::-webkit-scrollbar{display:none}
+.hscroll>*{flex-shrink:0}
+@media(max-width:767px){
+  /* Denser type + headings — much less 2-line wrapping */
+  :root{--fs-h1:21px}
+  #content{padding-left:12px!important;padding-right:12px!important}
+  /* Cards: tighter padding so 2-up rows align cleanly */
+  #content .ui-card,#content .ui-card-pad{padding:12px}
+  #content .bg-white.rounded-2xl.p-4,#content .bg-white.rounded-2xl.p-5{padding:12px}
+  /* Tables: compact cells + smaller text → more columns fit before scrolling */
+  #content table{font-size:12px}
+  #content th{padding:7px 8px!important;font-size:9.5px!important}
+  #content td{padding:7px 8px!important}
+  /* Buttons: smaller, consistent height — no ragged rows */
+  .ui-btn{padding:7px 12px;font-size:12.5px;min-height:36px}
+  .ui-btn-md{min-height:36px}
+  .ui-tabs .ui-tab{padding:7px 11px;min-height:34px;font-size:12px}
+  /* Sub-tab pills (ui-tabs) already scroll; force nowrap so they never stack */
+  .ui-tabs{flex-wrap:nowrap}
+  /* Status / count chips: never break mid-chip */
+  #content span[class]{overflow-wrap:normal}
+  /* OKR compact rows: drop the meta line + inline bar on phones — title, %, values, status stay */
+  .okr-meta{display:none}
+  .okr-bar{display:none}
+}
 /* Safe-area aware sticky topbar on notched devices */
 .topbar{padding-top:env(safe-area-inset-top)}
 /* Subtle top sync bar (W1.1) — indeterminate progress shown during a background _lazyLoad. */

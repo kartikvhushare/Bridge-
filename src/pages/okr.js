@@ -89,58 +89,54 @@ function okrPage(){
   return `<div class="fade">${head}${_howBar('okr')}${summary}${duePanel}${fBar}<div>${tree}</div></div>`;
 }
 
+/* COMPACT ROWS (owner request): one slim line per OKR so hundreds fit on a page.
+   Row click → Progress & Updates popup. Chevron expands children (collapsed by default).
+   ⋯ opens the action menu (Update / Rules & Target / Progress / Logs / Add sub / Edit / Delete). */
 function _okrNodeHTML(o,depth){
   if(depth>10)return'';
   const kids=okrChildren(o.id);
   const lvl=okrLevel(o);
   const exp=!!_OKR_EXP[o.id];
-  const panel=_OKR_PANEL[o.id]||null;
   const pct=okrProgress(o);
   const st=okrStatusOf(o);
   const barC=_okrBarColor(st);
   const owner=uById(o.ownerId);
-  const dept=(DB.departments||[]).find(d=>d.id===o.departmentId);
-  const subDept=(DB.departments||[]).find(d=>d.id===o.subDepartmentId);
-  const canEdit=_okrCanEditNode(o),canCk=_okrCanCheckin(o),canCreate=_okrCanCreate();
-  const icBtn='width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0';
-  const meta='font-size:11.5px;color:var(--c-text-2);display:inline-flex;align-items:center;gap:4px';
-  // Owner request #8/#9/#6: these open POPUPS now (rules / progress / per-level logs).
-  const pTab=(which,label,icon)=>`<button onclick="App._okrPop('${o.id}','${which}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:9px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);font-size:12px;font-weight:700;cursor:pointer">${ic(icon,'w-3.5 h-3.5')}${label}</button>`;
-  const card=`<div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;margin-bottom:8px;${depth?'margin-left:'+Math.min(depth,5)*18+'px;':''}overflow:hidden">
-    <div style="padding:13px 14px 10px">
-      <div style="display:flex;align-items:flex-start;gap:9px">
-        ${kids.length?`<button onclick="App._okrTogExp('${o.id}')" title="${exp?'Collapse':'Expand'} sub-objectives" style="${icBtn};margin-top:1px;transform:${exp?'rotate(90deg)':'none'}">${ic('chevR','w-4 h-4')}</button>`:`<span style="width:28px;flex-shrink:0;display:grid;place-items:center;margin-top:8px"><span style="width:5px;height:5px;border-radius:50%;background:var(--c-border)"></span></span>`}
-        ${_okrLvlChip(lvl)}
-        <div style="flex:1;min-width:0">
-          <div class="fd" style="font-size:14.5px;font-weight:800;color:var(--c-text);line-height:1.25">${esc(o.title||'Untitled')}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px">
-            ${owner?`<span style="${meta}">${avatar(owner,'w-4 h-4','text-[8px]')}${esc(fullName(owner))}</span>`:''}
-            ${dept?`<span style="${meta}">${ic('dept','w-3 h-3')}${esc(dept.name)}${subDept?' › '+esc(subDept.name):''}</span>`:''}
-            <span style="${meta}">${ic('clock','w-3 h-3')}${esc(_okrFreqLabel(o))}</span>
-            ${o.periodStart||o.periodEnd?`<span style="${meta}">${ic('doc','w-3 h-3')}${fmtS(o.periodStart)} → ${fmtS(o.periodEnd)}</span>`:''}
-            ${kids.length?`<span style="${meta}">${ic('tree','w-3 h-3')}${kids.length} sub-objective${kids.length===1?'':'s'}</span>`:''}
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
-          ${okrStatusChip(st)}
-          <span class="fd" style="font-size:16px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span>
-          <span style="font-size:11.5px;font-weight:700;color:var(--c-text-2);white-space:nowrap" title="Current → Target (this level's own inputs)">${esc(_okrFmtVal(o,(okrLatestCheckin(o.id)||{}).value))} <span style="color:var(--c-text-3)">→</span> ${o.metricType==='yesno'?'Yes':esc(_okrFmtVal(o,o.targetValue))}</span>
-        </div>
-      </div>
-      <div style="height:6px;background:var(--c-border);border-radius:3px;overflow:hidden;margin-top:9px"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${barC};border-radius:3px;transition:width .3s"></div></div>
-      <div style="display:flex;align-items:center;gap:7px;margin-top:10px;flex-wrap:wrap">
-        ${pTab('rules','Rules & Target','cog')}
-        ${pTab('progress','Progress & Updates','chart')}
-        ${pTab('logs','Logs','audit')}
-        <span style="flex:1"></span>
-        ${canCk?btn('Update',`App._okrCheckin('${o.id}','${todayISO()}')`,{variant:'ghost',size:'sm',icon:'edit'}):''}
-        ${canCreate?`<button onclick="App._okrEdit(null,'${o.id}')" title="Add sub-objective (L${lvl+1})" style="${icBtn}">${ic('plus','w-4 h-4')}</button>`:''}
-        ${canEdit?`<button onclick="App._okrEdit('${o.id}')" title="Edit" style="${icBtn}">${ic('edit','w-3.5 h-3.5')}</button><button onclick="App._okrDelete('${o.id}')" title="Delete" style="${icBtn}">${ic('trash','w-3.5 h-3.5')}</button>`:''}
-      </div>
+  const icBtn='width:26px;height:26px;display:grid;place-items:center;border-radius:7px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0';
+  const cur=esc(_okrFmtVal(o,(okrLatestCheckin(o.id)||{}).value));
+  const tgt=o.metricType==='yesno'?'Yes':esc(_okrFmtVal(o,o.targetValue));
+  const row=`<div style="display:flex;align-items:center;gap:8px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:10px;margin-bottom:5px;padding:7px 10px;${depth?'margin-left:'+Math.min(depth,5)*16+'px;':''}">
+    ${kids.length?`<button onclick="App._okrTogExp('${o.id}')" title="${exp?'Collapse':'Expand'} ${kids.length} sub-objective${kids.length===1?'':'s'}" style="${icBtn};transform:${exp?'rotate(90deg)':'none'};transition:transform .15s">${ic('chevR','w-4 h-4')}</button>`:`<span style="width:26px;flex-shrink:0;display:grid;place-items:center"><span style="width:4px;height:4px;border-radius:50%;background:var(--c-border)"></span></span>`}
+    ${_okrLvlChip(lvl)}
+    <div onclick="App._okrPop('${o.id}','progress')" role="button" tabindex="0" title="Open Progress & Updates" style="flex:1;min-width:0;cursor:pointer">
+      <div class="fd" style="font-size:13.5px;font-weight:800;color:var(--c-text);line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.title||'Untitled')}${kids.length?` <span style="font-size:10px;font-weight:700;color:var(--c-text-3)">· ${kids.length} sub</span>`:''}</div>
+      <div class="okr-meta" style="font-size:10.5px;color:var(--c-text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px">${owner?esc(fullName(owner)):'—'} · ${esc(_okrFreqLabel(o))}${o.periodStart||o.periodEnd?' · '+fmtS(o.periodStart)+' → '+fmtS(o.periodEnd):''}</div>
     </div>
+    <div class="okr-bar" style="width:64px;height:5px;background:var(--c-border);border-radius:3px;overflow:hidden;flex-shrink:0"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${barC};border-radius:3px"></div></div>
+    <span class="fd" style="font-size:13px;font-weight:800;color:var(--c-text);width:42px;text-align:right;flex-shrink:0">${pct===null?'—':pct+'%'}</span>
+    <span style="font-size:11px;font-weight:700;color:var(--c-text-2);white-space:nowrap;flex-shrink:0" title="Current → Target (this level's own inputs)">${cur} <span style="color:var(--c-text-3)">→</span> ${tgt}</span>
+    ${okrStatusChip(st,true)}
+    <button onclick="App._okrMenu('${o.id}')" title="Actions" style="${icBtn};font-weight:800;font-size:15px;color:var(--c-text-2)">⋯</button>
   </div>`;
-  return card+(exp?kids.map(k=>_okrNodeHTML(k,depth+1)).join(''):'');
+  return row+(exp?kids.map(k=>_okrNodeHTML(k,depth+1)).join(''):'');
 }
+/* Action menu popup — everything that used to crowd the card, one tap away. */
+App._okrMenu=(id)=>{
+  const o=okrById(id);if(!o)return;
+  const lvl=okrLevel(o);
+  const canEdit=_okrCanEditNode(o),canCk=_okrCanCheckin(o),canCreate=_okrCanCreate();
+  const item=(label,icon,onclick,danger)=>`<button onclick="App.closeModal();${onclick}" style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 12px;border-radius:10px;border:none;background:transparent;color:${danger?'var(--c-danger-ink)':'var(--c-text)'};font-size:13.5px;font-weight:600;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--c-surface-2)'" onmouseout="this.style.background='transparent'">${ic(icon,'w-4 h-4')}${label}</button>`;
+  modalShell({title:o.title||'Objective',sub:'L'+lvl+' · what do you want to do?',size:'max-w-sm',
+    body:`<div style="display:flex;flex-direction:column;gap:2px">
+      ${canCk?item('Add / edit update','edit',`App._okrCheckin('${id}','${todayISO()}')`):''}
+      ${item('Progress & Updates','chart',`App._okrPop('${id}','progress')`)}
+      ${item('Rules & Target','cog',`App._okrPop('${id}','rules')`)}
+      ${item('Activity log','audit',`App._okrPop('${id}','logs')`)}
+      ${canCreate?item('Add sub-objective (L'+(lvl+1)+')','plus',`App._okrEdit(null,'${id}')`):''}
+      ${canEdit?item('Edit objective','edit',`App._okrEdit('${id}')`):''}
+      ${canEdit?item('Delete','trash',`App._okrDelete('${id}')`,true):''}
+    </div>`,
+    footer:btnG('Close','App.closeModal()')});
+};
 
 /* ── Panel ①: Rules & Target ── */
 function _okrRulesPanel(o){

@@ -284,8 +284,7 @@ describe('r4 - OKR independent levels + popups + permissions', () => {
     W.S.route = 'okr'; W.S.filters = {};
     const html = W.pageContent();
     expect(html).toContain('Current → Target');
-    expect(html).toContain('Rules & Target');
-    expect(html).toContain('Logs');
+    expect(html).toContain('_okrMenu'); // compact rows: actions live in the ⋯ menu now
   });
   it('Progress popup shows Start/Current/Target + Progress chip + chart canvas', () => {
     W.App._okrPop('r4L1', 'progress');
@@ -337,5 +336,142 @@ describe('r4 - OKR independent levels + popups + permissions', () => {
     const area = W.PERM_AREAS ? W.PERM_AREAS.find(a => a.key === 'okr') : null;
     if (area) { expect(area.actions).toContain('editEntries'); expect(area.actions).toContain('deleteLogs'); expect(area.actions).toContain('changeOwner'); }
     expect(W.DB.roleProfiles.superadmin.perms.okr.actions.editEntries).toBe(true);
+  });
+});
+
+/* ── Round 5: compact UI, locations bugfix, deep multi-role sweep ── */
+describe('r5 - locations visibility bugfix', () => {
+  it('admin with stale city chips still sees ALL locations', () => {
+    W.S.uid = 'sa1';
+    const me2 = W.uById('sa1');
+    me2.cities = ['locA']; // stale chip list that excludes the new location
+    W.DB.locations.push({ id: 'locA', name: 'Old Town', status: 'Active' }, { id: 'locNEW', name: 'Brand New Branch', status: 'Active' });
+    W.S.route = 'locations'; W.S.filters = {};
+    const html = W.pageContent();
+    expect(html).toContain('Brand New Branch'); // previously hidden by the city filter
+    me2.cities = [];
+    W.DB.locations = W.DB.locations.filter(l => l.id !== 'locA' && l.id !== 'locNEW');
+  });
+});
+
+describe('r5 - compact OKR rows + complete In-App tab', () => {
+  it('OKR page renders slim rows with an actions menu', () => {
+    W.S.route = 'okr'; W.S.filters = {};
+    const html = W.pageContent();
+    expect(html).toContain('_okrMenu');           // ⋯ action menu wired
+    expect(html.includes('Rules & Target</button>')).toBe(false); // bulky per-card buttons gone
+  });
+  it('In-App tab lists HR events too', () => {
+    W.S.route = 'settings'; W.S.filters = { stab: 'inapp' };
+    const html = W.pageContent();
+    expect(html).toContain('Leave submitted');
+    expect(html).toContain('Didn’t clock out');
+    expect(html).toContain('Review cycle opened');
+    expect(html).toContain('WFH marked');
+  });
+});
+
+describe('r5 - deep check: every route renders for a BASIC EMPLOYEE too', () => {
+  const ROUTES5 = ['dashboard','users','departments','locations','checklists','allcl','mychecklists',
+    'teamview','questions','tickets','documents','analytics','reports','hrmanalytics','okr',
+    'announcements','approvals','attendance','leave','myschedule','schedule','shifts','overtime',
+    'expenses','lifecycle','sops','discipline','letters','payroll','surveys','reviews','hierarchy',
+    'audit','settings','accesscontrol','hrmconfig','notifications','profile','more'];
+  it('no route throws as emp1', () => {
+    W.S.uid = 'emp1';
+    for (const r of ROUTES5) {
+      W.S.route = r; W.S.filters = {}; W.S.search = '';
+      const html = W.pageContent();
+      expect(typeof html).toBe('string');
+    }
+    W.S.uid = 'sa1';
+  });
+});
+
+/* ── Round 6: delete options on alert/approval feeds ── */
+describe('r6 - alerts & approvals delete options', () => {
+  it('alerts page offers per-item delete and Clear all; both work', () => {
+    W.S.uid = 'emp1';
+    W.DB.notifications.unshift({ id: 'r6n1', userId: 'emp1', text: 'r6 test alert', time: new Date().toISOString(), read: false, kind: 'general' });
+    W.S.route = 'notifications'; W.S.filters = {};
+    const html = W.pageContent();
+    expect(html).toContain('_delNotif');
+    expect(html).toContain('Clear all');
+    W.App._delNotif('r6n1');
+    expect(W.DB.notifications.some(n => n.id === 'r6n1')).toBe(false);
+    W.DB.notifications.unshift({ id: 'r6n2', userId: 'emp1', text: 'another', time: new Date().toISOString(), read: true, kind: 'general' });
+    global.confirm = () => true;
+    W.App._clearAllNotifs();
+    expect(W.DB.notifications.some(n => n.userId === 'emp1')).toBe(false);
+    W.S.uid = 'sa1';
+  });
+  it('decided approval records are deletable; pending are protected', () => {
+    W.S.uid = 'sa1';
+    W.DB.approvals.push(
+      { id: 'r6a1', type: 'Submission', requesterId: 'emp1', status: 'Approved', date: '2026-07-10', createdAt: '2026-07-10T00:00:00Z' },
+      { id: 'r6a2', type: 'Submission', requesterId: 'emp1', status: 'Pending', date: '2026-07-11', createdAt: '2026-07-11T00:00:00Z' });
+    global.confirm = () => true;
+    W.App._delApprovalRec('r6a1');
+    expect(W.DB.approvals.some(a => a.id === 'r6a1')).toBe(false);
+    W.App._delApprovalRec('r6a2'); // pending → refused
+    expect(W.DB.approvals.some(a => a.id === 'r6a2')).toBe(true);
+    W.DB.approvals = W.DB.approvals.filter(a => a.id !== 'r6a2');
+  });
+  it('rejected leave records are deletable; approved never', () => {
+    W.DB.leaveRequests.push(
+      { id: 'r6l1', userId: 'emp1', leaveTypeId: 'ltX', start: '2026-07-01', end: '2026-07-02', status: 'Rejected', workingDays: 2 },
+      { id: 'r6l2', userId: 'emp1', leaveTypeId: 'ltX', start: '2026-07-03', end: '2026-07-04', status: 'Approved', workingDays: 2 });
+    global.confirm = () => true;
+    W.App._delLeaveRec('r6l1');
+    expect(W.DB.leaveRequests.some(r => r.id === 'r6l1')).toBe(false);
+    W.App._delLeaveRec('r6l2'); // approved → refused
+    expect(W.DB.leaveRequests.some(r => r.id === 'r6l2')).toBe(true);
+    W.DB.leaveRequests = W.DB.leaveRequests.filter(r => r.id !== 'r6l2');
+  });
+});
+
+/* ── Round 7: one-click approvals, tombstones, cold archive ── */
+describe('r7 - one-click multi-stage approve', () => {
+  it('an approver valid for BOTH stages approves in ONE click', () => {
+    W.S.uid = 'sa1'; // Super Admin = universal approver at every stage
+    const req = { id: 'r7lv1', userId: 'emp1', leaveTypeId: 'ltX', leaveYear: '2026', start: '2026-08-03', end: '2026-08-04',
+      halfDay: false, workingDays: 2, reason: 't', unpaid: true, flow: [{ type: 'manager' }, { type: 'hr' }],
+      stageIndex: 0, stage: 'manager', status: 'Pending', createdAt: new Date().toISOString() };
+    W.DB.leaveRequests.push(req);
+    W.App.decideLeave('r7lv1', 'approve', 0);
+    expect(req.status).toBe('Approved'); // previously needed two clicks
+    W.DB.leaveRequests = W.DB.leaveRequests.filter(r => r.id !== 'r7lv1');
+  });
+});
+
+describe('r7 - deleted records never resurrect (tombstones)', () => {
+  it('a deleted alert stays gone even when the server still returns it', () => {
+    W.S.uid = 'emp1';
+    W.DB.notifications.unshift({ id: 'r7n1', userId: 'emp1', text: 'ghost', time: new Date().toISOString(), read: false });
+    W.App._delNotif('r7n1');
+    // simulate a concurrent fetch that still contains the row
+    W._applyNotifications([{ id: 'r7n1', user_id: 'emp1', text: 'ghost', read: false, created_at: new Date().toISOString() }]);
+    expect(W.DB.notifications.some(n => n.id === 'r7n1')).toBe(false);
+    W.S.uid = 'sa1';
+  });
+  it('a deleted leave record stays gone through the merge-style apply', () => {
+    W.DB.leaveRequests.push({ id: 'r7lv2', userId: 'emp1', leaveTypeId: 'ltX', start: '2026-06-01', end: '2026-06-02', status: 'Rejected', workingDays: 2 });
+    global.confirm = () => true;
+    W.App._delLeaveRec('r7lv2');
+    W._applyLeaveRequests([{ id: 'r7lv2', user_id: 'emp1', leave_type_id: 'ltX', start_date: '2026-06-01', end_date: '2026-06-02', status: 'Rejected', working_days: 2 }]);
+    expect(W.DB.leaveRequests.some(r => r.id === 'r7lv2')).toBe(false);
+  });
+});
+
+describe('r7 - cold archive plumbing', () => {
+  it('cold loaders exist and route hooks call them without throwing', () => {
+    expect(typeof W._lazyCold).toBe('function');
+    W._lazyForRoute('audit'); W._lazyForRoute('okr'); W._lazyForRoute('analytics'); W._lazyForRoute('attendance');
+    expect(true).toBe(true);
+  });
+  it('Alerts page offers Load older', () => {
+    W.S.uid = 'emp1'; W.S.route = 'notifications'; W.S.filters = {};
+    expect(W.pageContent()).toContain('Load older');
+    W.S.uid = 'sa1';
   });
 });

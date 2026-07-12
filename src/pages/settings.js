@@ -327,10 +327,14 @@ function settingsPage(){
   TABS.push(['templates','Templates']);
   const tabBar=`<div class="ui-tabs" style="margin-bottom:20px">${TABS.map(([k,ll])=>`<button class="ui-tab${stab===k?' on':''}" onclick="App._setSTab('${k}')">${ll}</button>`).join('')}</div>`;
 
+  // ONE complete in-app surface (owner request): checklist events + approvals/feedback + ALL the
+  // HR events (leave, attendance, announcements, reviews, WFH). HR rows ride DB.hrmNotifPrefs
+  // via _hnpRow2 (same keys as before — they were previously buried in the HR Email tab).
+  const _hnpRow2=(key,label,desc)=>{const on=_hnp(key);return`<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #F5F4F0"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#15171C">${label}</div>${desc?`<div style="font-size:11px;color:#B8B5AC;margin-top:1px">${desc}</div>`:''}</div><button role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(label)}" class="tog ${on?'on':'off'}" onclick="App._hnpTog(this,'${key}')"><span></span></button></div>`;};
   const inappTab=`<div class="space-y-4">
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
       <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9">
-        <div style="font-size:14px;font-weight:700">In-app notifications</div>
+        <div style="font-size:14px;font-weight:700">In-app notifications — every event</div>
         <div style="font-size:12px;color:#9CA3AF;margin-top:2px">Bell icon — shown only to the relevant user. Per-feature master switches (Leave, Payroll, OKRs…) live in <strong>HR Config → Alerts</strong>, like email.</div>
       </div>
       <div style="padding:4px 20px 12px">
@@ -345,6 +349,18 @@ function settingsPage(){
         ${_nsTogRow('inapp_approval_requested','Approval requested','Sent to admin when an approval is pending')}
         ${_nsTogRow('inapp_approval_decided','Approval decided','Sent to the user when their approval is approved/rejected')}
         ${_nsTogRow('inapp_feedback_received','Feedback received','Sent to the user when their manager sends feedback')}
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Leave</div>
+        ${_hnpRow2('inapp_hrm_leave_submitted','Leave submitted','Approvers notified when leave is requested')}
+        ${_hnpRow2('inapp_hrm_leave_approved','Leave approved','Employee notified when their leave is approved')}
+        ${_hnpRow2('inapp_hrm_leave_rejected','Leave rejected','Employee notified when their leave is rejected')}
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Attendance</div>
+        ${_hnpRow2('inapp_hrm_late','Late clock-in','Employee notified when they clock in late')}
+        ${_hnpRow2('inapp_hrm_missed_clockout','Didn’t clock out','Employee notified when the day auto-closes at midnight')}
+        ${_hnpRow2('inapp_hrm_wfh','WFH marked','Manager notified when someone marks today as WFH')}
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Announcements & Reviews</div>
+        ${_hnpRow2('inapp_announcement','Announcements','Targeted users notified of new announcements')}
+        ${_hnpRow2('inapp_review_opened','Review cycle opened','Participants notified when a cycle opens')}
+        ${_hnpRow2('inapp_review_results','Review results ready','Employee notified when results are visible')}
       </div>
     </div>
   </div>`;
@@ -416,13 +432,7 @@ function settingsPage(){
         <div style="font-size:12px;color:#6B7280;line-height:1.5;background:#F9FAFB;border:1px solid #F0EEE9;border-radius:10px;padding:10px 12px">The HR sending address is configured by the backend email service (coming soon). Emails are not actually sent yet — these switches control what <em>will</em> be sent once the backend is connected. The in-app notifications below work today.</div>
       </div>
       <div style="padding:4px 20px 12px">
-        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">In-app notifications</div>
-        ${_hnpRow('inapp_hrm_leave_submitted','Leave submitted','Approvers notified when leave is requested')}
-        ${_hnpRow('inapp_hrm_leave_approved','Leave approved','Employee notified when their leave is approved')}
-        ${_hnpRow('inapp_hrm_leave_rejected','Leave rejected','Employee notified when their leave is rejected')}
-        ${_hnpRow('inapp_hrm_late','Late clock-in','Employee notified when they clock in late')}
-        ${_hnpRow('inapp_hrm_missed_clockout','Missed clock-out','Employee notified when a clock-out is auto-closed')}
-        ${_hnpRow('inapp_announcement','Announcements','Targeted users notified of new announcements')}
+        <div style="font-size:11px;color:#9CA3AF;padding:10px 0 2px">In-app switches for these events moved to the <strong>In-App</strong> tab — this tab is email only.</div>
         <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Email notifications ${hrmMaster?'':'<span style="color:#D97706">(master switch off)</span>'}</div>
         ${_hnpRow('email_hrm_leave_submitted','Leave submitted','Email to approvers when leave is requested')}
         ${_hnpRow('email_hrm_leave_approved','Leave approved','Email to the employee on approval')}

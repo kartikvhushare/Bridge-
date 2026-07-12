@@ -115,6 +115,9 @@ function loadDB(){
     // workspace_settings (key 'hrm_notif_prefs') so refreshes/devices agree; loadFromSB merges server copy.
     DB.hrmNotifPrefs={..._hrmNotifPrefsDefault(),...(DB.hrmNotifPrefs&&typeof DB.hrmNotifPrefs==='object'?DB.hrmNotifPrefs:{})};
     if(!Array.isArray(DB.drafts))DB.drafts=[]; // PHASE4b: drafts collection for older saved states
+    // R7 (sync-integrity): tombstones for user-deletable feed records — a deleted alert/approval/
+    // leave record must never resurrect from a concurrent server fetch or a local re-push.
+    ['notifications_deleted','approvals_deleted','leaveRequests_deleted'].forEach(k=>{if(!Array.isArray(DB[k]))DB[k]=[];});
     try{_seedHRMPlan();}catch(e){}
     DB.users.forEach(u=>{
       if(!u.rules)u.rules={past:true,future:true,edit:true};

@@ -84,8 +84,27 @@ function _inboxRow(x){
     : x._src.coll==='overtime'
     ? "App._otDecide('"+esc(x._src.id)+"','reject')"
     : "App._decideReject('"+esc(x._src.id)+"')";
-  return '<div class="ui-card" style="padding:16px">'
-    +'<div onclick="App._inboxOpen(\''+esc(x.id)+'\')" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer">'
+  // Owner request: delete/cancel controls on inbox records. Matrix (safety first):
+  //  · submission/edit approvals — DECIDED records deletable (requester / approver / admin);
+  //  · leave — Pending → Cancel (existing handler releases the reserved balance);
+  //            Rejected/Cancelled → delete the record; Approved never (balances already applied);
+  //  · overtime — Rejected → remove (existing handler, stays in DB log);
+  //  · documents — decided in Documents (deleting the doc lives there).
+  const _del=(()=>{
+    const c=x._src.coll;
+    if(c==='approvals'&&x.status!=='Pending'&&(x.requestedBy===S.uid||isAdmin()||can('checklists','approve')))
+      return{call:"App._delApprovalRec('"+esc(x._src.id)+"')",label:'Delete record'};
+    if(c==='leaveRequests'){
+      if(x.status==='Pending'&&x.requestedBy===S.uid)return{call:"App.cancelLeave('"+esc(x._src.id)+"')",label:'Cancel request'};
+      if((x.status==='Rejected'||x.status==='Cancelled')&&(x.requestedBy===S.uid||can('leaveRequests','approve')))
+        return{call:"App._delLeaveRec('"+esc(x._src.id)+"')",label:'Delete record'};
+    }
+    if(c==='overtime'&&x.status==='Rejected')return{call:"App._otDel('"+esc(x._src.id)+"')",label:'Remove'};
+    return null;
+  })();
+  return '<div class="ui-card" style="padding:16px;position:relative">'
+    +(_del?'<button onclick="'+_del.call+'" title="'+_del.label+'" aria-label="'+_del.label+'" style="position:absolute;top:10px;right:10px;width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:var(--c-text-3);cursor:pointer;z-index:2" onmouseover="this.style.color=\'var(--c-danger-ink)\';this.style.background=\'var(--c-danger-soft)\'" onmouseout="this.style.color=\'var(--c-text-3)\';this.style.background=\'transparent\'">'+ic('trash','w-4 h-4')+'</button>':'')
+    +'<div onclick="App._inboxOpen(\''+esc(x.id)+'\')" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;'+(_del?'padding-right:30px':'')+'">'
     +'<span style="width:40px;height:40px;border-radius:11px;background:var(--c-surface-2);color:var(--c-text-2);display:grid;place-items:center;flex-shrink:0">'+ic(meta.icon,'w-5 h-5')+'</span>'
     +'<div style="flex:1;min-width:0">'
     +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:14.5px;font-weight:700">'+esc(x.subject)+'</span>'
@@ -101,6 +120,30 @@ function _inboxRow(x){
       :'')
     +'</div>';
 }
+/* Delete a DECIDED submission/edit approval record (history cleanup — logged). */
+App._delApprovalRec=(id)=>{
+  const a=(DB.approvals||[]).find(x=>x.id===id);if(!a)return;
+  if(a.status==='Pending'){toast('Decide it first — pending approvals can\'t be deleted','err');return;}
+  if(!(a.requesterId===S.uid||isAdmin()||can('checklists','approve'))){toast('Not allowed','err');return;}
+  if(!confirm('Delete this '+(a.status||'').toLowerCase()+' approval record? This cannot be undone.'))return;
+  DB.approvals=DB.approvals.filter(x=>x.id!==id);
+  DB.approvals_deleted=DB.approvals_deleted||[];if(!DB.approvals_deleted.includes(id))DB.approvals_deleted.push(id);if(DB.approvals_deleted.length>800)DB.approvals_deleted=DB.approvals_deleted.slice(-800); // R7
+  log(fullName(me()),'Deleted approval record',(a.type||'Approval')+(a.date?' · '+a.date:''));
+  saveDB();toast('Record deleted','warn');rr();
+  sb.from('approvals').delete().eq('id',id).then(()=>{}).catch(()=>{});
+};
+/* Delete a Rejected/Cancelled leave record (Approved is never deletable — balances already applied). */
+App._delLeaveRec=(id)=>{
+  const r=(DB.leaveRequests||[]).find(x=>x.id===id);if(!r)return;
+  if(!(r.status==='Rejected'||r.status==='Cancelled')){toast('Only rejected or cancelled leave records can be deleted','err');return;}
+  if(!(r.userId===S.uid||can('leaveRequests','approve'))){toast('Not allowed','err');return;}
+  if(!confirm('Delete this '+r.status.toLowerCase()+' leave record? This cannot be undone.'))return;
+  DB.leaveRequests=DB.leaveRequests.filter(x=>x.id!==id);
+  DB.leaveRequests_deleted=DB.leaveRequests_deleted||[];if(!DB.leaveRequests_deleted.includes(id))DB.leaveRequests_deleted.push(id);if(DB.leaveRequests_deleted.length>800)DB.leaveRequests_deleted=DB.leaveRequests_deleted.slice(-800); // R7
+  log(fullName(me()),'Deleted leave record',(uById(r.userId)?fullName(uById(r.userId)):'')+' · '+r.start+' → '+r.end);
+  saveDB();toast('Record deleted','warn');rr();
+  sb.from('leave_requests').delete().eq('id',id).then(()=>{}).catch(()=>{});
+};
 App._setInboxType=(k)=>{S.filters.inboxType=k;rr();};
 // Approvals status sub-tab (Pending / Approved / Rejected). Reset the type filter so switching
 // status never leaves a stale type chip selected for a type that has no items in the new tab.
