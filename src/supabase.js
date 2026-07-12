@@ -317,9 +317,60 @@ function _startRealtime(){
         if((DB.notifications||[]).some(n=>n.id===r.id))return;
         DB.notifications.unshift({id:r.id,userId:r.user_id,text:r.text||'',time:r.created_at||new Date().toISOString(),read:r.read===true,kind:r.kind||'general',targetRoute:r.target_route||null});
         saveDB();rr();
-      }).subscribe();
+        // R17: an 'access' ping means an admin changed MY permissions/HR settings — refetch and
+        // re-render so this open session drops (or gains) controls immediately, no reload needed.
+        if(r.kind==='access'){try{toast(r.text||'Your access was updated','warn');}catch(e){}_refreshMyAccess();}
+      })
+      /* R17 (owner report: "I removed manage but Lee can still edit his own shift"): access changes
+         SAVED fine (R14), but an already-open session kept the OLD permissions in memory until the
+         next full reload — so the target user kept seeing (and clicking) controls their role no longer
+         grants. Live propagation, verified on the live site:
+         — ROLE edits arrive via workspace_settings realtime below (in the publication, RLS read=true).
+           The big jsonb value is a TOASTed column, so a payload may arrive WITHOUT it — refetch then.
+         — PER-USER edits (role assignment / overrides / HR settings) arrive as a kind='access'
+           notification (see the notifications listener above + _acPushHrm), because realtime on
+           user_hrm itself proved unreliable (its RLS check drops events). */
+      .on('postgres_changes',{event:'*',schema:'public',table:'workspace_settings',filter:'key=eq.role_profiles'},(payload)=>{
+        try{
+          const v=payload&&payload.new&&payload.new.value;
+          const myPid=(me()&&me().hrm||{}).roleProfileId;
+          if(v&&typeof v==='object'){
+            if(JSON.stringify(DB.roleProfiles)===JSON.stringify(v))return;   // my own edit echoing back
+            const mineChanged=myPid&&JSON.stringify((DB.roleProfiles||{})[myPid])!==JSON.stringify(v[myPid]);
+            DB.roleProfiles=v;
+            saveDB();rr();
+            if(mineChanged)toast('Your permissions were just updated','warn');
+          }else{
+            const before=myPid?JSON.stringify((DB.roleProfiles||{})[myPid]):'';
+            _refreshMyAccess().then(ch=>{if(ch&&myPid&&before!==JSON.stringify((DB.roleProfiles||{})[myPid]))toast('Your permissions were just updated','warn');});
+          }
+        }catch(e){}
+      })
+      .subscribe();
   }catch(e){console.warn('[realtime]',e.message);}
 }
+/* R17: pull MY current access from the server (own user_hrm row + role bundles) and apply it to this
+   open session. Called when a kind='access' notification lands or a role_profiles event arrives without
+   its (TOASTed) value. Safe to call any time; renders only when something actually changed. */
+async function _refreshMyAccess(){
+  try{
+    const[uh,ws]=await Promise.all([
+      sb.from('user_hrm').select('hrm').eq('user_id',S.uid).maybeSingle(),
+      sb.from('workspace_settings').select('value').eq('key','role_profiles').maybeSingle()
+    ]);
+    let changed=false;
+    const u=uById(S.uid);
+    if(u&&uh&&uh.data&&uh.data.hrm&&typeof uh.data.hrm==='object'){
+      if(JSON.stringify(_hrmStrip(u.hrm||{}))!==JSON.stringify(uh.data.hrm)){u.hrm=uh.data.hrm;_ensureHrm(u);changed=true;}
+    }
+    if(ws&&ws.data&&ws.data.value&&typeof ws.data.value==='object'){
+      if(JSON.stringify(DB.roleProfiles)!==JSON.stringify(ws.data.value)){DB.roleProfiles=ws.data.value;changed=true;}
+    }
+    if(changed){saveDB();rr();}
+    return changed;
+  }catch(e){return false;}
+}
+window._refreshMyAccess=_refreshMyAccess;
 async function loadFromSB(){
   // Check and refresh session before queries — prevents 401 on stale tokens
   try{
@@ -601,9 +652,23 @@ async function _sync(){try{
     (()=>{const _nRow=n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString(),kind:n.kind||null,target_route:n.targetRoute||null});
       const _dead=new Set(DB.notifications_deleted||[]); // R7: never re-push a deleted alert
       const mine=DB.notifications.filter(n=>!_dead.has(n.id)&&(n.userId===S.uid||isAdmin()));
-      const foreign=DB.notifications.filter(n=>!_dead.has(n.id)&&!(n.userId===S.uid||isAdmin()));
       const ps=[];if(mine.length)ps.push(_safeUp('notifications',_dedupeById(mine.map(_nRow)),{onConflict:'id'}));
-      if(foreign.length)ps.push(_safeUp('notifications',_dedupeById(foreign.map(_nRow)),{onConflict:'id',ignoreDuplicates:true}));
+      /* R16 CRITICAL (found in deep live testing): the previous foreign push used
+         upsert({ignoreDuplicates:true}). PostgREST STILL evaluates the UPDATE (n_u) WITH CHECK on any
+         upsert — and n_u only allows user_id=self OR _is_super(). So a non-super-admin (SubAdmin,
+         manager, HR, or employee) creating a notification for ANOTHER user — announcement fan-out,
+         "leave approved", checklist/ticket assignment, etc. — was 403'd and the recipient NEVER got the
+         bell. Verified live: plain .insert() for another user PASSES the n_i policy; only the upsert
+         path failed. Fix: push foreign rows with a plain INSERT (n_i = true for everyone), and remember
+         which ids were delivered this session so re-pushes don't duplicate-key. Foreign rows are never
+         reloaded into this client's memory (boot filters notifications to user_id=self), so the
+         in-session set is all we need. */
+      window._nfSent=window._nfSent||new Set();
+      const foreign=DB.notifications.filter(n=>!_dead.has(n.id)&&!(n.userId===S.uid||isAdmin())&&!window._nfSent.has(n.id));
+      if(foreign.length){const rows=_dedupeById(foreign.map(_nRow));
+        ps.push(sb.from('notifications').insert(rows)
+          .then(({error})=>{ if(!error||error.code==='23505'){rows.forEach(r=>window._nfSent.add(r.id));return{};} return{error}; })
+          .catch(e=>({error:e})));}
       return _syncMerge(ps);})(),
     /* PHASE3-FIX: RLS fb_i (INSERT) = manager|elevated|hr, fb_u (UPDATE) adds user_id. Upserting the
        employee's own (manager-created) rows fails the INSERT check — split like tickets. */

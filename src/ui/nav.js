@@ -39,8 +39,8 @@ const NAV_ALL=[
    router already enforces, so access control needs no new areas. */
 const HUB_DEF={
   inbox:{label:'Inbox',tabs:[
-    ['approvals','Approvals',()=>can('approvals','view')],
-    ['notifications','Alerts',()=>true]]},
+    ['notifications','Alerts',()=>true],            // R18 (owner request): Inbox lands on Alerts by default
+    ['approvals','Approvals',()=>can('approvals','view')]]},
   dash:{label:'Dashboard',tabs:[
     ['dashboard','My Day',()=>true],
     ['analytics','Company',()=>isAdmin()||can('analytics','view')],

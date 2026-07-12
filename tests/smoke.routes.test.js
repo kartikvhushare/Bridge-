@@ -743,3 +743,79 @@ describe('r15 - role scopes bind SubAdmins (no page-level bypass)', () => {
     W.S.uid = 'sa1';
   });
 });
+
+/* ── Round 16: chart hover-transition hardening (kills "this._fn is not a function") ── */
+describe('r16 - chart theme disables the fragile hover transitions', () => {
+  it('_aChartTheme zeroes transitions.active/resize/hide/show animation duration', () => {
+    HTMLCanvasElement.prototype.getContext = () => null;
+    window.Chart = class { constructor(c, cfg) {} destroy() {} };
+    window.Chart.defaults = { font: {}, animation: {}, transitions: {}, plugins: { tooltip: {}, legend: { labels: {} } }, elements: { bar: {}, line: {}, point: {} } };
+    window.Chart.__bridged = 0;
+    W._aChartTheme();                          // run the theme initializer
+    const tr = window.Chart.defaults.transitions;
+    ['active', 'resize', 'hide', 'show'].forEach(k => {
+      expect(tr[k] && tr[k].animation && tr[k].animation.duration).toBe(0);
+    });
+    // the initial load animation must be PRESERVED (only interaction transitions are disabled)
+    expect(window.Chart.defaults.animation.duration).toBe(600);
+  });
+});
+
+/* ── Round 16: cross-user notification delivery (RLS n_u only allows self/super) ── */
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+describe('r16 - foreign notifications use plain INSERT (not upsert) so RLS n_u never blocks delivery', () => {
+  const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'supabase.js'), 'utf8');
+  it('the foreign-notification branch inserts (never upserts with ignoreDuplicates)', () => {
+    // isolate the notifications push IIFE
+    const i = src.indexOf('_nfSent');
+    expect(i).toBeGreaterThan(-1);                                   // the fix marker exists
+    const region = src.slice(i - 400, i + 400);
+    expect(region).toContain("sb.from('notifications').insert(");    // foreign rows go through plain insert
+    expect(/foreign[\s\S]{0,200}ignoreDuplicates/.test(region)).toBe(false); // old broken upsert path gone
+  });
+  it("still upserts the sender's OWN notifications (read-flag sync preserved)", () => {
+    const i = src.indexOf('const mine=DB.notifications.filter');
+    expect(i).toBeGreaterThan(-1);
+    expect(src.slice(i, i + 200)).toContain("_safeUp('notifications'");
+  });
+});
+
+/* ── Round 17: access changes reach OPEN sessions live (no reload) ── */
+describe('r17 - live access propagation', () => {
+  const sbSrc = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'supabase.js'), 'utf8');
+  const acSrc = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'pages', 'accesscontrol.js'), 'utf8');
+  it('realtime subscribes to role_profiles changes with a TOAST-safe refetch fallback', () => {
+    expect(sbSrc).toContain("table:'workspace_settings',filter:'key=eq.role_profiles'");
+    expect(sbSrc).toContain('_refreshMyAccess');
+  });
+  it("an incoming kind='access' notification triggers the access refetch", () => {
+    const i = sbSrc.indexOf("if(r.kind==='access')");
+    expect(i).toBeGreaterThan(-1);
+    expect(sbSrc.slice(i, i + 160)).toContain('_refreshMyAccess()');
+  });
+  it('_refreshMyAccess refetches BOTH the user_hrm row and the role bundles', () => {
+    const i = sbSrc.indexOf('async function _refreshMyAccess');
+    expect(i).toBeGreaterThan(-1);
+    const body = sbSrc.slice(i, i + 900);
+    expect(body).toContain("from('user_hrm')");
+    expect(body).toContain("eq('key','role_profiles')");
+    expect(body).toContain('_ensureHrm');
+  });
+  it("_acPushHrm pings the target user with a kind='access' notification (deduped)", () => {
+    const i = acSrc.indexOf('function _acPushHrm');
+    const body = acSrc.slice(i, i + 1400);
+    expect(body).toContain("kind:'access'");
+    expect(body).toContain('_acNtfAt');            // 10s per-target dedupe
+    expect(body).toContain('u.id!==S.uid');        // never ping yourself
+  });
+});
+
+/* ── Round 18: Inbox defaults to the Alerts sub-tab ── */
+describe('r18 - inbox hub lands on Alerts', () => {
+  it("_hubHome('inbox') is the notifications (Alerts) route, even for approvers", () => {
+    W.S.uid = 'sa1';                                  // super admin CAN view approvals…
+    expect(W._hubHome('inbox')).toBe('notifications'); // …but Alerts still comes first
+  });
+});

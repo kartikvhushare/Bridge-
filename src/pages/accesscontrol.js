@@ -183,7 +183,24 @@ function _acPushProfile(u){
    via the DEBOUNCED background batch, so a quick reload (or one failed push) silently reverted
    the change at next login. Access changes now push the user_hrm row IMMEDIATELY. */
 function _acPushHrm(u){
-  sb.from('user_hrm').upsert({user_id:u.id,hrm:_hrmStrip(u.hrm),updated_at:new Date().toISOString()},{onConflict:'user_id'}).then(({error})=>{if(error)_syncErr('access change (hrm)')(error);}).catch(_syncErr('access change (hrm)'));
+  sb.from('user_hrm').upsert({user_id:u.id,hrm:_hrmStrip(u.hrm),updated_at:new Date().toISOString()},{onConflict:'user_id'}).then(({error})=>{
+    if(error){_syncErr('access change (hrm)')(error);return;}
+    /* R17 (owner report: "I removed the permission but he can still use it"): a target user's OPEN
+       session kept the old permissions until their next reload. Realtime on user_hrm itself proved
+       unreliable (the RLS check drops those events), so we ride the PROVEN notifications channel:
+       tell the target "your access changed" — their client's realtime listener sees kind='access',
+       refetches user_hrm + role_profiles, re-renders, and the stale controls vanish within ~1s.
+       Deduped per target (10s) so a burst of edits produces one ping. */
+    try{
+      if(u.id!==S.uid){
+        window._acNtfAt=window._acNtfAt||{};const now=Date.now();
+        if(!window._acNtfAt[u.id]||now-window._acNtfAt[u.id]>10000){
+          window._acNtfAt[u.id]=now;
+          sb.from('notifications').insert({id:uid('n'),user_id:u.id,text:'\ud83d\udd10 Your access or HR settings were just updated by an admin',read:false,kind:'access',created_at:new Date().toISOString()}).then(()=>{}).catch(()=>{});
+        }
+      }
+    }catch(e){}
+  }).catch(_syncErr('access change (hrm)'));
 }
 App._acOvAdd=(area)=>{
   if(!_acGuard()||!_ACD)return;

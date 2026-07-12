@@ -1,147 +1,79 @@
-# Evarca — Phase 3 (Vite project split) + Phase 4 (product changes)
+# Evarca HRM
 
-Source of truth for this split: `bridge-latest.html`, md5 `a9e5b9b6…`, 11,781 lines. Identical behavior, zero visual change.
-
-## Phase 4 changes (July 2026)
-
-1. **Rename Bridge → Evarca** — every user-visible string, logo letter, email template, CSV filename prefix, page title, package name. Internal localStorage keys (`shiftly_v3`, `bridge_login_rl`, `bridge_how_*`, `bridge_setup_dismissed`, `bridge_triggers_*`) are intentionally UNCHANGED so existing sessions/data survive.
-2. **Referential-integrity delete guards** — `guardDelete(type,id,label)` + `_refLinks` in `src/ui/helpers.js`. Deleting a user / department / location / checklist / question / folder / OKR / role / letter template is blocked while live records still point at it; a modal names each link and how to clear it. History (past submissions, decided approvals) never blocks — Disable retires a person.
-3. **Per-feature in-app notification switches** — `hrmConfig.inappKinds` mirrors `emailKinds`; chips in HR Config → Alerts. Gated in `notify()`, `_hrmNotify()` and every direct `DB.notifications.unshift` page site via `_inappOn(kind)` (`src/engine/triggers.js`).
-4. **Settings → Workflow tab removed** — its 4 toggles were written but never read anywhere (verified by grep); approval/edit behavior is governed per-checklist and by Access Control. Stale `S.filters.stab==='workflow'` falls back to In-App.
-5. **WFH eligibility toggle** — `u.hrm.wfhEligible` (default: NOT eligible), set in the user editor. Gates the "Mark today WFH" button (mychecklists) and `App._togWFH` (dashboard).
-6. **Assets on the user record** — `u.hrm.assets[]` (name, category, serial, assigned date, notes, status Assigned/Returned + return date), managed in the user editor (`_assetsSection`, users.js), read-only "Assets assigned to me" card on Profile. Rides the existing `user_hrm` sync; an unreturned asset blocks user deletion.
-7. **Mobile Wave 2** (styles.css) — 16px form controls on ≤767px (kills iOS focus-zoom), modal 3-column field grids collapse to 2, canvas/img overflow guard, ≥44px modal buttons, review-table scroll wrapper.
-
-Verified: all previous tests green (72) + new `tests/smoke.routes.test.js` (50: renders all 39 routes as Super Admin + fingerprints each change) = **122 tests**, `vite build` clean, built bundle carries zero "Bridge" strings.
-
-## Phase 4 — round 2 (July 2026)
-
-1. **Clock-out enforces the geofence** exactly like clock-in (strict + Retry). The old lenient H4 gate is gone; a genuinely stranded shift still auto-closes at midnight with capped, flagged hours.
-2. **Worked hours display as "7h 52m"** (`fmtH`) on the attendance table, HRM analytics stat + table, and overtime rows. Raw decimals stay in payroll math, chart data and CSV exports.
-3. **Full persistence** — nothing user-editable lives only in localStorage anymore. Migration `phase4_full_persistence_and_drafts` added `hrm_config.extras` (jsonb: emailKinds, inappKinds, branding, alerts, flowTemplates, letterTemplates — pushed in `_sync`, merged in `_applyHrmConfig`), an `announcements` table (targeted writes at post/delete, read-all RLS), and HR notif prefs now ride `workspace_settings` (key `hrm_notif_prefs`). All were previously local-only and reverted on cache clear.
-4. **Server-backed drafts** — new `drafts` table (RLS: owner only). Checklist runs get a "Save draft" button (per checklist+date, auto-restores into RUN on any device, "Draft" badge on the card); OKR check-in modal gets "Save draft" (per OKR, restores with a hint). Submitting deletes the draft row. Photos never ride drafts (same stripping rule as saveDB).
-5. **Hierarchy** — compact by default (depth ≥1 collapsed; Expand-all / Collapse-all / Center-on-me in the header). Clicking a card opens a directory-safe profile popup: email, phone, department, manager, direct reports, office, joined + tenure, birthday, work week — deliberately excludes salary, IBAN, assets, documents and permissions.
-
-Also: `tests/_env.js` chain stub now returns chainable thenables (`.then().catch()` paths like `_pushRow`/`log` no longer throw in tests). Suite: **130 tests green**, build clean.
-
-## Phase 4 — round 3 (July 2026)
-
-1. **Midnight auto clock-out** — a forgotten clock-out now closes AT midnight from any open tab (self-arming timer in main.js), not only on the next login; no geofence involved. Status label is now **“Didn’t clock out”** (ATT_LABEL.AutoClosed) with friendly flag chips (FLAG_LABEL). `_runAutoClose` only touches rows the session can persist (own rows / attendance-edit) so cross-device state can’t flip-flop.
-2. **Dashboard drill-downs** — `App._dashDrill(kind)` (dashboard.js): every count card opens the LIST behind its number (pulse strip, admin tiles, stat cards, who’s-in cells, Company-analytics hero cards). Lists are permission-scoped via the same resolver the target page uses; each modal links to the full page.
-3. **Professional charts** — global Chart.js theme (dark rounded tooltips, circular legend markers, ease-out animation, consistent palette, gradient line fills, capped bar thickness). New visuals: Company analytics gains *Submissions by weekday* (gradient vertical bars) and Tickets became a classic pie; HRM analytics gains *Attendance trend* (3-series line) and *Leave mix* (doughnut). All charts respect the existing filter bars (status/dept/member/location + date range on Company; user/dept/location/type + range on HRM).
-
-Suite: **134 tests green**, build clean.
-
-## Phase 4 — round 4: OKR rework (July 2026, final)
-
-1. **Independent levels** — `okrProgress()` no longer rolls children up: every node (L0/L1/L2) is measured ONLY from its own check-ins vs its own start→target. Sub-objectives render underneath as structure/information only. A parent with no own inputs shows "No data" until its owner checks in.
-2. **The graph** (in the Progress & Updates popup) shows **Actual** (the recorded inputs, connected, with visible points) vs **Ideal** (straight start-value → target pace across the window). Window = periodStart→periodEnd (else first input→today); every single date of the window is a label — a 1st→31st period shows 1,2,3…31. Stats above the chart: Start · Current · Target · Status, with a **Progress %** chip pinned to the chart's top-right.
-3. **Popups everywhere** — Rules & Target (#8), Progress & Updates (#9) and the per-level **Logs** (#6) each open in a modal from buttons on the card. OKR activity no longer appears on the Audit page. The card itself shows **Current → Target** (#7).
-4. **Inputs are editable & deletable** (#5) — edit/trash buttons on every feed row; deletes are logged. Rights: **level owner + upper-level owner + roles granted `okr.editEntries`** (same rule enforced in RLS via the new `_okr_owner_or_up()` SQL helper, migration `okr_independent_levels_permissions`).
-5. **Granular permissions** (#10) — the OKR area in Access Control gains `editEntries` ("Edit / delete inputs"), `changeOwner`, `deleteLogs` toggles (seed version bumped to v7). Relationship rights always apply on top: level owner / upper-level owner. Owner reassignment on an existing node is gated in the editor AND in `_okrSave` AND in RLS.
-
-Suite: **144 tests green**, build clean, fresh dist.
-
-## Phase 4 — round 5: polish & fixes (July 2026)
-
-1. **Compact mobile pass (Wave 3)** — `.hscroll` one-line scrolling strips for every tab bar (hub strip, Visuals/Details, ui-tabs never stack); ≤767px: smaller h1, tighter card padding, compact table cells (7px/12px), 36px buttons.
-2. **Compact OKR page** — bulky cards → slim one-line rows (chevron · L-chip · title · bar · % · current→target · status · ⋯). Row click opens Progress & Updates; ⋯ opens the action menu (update / rules / progress / logs / add sub / edit / delete). Children collapsed by default; hundreds of OKRs now fit.
-3. **Demo data seeded** (owner request — graphs were empty from sparse data): ~200 attendance rows, ~200 submissions (mixed statuses over 30 days), 6 leave requests, 6 tickets, 2 demo OKRs with 8 check-ins. ALL tagged: ids `demo…` / attendance `note='demo'`. Wipe with: `DELETE FROM attendance WHERE note='demo'; DELETE FROM submissions WHERE id LIKE 'demo_%'; DELETE FROM leave_requests WHERE id LIKE 'demo_%'; DELETE FROM tickets WHERE id LIKE 'demo_%'; DELETE FROM okr_checkins WHERE id LIKE 'demo_%'; DELETE FROM okrs WHERE id LIKE 'demo_%';`
-4. **In-App tab = every event** — the HR in-app switches (leave ×3, late, didn't-clock-out, WFH, announcements, review opened/results) moved from the HR Email tab into Settings → In-App; HR Email tab is email-only now.
-5. **BUGFIX: invisible locations** — the city-scope filter was applied to admins, so an admin with old city chips couldn't see locations created afterwards (including their own). Admins now always see all locations; non-admin creators auto-gain their new location in their city scope.
-6. **Deep check** — new smoke section renders every route as a basic employee (catches role-scoped crashes).
-
-Suite: **148 tests green**, build clean, fresh dist.
-
-## Phase 4 — round 6: delete options on every feed (July 2026)
-
-- **Alerts (notifications)** — ✕ on every row + a confirmed **Clear all** (own rows only; server rows deleted too — RLS `n_d` already allowed it).
-- **Approvals inbox** — trash button per record: decided submission/edit approvals deletable (requester / approver / admin, logged); leave: Pending → **Cancel request** (existing `cancelLeave` releases the reserved balance), Rejected/Cancelled → delete record, **Approved never** (balances already applied); overtime: Rejected → remove (existing handler). Documents decide/delete in Documents.
-- **Feedback** — Delete on each card (sender / HR / admin, logged, removes for both sides).
-- Deliberately NOT deletable: the Audit log (tamper evidence) and approved leave/overtime records (payroll/balance integrity).
-
-Suite: **151 tests green**, build clean, fresh dist.
-
-## Phase 4 — round 7: sync integrity, one-click approvals, egress & security (July 2026)
-
-1. **One-click approvals** — `decideLeave` now loops consecutive stages when the SAME decider is valid for the next stage (Super Admin covering manager+HR no longer clicks Approve twice). Different-person stages still hand off with notifications. (Root cause of the owner's report: demo leave rows had `flow:[]` → fell back to the 2-stage chain; pending demo leave was also removed from the DB and remaining demo rows got a proper 1-stage flow.)
-2. **Resurrection tombstones (R7)** — deleted alerts / approval records / leave records can no longer come back after logout/login: `notifications_deleted` / `approvals_deleted` / `leaveRequests_deleted` tombstones (capped 800) filter every `_apply*` AND every `_sync` re-push.
-3. **Egress "cold archive"** — boot now fetches only a **7-day hot window** for the heavy tables (submissions, notifications, attendance); audit_logs and okr_logs don't load at boot at all. Opening the tab that needs more triggers `_lazyCold` (once per session, sync bar shown, merge-safe): Audit → 300 audit rows, OKR → 400 logs, Dashboard/Analytics → 30-day submissions, Attendance/HRM-Analytics/Payroll → 90-day attendance, Alerts → "Load older" button (90-day notifications).
-4. **Security headers** (vercel.json): X-Frame-Options DENY + CSP frame-ancestors 'none' (no clickjacking), nosniff, strict Referrer-Policy, HSTS, Permissions-Policy (geolocation/camera self-only — needed for geofence + check-in photos). No script CSP (Tailwind CDN + inline handlers are load-bearing).
-
-Suite: **156 tests green**, build clean, fresh dist.
-
-## Phase 4 — round 8: small-bug sweep (July 2026)
-
-1. **Office ≠ geofence** — a person's office is just their workplace. Clock-in/out only checks location when that office actually has an ENABLED fence; no fence configured → free clocking (geo:null). Field renamed "Office location (where they work)" with a hint.
-2. **Approved leave deletable** — approvers see "Delete & reverse" on Approved leave in the inbox: restores the used balance days, clears the written leave days from attendance (a day with a real clock-in just loses its leave marking), tombstoned + fully logged. Rejected/Cancelled stay deletable by requester/approver; Pending still cancels.
-3. **Attendance log mobile view** — table is desktop-only; phones get a card list (date + status chip, in→out · hours, flag chips).
-4. **Hierarchy popup** — phone removed; Office always shown ('—' when unset).
-5. **Super admins count like everyone in reporting** — new `_todayBuckets()` is the single source for the who's-in widget AND its drill lists (fixes "In office 0 but the drill shows people"); admin-exclusion removed from: who's-in, dashboard drills, Company-analytics hero, absentee report, event triggers, org-wide team snapshot. (Deliberately still excluded from payroll runs / roster people pickers — those aren't reports.)
-6. **Toasts wrap on mobile** — max-width 92vw, multi-line safe.
-
-Suite: **160 tests green**, build clean, fresh dist.
-
-## Phase 4 — round 9: clock-out & empty-graphs investigation (July 2026)
-
-1. **Dashboard vs Attendance clock-out** — verified both tabs embed the SAME `_clockWidget()` → same `App.clockOut` → same geofence rule (fence checked only when an enabled fence exists — round 8). The reported difference came from running an older deployed build.
-2. **Empty graphs** — proved the chart layer is sound: new `r9` smoke tests inject real page HTML into jsdom, stub `Chart`, and EXECUTE `_drawAnalyticsCharts/_drawHrmCharts/_drawOKRCharts/_drawHomeCharts` — any ReferenceError/TypeError in a config now fails CI instead of being swallowed by `_paintCharts`'s try{} (which used to blank every canvas silently). The OKR test asserts 2 datasets (Ideal+Actual) and 31 day labels.
-3. **Visible CDN failure** — if Chart.js never arrives from cdn.jsdelivr.net (network/ad-blocker), every chart box now shows "Charts library didn't load — check the connection/ad-blocker, then refresh" instead of silent blank space. `_paintCharts` retries ~3s first and logs to console instead of swallowing errors.
-
-Suite: **164 tests green**, build clean, fresh dist.
-
-**R9-FIX (verified on the live site):** a deep link / refresh landed on a route without `App.go`, so the per-tab cold loads never fired — analytics then showed only the 7-day hot window (and looked "empty-ish"). Boot now calls `_lazyForRoute(S.route)` after login. Confirmed live: firing the load took DB.submissions 49 → 201 and filled the full-month trend; on-time corrected 6% → 29%.
-
-**R15 — Access Control scopes now actually bind SubAdmins (owner report: "Lee has access to shift but only for him but still he can see everything"):** the resolver was always right — the leak was page-level `isSubAdmin()` bypasses that skipped it. The rule now: only the SUPER ADMIN is universal; everyone else (SubAdmins included) gets exactly what their role's toggles and scopes say. Roles left at scope "Everyone" behave exactly as before (full parity — Super Admins stay visible in the roster per R14). Rebound to the resolver: Shifts roster (scheduling scope — the reported bug), Checklists builder (list + assignee candidates + edit/duplicate/delete buttons follow the checklists scope & edit toggle), Checklists all-results (whose results you see follows the checklists scope), Team page (org-wide only when employees scope = Everyone), Questions (see/manage-all needs questions→Manage), OKR node edit & change-owner (okr toggles decide; level owners / upper-level owners keep built-in rights), My-Day leave-approve hint (needs leave→Approve). Intentionally unchanged: OKR *visibility* keeps the R4 owner-tree model, mobile nav grouping is cosmetic. 3 new regression tests emulate Lee (scope self → roster shows only him; scope everyone → full roster incl Super Admin; checklists self → only own/assigned). Suite: 174 tests green.
-
-**R14 — roster visibility + access-change reliability (owner reports):** (1) Super Admins now appear in the shift roster (the old `role!=='Admin'` exclusion is gone) — you can roster yourself and managers see you. (2) "I update the access and it's not getting updated": permission overrides, the HR flag, role assignments — all live on `u.hrm`, which previously reached the server only via the DEBOUNCED background batch; a quick reload (or one silent failed push) reverted the change at next login. New `_acPushHrm()` pushes the user_hrm row IMMEDIATELY on: Access Control save + role assign, the roster off-days editor, the user editor save, and the asset add/return/remove handlers.
-
-**R13 — Shifts off-days integration (owner request):** the "Off / on leave today" strip is removed. Off-days now show as OFF cells directly in the roster grid, driven by the ONE source of truth (`u.hrm.schedule.offDays` — the same field the user editor sets). Clicking an OFF cell or a person's name opens the off-days editor (day chips, same pattern as the user modal); saving writes that field, so the change applies everywhere at once — user profile, attendance calendar, absentee/report logic, who's-in buckets, My-attendance card and the roster — and syncs via user_hrm like any HR edit. Editing off-days in the user tab reflects in the roster automatically (same field). Gate: employees.edit or scheduling.manage. An "Add a shift anyway" shortcut inside the editor covers deliberate off-day rostering.
-
-**R12 — People search + better Ticket filters (owner request):** the People page search bar now shows on ALL screen sizes (was mobile-only) with focus-preserving typing; Tickets gained a proper filter bar — search (title/description/people), assignee dropdown, priority (incl. Critical), sort (newest/oldest/by priority), Clear button, one-line scrolling status pills with a result count, and the three stat cards are tap-to-filter. Also hardened `homeDash` against a transient unresolvable session user (caught by the test harness as an unhandled exception).
-
-**R11 — compact leave request rows (owner request):** the Leave page's "My requests" cards (huge, with approval progress always expanded) became one-line rows — type · dates · days · status chip · actions — that expand on tap for reason + approval progress. Delete sits on the row: Rejected/Cancelled → requester or approver; Approved → approver only (Delete & reverse); Pending keeps the inline Cancel (✕). Year groups still fold. Hundreds of requests now fit on one screen.
-
-**R10 — "My attendance" on My Day (owner request):** the two personal completion charts ("My last 30 days" + "Completions trend") were confusing — replaced with ONE attendance card: a day-breakdown doughnut (on-time / late / half-day / leave / absent / didn't-clock-out, center = present/workdays) + counter chips for everything (Present, Late in, Early out, Half days, On leave, Absent, Didn't clock out, WFH days, total Worked hours) + a FROM–TO range picker defaulting to the CURRENT MONTH ("This month" reset button when changed).
-
-**R10-FIX — THE "charts show for 1 sec then go empty" bug (root-caused live in Chrome):** the round-4 chart theme REPLACED Chart.js v4's nested defaults objects (`Chart.defaults.plugins.tooltip = {...spread}` etc.). v4 defaults nodes carry non-enumerable resolver descriptors; replacing them broke tooltip/hover animation resolution → `Uncaught TypeError: this._fn is not a function` inside chart.js's RAF loop → the SHARED animator died → every chart froze/blanked. Triggered by HOVERING a chart (which automated tests never did — the live console showed 4 uncaught exceptions from cdn.jsdelivr.net/chart.js). Fix: mutate defaults property-by-property, never replace nodes; verified stable on the live site with a hot-patch before shipping.
+Vite + vanilla-JS single-page HRM app (formerly "Bridge"), deployed on Vercel at https://bridgehrm.vercel.app, backed by Supabase (Postgres + Auth + Realtime, project `emzgwkvkgojcaqngkatw`). This README documents how the codebase works and every change round, newest first.
 
 ## Commands
 
-```
-npm install
-npm run dev        # local dev server
-npm run test       # vitest — 3 harnesses, 46 tests / 61 assertions
-npm run build      # production build → dist/
-npm run preview    # serve the production build locally
-```
+- `npm install` — install dependencies
+- `npx vite build` — production build into `dist/`
+- `npx vitest run` — run the full test suite (`tests/`)
+- `npx vite` — local dev server
 
 ## Deploy (Vercel)
 
-Framework preset: **Vite**. Push/upload this whole folder (GitHub web upload works — Vercel auto-builds). `vercel.json` here is an empty placeholder — if your previous deployment had a real one, restore it over this file.
+Upload this folder to the GitHub repo; Vercel builds and deploys automatically. `vercel.json` sets the security headers (X-Frame-Options DENY, CSP frame-ancestors 'none', nosniff, HSTS, Referrer-Policy, Permissions-Policy).
+
+**Important:** browser tabs that are already open keep running the OLD bundle until they do a full refresh (Cmd/Ctrl+Shift+R). Always hard-refresh after a deploy before judging a fix.
 
 ## How the split works (read before editing)
 
-The original app was ONE classic `<script>` — every function and variable was a global. The split preserves that world:
+The app is classic-script style split into modules under `src/` (engine/, pages/, ui/). Every module window-attaches its top-level functions at the end of the file (`window.foo=foo`); cross-file references resolve via `window` at call time. **Rule: any new top-level function a page needs must be added to that file's window-attach block.**
 
-- Each module is a **verbatim cut** of the original statements (proven byte-identical by the splitter, `work/split-report.txt`). Comments travel with the statement that follows them.
-- At the end of every module, an auto-generated block does `window.foo=foo;` for each declaration. Cross-file references and inline `onclick="App.x()"` handlers resolve through `window`, exactly as before. **When you add a new top-level function a page needs, add it to that file's window-attach block.**
-- 22 top-level `let`s that get **reassigned** (e.g. `DB`, `CLD`, `RUN`, `_QED`, `_AF…`) were converted to `window.X = init;` at the declaration site — required so reassignment in one file is seen by all others. These are the ONLY statements that differ from the original (list in `work/split-report.txt`).
-- `src/main.js` imports every module in a verified execution order, then runs the boot block (moved from mid-file; in the original, function hoisting made its position irrelevant). **Don't reorder the imports** without re-checking top-level dependencies.
-- `index.html` keeps the original head verbatim: Tailwind CDN + config, fonts, supabase-js and Chart.js as classic scripts (they load before the module bundle by spec). Both original `<style>` blocks live in `src/styles.css` (`#polish` appended, cascade order preserved).
+Key modules: `src/perms.js` (permission resolver: `can(area,action)`, `scopeOf(area)`, `scopeFilter(area)` → none/self/team/department/location/everyone; roles live in `DB.roleProfiles`, per-user overrides in `u.hrm.perms` beat roles; only the Super Admin is universal), `src/supabase.js` (boot loader `loadFromSB` with 7/30/90-day egress windows, debounced 1.5s `_sync()` batch, targeted `_pushRow`/`_delRow` writes, `_lazyLoad`/`_lazyCold` per-tab loaders, tombstone arrays `*_deleted` against resurrection, realtime channel), `src/engine/hrm.js` (attendance/geofence/auto-close), `src/engine/okr.js` (independent-level OKRs).
 
-## Layout vs the plan
+Charts: Chart.js v4 from CDN. **NEVER replace `Chart.defaults` nested objects** — mutate property-by-property only (see R10/R16). Theme lives in `src/ui/charts.js`.
 
-As per PHASE3_PLAN, plus a few files the code's real shape required: `engine/hrm.js` (leave/attendance/accrual/geofence engine), `pages/teamview.js`, `pages/profile.js`, `pages/notifications.js`, `pages/announcements.js`, `pages/login.js`. Supabase mappers scattered through the HRM block (`_mFlow…_delRow`, `_mSv…_svARow`, `queueEmail`) were gathered into `src/supabase.js` per the plan.
+## Change rounds (newest first)
 
-## Verification performed
+**R18 — Inbox lands on Alerts (owner request):** clicking Inbox used to open the Approvals sub-tab for anyone with approvals access; the Alerts (notifications) sub-tab is now first, so Inbox defaults to Alerts for everyone and the pill order matches. Suite: 182 tests green.
 
-- `npm run build` clean; built bundle boots to the login screen in jsdom with **zero console errors** (Supabase stubbed).
-- Route sweep: all **31 routes** render clean as a seeded Super Admin.
-- Tests: perms 26 asserts · OKR 20 · payroll 15 — all green.
-- Traps honored: localStorage keys (`shiftly_v3`, `bridge_login_rl`, …) byte-identical; `_seedRoleProfiles` `_v:'5'` untouched; function declarations kept as declarations; no template strings were added or edited (`esc()` coverage unchanged).
-- Known pre-existing quirk preserved as-is: `taskName` is read undeclared inside the feedback-push path (original line 8113) — it would throw there in the original too if that path ran with no surrounding declaration.
+**R17 — access changes now reach OPEN sessions live (owner report: "I removed manage but Lee can still edit his own shift"):** the change WAS saved (R14) and a fresh login enforced it — but a session that was already open kept the old permissions in memory until its next reload, so the target user kept seeing (and clicking) controls their role no longer grants. (The server still rejected such writes via RLS, so no data was at risk — but the UI lied.) Fix, verified live piece by piece: (1) ROLE edits — the client subscribes to `workspace_settings` realtime (key `role_profiles`; table added to the `supabase_realtime` publication by migration `r17_realtime_access_propagation`). The big jsonb value is TOASTed, so a payload can arrive without it — the handler refetches in that case. (2) PER-USER edits (role assignment, overrides, HR settings) — realtime on `user_hrm` itself proved unreliable (its RLS check drops events), so `_acPushHrm` also sends the target a `kind='access'` notification ("🔐 Your access or HR settings were just updated by an admin", deduped 10s per target); the notifications realtime listener sees it, calls the new `_refreshMyAccess()` (refetch own user_hrm row + role bundles), re-renders and toasts. Measured live: the ping reached an open session in <2s. Net effect: revoke "manage" and the target's Shifts page drops the +/edit cells within about a second — no reload. Suite: 181 tests green.
+
+**R16 — cross-user in-app notifications were silently blocked by RLS (found in deep live testing):** posting an announcement, approving someone's leave, assigning a checklist/ticket — anything that creates a notification for ANOTHER user — was dropped for every sender below Super Admin. Root cause: `_sync` pushed those "foreign" rows with `upsert({ignoreDuplicates:true})`, and PostgREST evaluates the notifications UPDATE policy (`n_u`) on ANY upsert; `n_u` only allows `user_id=self OR is_super`, so the sender got a 403 and the recipient never saw the bell. (feedback and tickets are NOT affected — their UPDATE policies include a creator clause; notifications' does not.) Fix: push foreign notifications with a plain `.insert()` (INSERT policy `n_i` is open) and remember delivered ids in-session so re-pushes don't duplicate-key. Verified live: an announcement from SubAdmin Lee delivered 0 rows before the fix, all 25 after.
+
+**R16 — killed the real "graphs go empty" cause:** hovering ANY chart threw 8× `Uncaught TypeError: this._fn is not a function` from Chart.js v4 (the latent cause of the recurring "shows for a second then empty" reports). R10 stopped the visible blanking, but the per-interaction HOVER transition ('active') still spun up a broken interpolation. Fix in the chart theme: `Chart.defaults.transitions.{active,resize,hide,show}.animation.duration=0` — disables ONLY the interaction transitions; the 600ms load animation stays. Verified live: hovering every chart type now produces ZERO console errors.
+
+**R15 — Access Control scopes actually bind SubAdmins (owner report: "Lee has access to shift but only for him but still he can see everything"):** the resolver was always right — the leak was page-level `isSubAdmin()` bypasses that skipped it. Rule now: only the SUPER ADMIN is universal; everyone else gets exactly what their role's toggles and scopes say. Roles left at scope "Everyone" behave exactly as before (Super Admins stay visible in the roster per R14). Rebound to the resolver: Shifts roster (scheduling scope — the reported bug), Checklists builder (list + assignee candidates + edit/duplicate/delete buttons follow the checklists scope & edit toggle), Checklists all-results (whose results you see follows the checklists scope), Team page (org-wide only when employees scope = Everyone), Questions (see/manage-all needs questions→Manage), OKR node edit & change-owner (okr toggles decide; level owners / upper-level owners keep built-in rights), My-Day leave-approve hint (needs leave→Approve). Intentionally unchanged: OKR *visibility* keeps the R4 owner-tree model; mobile nav grouping is cosmetic. 3 regression tests emulate the Lee case.
+
+**R14 — roster visibility + access-change reliability (owner reports):** (1) Super Admins now appear in the shift roster (the old `role!=='Admin'` exclusion is gone) — you can roster yourself and managers see you. (2) "I update the access and it's not getting updated": permission overrides, the HR flag, role assignments — all live on `u.hrm`, which previously reached the server only via the DEBOUNCED background batch; a quick reload (or one silent failed push) reverted the change at next login. New `_acPushHrm()` pushes the user_hrm row IMMEDIATELY on: Access Control save + role assign, the roster off-days editor, the user editor save, and the asset add/return/remove handlers.
+
+**R13 — Shifts off-days integration (owner request):** the "Off / on leave today" strip is removed. Off-days show as OFF cells directly in the roster grid, driven by ONE source of truth (`u.hrm.schedule.offDays` — the same field the user editor sets). Clicking an OFF cell or a person's name opens the off-days editor (day chips, same pattern as the user modal); saving writes that field, so the change applies everywhere at once — user profile, attendance calendar, absentee/report logic, who's-in buckets, My-attendance card and the roster — and syncs via user_hrm like any HR edit. Gate: employees.edit or scheduling.manage. An "Add a shift anyway" shortcut covers deliberate off-day rostering.
+
+**R12 — People search + better Ticket filters (owner request):** the People page search bar shows on ALL screen sizes (was mobile-only) with focus-preserving typing; Tickets gained a proper filter bar — search (title/description/people), assignee dropdown, priority (incl. Critical), sort (newest/oldest/by priority), Clear button, one-line scrolling status pills with a result count, and the three stat cards are tap-to-filter. Also hardened `homeDash` against a transient unresolvable session user.
+
+**R11 — compact leave requests with row-level delete (owner request):** leave request cards are one-line rows that expand on tap (`S.filters.lvExp`); decided rows get a delete (✕), pending rows a Cancel. Approved-leave delete goes through the reversal path (see R8).
+
+**R10 — My-Day attendance summary card (owner request, replacing the confusing charts):** a personal "My attendance" card on My Day with a from/to range (defaults to the current month) and counters for On time, Late in, Half day, On leave, Absent, "Didn't clock out", WFH, worked hours — plus a doughnut (`hChartMyAtt`). R10-CRITICAL: the Chart.js theme must MUTATE `Chart.defaults` property-by-property; replacing nested defaults objects (old `{...spread}` code) destroyed v4 resolver descriptors → `this._fn is not a function` on hover → every chart on the page blanked ("shows 1 sec then empty").
+
+**R9 — dashboard clock-out + deep-link data loads:** clock-out from the Dashboard tab works like the Attendance tab (same geofence rules — only where a fence is enabled); R9-FIX (verified live): a deep link / refresh landed on a route without `App.go`, so per-tab cold loads never fired — analytics showed only the 7-day hot window and looked "empty-ish". Boot now calls `_lazyForRoute(S.route)` after login. Confirmed live: firing the load took submissions 49 → 201 and filled the full-month trend; on-time corrected 6% → 29%.
+
+**R8 — geofence decoupled from office + admin-inclusive reporting + approved-leave delete:** office location on the People tab is just "where they work" — geofence applies ONLY where a fence is actually enabled (assigned office + city-access locations with fences). Super Admins count like normal people in reports/roster/"Not in yet". Approved leave can be deleted from Approvals ("Delete & reverse", approvers only): restores the balance, clears leave-marked attendance days, server-deletes, tombstones. Mobile attendance logs render as cards; hierarchy popup shows office location instead of phone; who's-in counts and drill-downs share one bucket source (`_todayBuckets`).
+
+**R7 — sync integrity + security + egress:** one-click multi-stage approvals (when the same decider is valid for the next stage, the loop advances in a single click — no more "click twice"); deleted records never resurrect (tombstone arrays `*_deleted` filter apply-merges and `_sync` pushes, capped 800); 7-day hot window at boot for the big tables (submissions/notifications/attendance), audit & okr_logs load only on demand (`_lazyCold`: audit/okrlogs/subs30/att90/notif90); security headers in `vercel.json`.
+
+**R6 — delete options on every feed (owner request):** alerts/notifications, approvals (incl. decided), feedback, leave history rows — all deletable, with tombstones so they stay gone.
+
+**R5 — mobile compaction + OKR compact rows + demo data + locations bugfix:** tighter tables/cards/buttons/text and 2-line sub-tabs on mobile; OKR page uses slim collapsed rows with a kebab menu; demo data seeded so every graph has content (tagged `demo…` for later removal); locations created by a non-admin are visible to their creator (admins see all; creators auto-gain new locations in their cities).
+
+**R4 — OKR final rework (owner's 10-point spec):** independent L0/L1/L2 levels — each level measured by its OWN inputs only (`okrProgress(o)=_okrLeafPct(o)`); graph popup shows Start/Current/Target + progress; Actual line (spanGaps) + dashed Ideal line (start→target) across ALL dates of the period (day numbers when ≤37 days); inputs editable/deletable by the level owner or an upper-level owner; per-level logs in a popup (OKRs removed from the Audit page); Rules & Target popup; granular permissions incl. `editEntries`, `changeOwner`, `deleteLogs` (owner-or-upper built-ins always kept). RLS helper `_okr_owner_or_up(okr_id)` on the server.
+
+**R3 — midnight auto clock-out + dashboard drill-downs + professional charts:** anyone who forgot to clock out is auto-clocked-out at midnight (no geolocation), labeled "Didn't clock out"; every dashboard stat card opens a details drill-down modal (`App._dashDrill`); charts got a professional global theme (mixed line/bar/doughnut, filters, consistent palette).
+
+**R2 — clock-out location check; hours as "7h 52m" (not 7.86); FULL DB persistence** (every edit written to Supabase — no cache-only state, no reverts on refresh); **server-backed drafts** for checklists & OKR check-ins (`drafts` table — cross-device, deleted on submit); **compact hierarchy** with expand/collapse and a safe profile popup (name, manager, email, birthday, tenure — NO phone, salary, assets, documents or bank details).
+
+**R1 — the original 7 changes:** rename Bridge → Evarca everywhere (UI, titles, email/notification templates); referential-integrity delete guards on all deletes (a linked record can't be deleted — the guard modal names what still points to it); per-feature in-app notification toggles (like email); Settings "Workflow" tab removed (superseded by Access Control); WFH eligibility toggle on the user tab (default NOT eligible); assets record on the user tab (add/return/remove); whole platform made mobile friendly.
+
+## Permissions model (quick reference)
+
+`PERM_AREAS` in `src/perms.js` is the single source of truth (area → actions, scoped or not). Roles = `DB.roleProfiles` (synced via workspace_settings key `role_profiles`), assigned per user via `u.hrm.roleProfileId`; per-user overrides `u.hrm.perms` beat the role. Resolution: override → role → Super-Admin fallback. Scope values: none/self/team/department/location/everyone ('everyone' hides Super Admins from people lists for non-admin viewers — except the shift roster, R14/R15). Server RLS enforces AREA+ACTION via SQL helpers (`_can`, `_is_elevated`, `_is_super`); scopes are a client-side concept (known limitation — see Verification).
+
+## Verification performed (deep test session, Jul 2026)
+
+- 181 vitest tests green; clean `vite build`; full route sweep (33 routes) as Super Admin, SubAdmin (Lee), Manager, Basic — zero throws; restricted routes redirect to My Day with no data leak.
+- Live on the deployed site: R15 verified (Lee's roster = only Lee); department CRUD incl. delete-guard + tombstone; leave lifecycle end-to-end (create → ONE-click 2-stage approve → balance deducted → "Delete & reverse" restores balance); announcement fan-out (25 recipients); charts hover with zero console errors after R16; access-ping realtime delivery <2s (R17).
+- Known limitation (accepted for now): RLS checks actions, not scopes — a user with scheduling.manage scope 'self' could write another person's shift via the raw API (UI correctly prevents it). Hardening would need scope-aware RLS.
+- Known data note: seeded demo rows are tagged (`note='demo'` / ids `demo_%`) for later removal; leave_types contains a few duplicate names from seeding.
 
 ## Final check against the live database
 
-The one thing the sandbox could not do: click through against real Supabase. After deploying a preview, do one loop — login → clock in → checklist → approvals → payroll page — before promoting.
+Supabase project `emzgwkvkgojcaqngkatw`: RLS enabled on all public tables; `supabase_realtime` publication includes notifications, user_hrm, workspace_settings (R17). Migrations applied over the rounds include `phase4_full_persistence_and_drafts`, `okr_independent_levels_permissions`, `r17_realtime_access_propagation`.

@@ -17,6 +17,20 @@ function _aChartTheme(){
       Chart.defaults.font.family="'Hanken Grotesk',system-ui,sans-serif";
       Chart.defaults.font.weight='600';Chart.defaults.color='#787D89';
       Chart.defaults.animation.duration=600;
+      // R16 CRITICAL (verified live): the initial 600ms load animation is safe, but Chart.js v4's
+      // per-interaction HOVER transitions ('active' etc.) still spun up an interpolation whose
+      // resolved descriptor threw "Uncaught TypeError: this._fn is not a function" on every hover —
+      // 8 uncaught exceptions per hover in the console, and the latent cause of the intermittent
+      // "graph shows for a second then goes empty" reports. Disabling ONLY the interaction-transition
+      // durations (not the load animation) removes the throw entirely with no visual change: hover
+      // highlight/offset is simply instant. Confirmed on the live site: hovering every chart type
+      // afterwards produced ZERO console errors.
+      Chart.defaults.transitions=Chart.defaults.transitions||{};
+      ['active','resize','hide','show'].forEach(k=>{
+        Chart.defaults.transitions[k]=Chart.defaults.transitions[k]||{};
+        Chart.defaults.transitions[k].animation=Chart.defaults.transitions[k].animation||{};
+        Chart.defaults.transitions[k].animation.duration=0;
+      });
       const tt=Chart.defaults.plugins.tooltip;
       tt.backgroundColor='rgba(21,23,28,0.94)';tt.titleColor='#fff';tt.bodyColor='#D7DBE2';
       tt.titleFont={size:12,weight:'800'};tt.bodyFont={size:11.5,weight:'600'};
