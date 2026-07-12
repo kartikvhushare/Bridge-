@@ -39,12 +39,22 @@ function ticketsPage(){
   const f=S.filters;
   const statusFilter=f.tkStatus||'';
   const priorityFilter=f.tkPriority||'';
+  // R12 (owner request: better filters) — search + assignee + sort on top of status/priority.
+  const base=tickets.slice(); // pre-filter snapshot: drives the assignee options + stat cards
+  const q=(f.tkQ||'').toLowerCase();
+  if(q)tickets=tickets.filter(t=>((t.title||'')+' '+(t.description||'')+' '+(uById(t.assignedTo)?fullName(uById(t.assignedTo)):'')+' '+(uById(t.submitterId)?fullName(uById(t.submitterId)):'')).toLowerCase().includes(q));
   if(statusFilter)tickets=tickets.filter(t=>t.status===statusFilter);
   if(priorityFilter)tickets=tickets.filter(t=>t.priority===priorityFilter);
+  if(f.tkAssignee)tickets=tickets.filter(t=>t.assignedTo===f.tkAssignee);
+  const _priRank={Critical:0,High:1,Medium:2,Low:3};
+  const _tkTime=t=>t.createdAt||t.date||'';
+  if(f.tkSort==='old')tickets.sort((a,b)=>String(_tkTime(a)).localeCompare(String(_tkTime(b))));
+  else if(f.tkSort==='pri')tickets.sort((a,b)=>((_priRank[a.priority]??9)-(_priRank[b.priority]??9))||String(_tkTime(b)).localeCompare(String(_tkTime(a))));
+  else tickets.sort((a,b)=>String(_tkTime(b)).localeCompare(String(_tkTime(a)))); // newest first (default)
 
-  const open=tickets.filter(t=>t.status==='Open').length;
-  const inprog=tickets.filter(t=>t.status==='In Progress').length;
-  const resolved=tickets.filter(t=>t.status==='Resolved'||t.status==='Closed').length;
+  const open=base.filter(t=>t.status==='Open').length;
+  const inprog=base.filter(t=>t.status==='In Progress').length;
+  const resolved=base.filter(t=>t.status==='Resolved'||t.status==='Closed').length;
 
   const priClr={High:'#DC2626',Medium:'#F59E0B',Low:'#6B7280',Critical:'#7C3AED'};
   const priBg={High:'#FEF2F2',Medium:'#FFFBEB',Low:'#F9FAFB',Critical:'#F5F3FF'};
@@ -97,18 +107,30 @@ function ticketsPage(){
 
   return'<div class="fade">'+
     hdr('Tickets','Raise an issue or track escalation tickets',can('tickets','create')?btnP('New ticket','App.newTicket()','plus'):'')+
-    // Stats row
+    // Stats row — tap a card to filter by that status (tap again via Clear)
     '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'+
-      statCard('Open',open,'#F97316')+
-      statCard('In Progress',inprog,'#3B82F6')+
-      statCard('Resolved',resolved,'#0E9F6E')+
+      statCard('Open',open,'#F97316',"App._tkFilter('status','Open')")+
+      statCard('In Progress',inprog,'#3B82F6',"App._tkFilter('status','In Progress')")+
+      statCard('Resolved',resolved,'#0E9F6E',"App._tkFilter('status','Resolved')")+
     '</div>'+
-    // Filters
-    '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">'+
-      ['','Open','In Progress','Resolved','Closed'].map(s=>{const on=statusFilter===s;return`<button type="button" class="ui-tab-pill${on?' on':''}" onclick="App._tkFilter('status','${s}')">${s||'All'}</button>`;}).join('')+
-      '<div style="width:1px;align-self:stretch;background:var(--c-border);margin:0 2px"></div>'+
-      ['','High','Medium','Low'].map(p=>{const on=priorityFilter===p;return`<button type="button" class="ui-tab-pill${on?' on':''}" onclick="App._tkFilter('priority','${p}')">${p||'All priority'}</button>`;}).join('')+
-    '</div>'+
+    // R12 Filters: search · assignee · priority · sort (+ Clear), status pills below (one-line scroll)
+    (()=>{
+      const _selSt='font-size:12.5px;padding:6px 26px 6px 10px;min-height:0;height:34px;width:auto';
+      const _people=[...new Set(base.map(t=>t.assignedTo).filter(Boolean))].map(id=>uById(id)).filter(Boolean).sort((a,b)=>fullName(a).localeCompare(fullName(b)));
+      const _active=!!(f.tkQ||statusFilter||priorityFilter||f.tkAssignee||f.tkSort);
+      return '<div class="ui-card" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;margin-bottom:10px">'+
+        '<div style="position:relative;flex:1;min-width:170px"><span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--c-text-3)">'+ic('search','w-4 h-4')+'</span>'+
+        `<input id="tk-q" value="${esc(f.tkQ||'')}" oninput="S.filters.tkQ=this.value;App._searchRR('tk-q')" placeholder="Search title, description, people…" class="ui-input" style="padding:6px 10px 6px 32px;min-height:34px;font-size:12.5px"/></div>`+
+        `<select onchange="S.filters.tkAssignee=this.value;rr()" class="ui-select" style="${_selSt}"><option value="">All assignees</option>${_people.map(p=>`<option value="${p.id}" ${f.tkAssignee===p.id?'selected':''}>${esc(fullName(p))}</option>`).join('')}</select>`+
+        `<select onchange="App._tkFilter('priority',this.value)" class="ui-select" style="${_selSt}"><option value="">Any priority</option>${['Critical','High','Medium','Low'].map(p=>`<option ${priorityFilter===p?'selected':''}>${p}</option>`).join('')}</select>`+
+        `<select onchange="S.filters.tkSort=this.value;rr()" class="ui-select" style="${_selSt}"><option value="">Newest first</option><option value="old" ${f.tkSort==='old'?'selected':''}>Oldest first</option><option value="pri" ${f.tkSort==='pri'?'selected':''}>By priority</option></select>`+
+        (_active?`<button onclick="['tkQ','tkStatus','tkPriority','tkAssignee','tkSort'].forEach(k=>delete S.filters[k]);rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear</button>`:'')+
+      '</div>'+
+      '<div class="hscroll" style="gap:8px;margin-bottom:16px;align-items:center">'+
+        ['','Open','In Progress','Resolved','Closed'].map(s=>{const on=statusFilter===s;return`<button type="button" class="ui-tab-pill${on?' on':''}" style="flex-shrink:0" onclick="App._tkFilter('status','${s}')">${s||'All'}</button>`;}).join('')+
+        `<span style="flex-shrink:0;font-size:11.5px;color:var(--c-text-3);font-weight:600;margin-left:4px">${tickets.length} ticket${tickets.length===1?'':'s'}</span>`+
+      '</div>';
+    })()+
     // List
     (tickets.length?
       '<div style="display:flex;flex-direction:column;gap:10px">'+tickets.map(tkCard).join('')+'</div>':

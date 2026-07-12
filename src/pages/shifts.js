@@ -15,22 +15,23 @@ function shiftsPage(){
   const subD=FD.shDept?subDepts((topD.find(d=>d.name===FD.shDept)||{}).id||''):[];
   if(FD.shSub)people=people.filter(u=>u.department===FD.shSub);
   else if(FD.shDept){const names=new Set([FD.shDept,...subD.map(s2=>s2.name)]);people=people.filter(u=>names.has(u.department));}
-  const offToday=DB.users.filter(u=>u.status==='Active'&&(_onLeaveToday(u.id,today)||(u.hrm?.schedule?.offDays||[]).includes(dayAbbr(today))));
+  // R13 (owner request): the "Off / on leave today" strip is GONE — off-days show right in the
+  // grid instead. OFF comes from the ONE source of truth (u.hrm.schedule.offDays, set in the user
+  // editor); clicking an OFF cell (or the person's name) edits those off-days from here, and the
+  // change applies everywhere that reads them (user editor, attendance, reports, this roster).
+  const canOff=can('employees','edit')||canMng;
   const cell=(u,d2)=>{
     const sh=(DB.shifts||[]).find(s=>s.userId===u.id&&s.date===d2);
     const off=(u.hrm?.schedule?.offDays||[]).includes(dayAbbr(d2));
     const onLv=_onLeaveToday(u.id,d2);
     if(onLv)return `<div style="font-size:10px;font-weight:800;color:#B45309;background:#FFFBEB;border-radius:7px;padding:5px 4px;text-align:center">LEAVE</div>`;
     if(sh)return `<div ${canMng?`onclick="App._shEdit('${u.id}','${d2}')" style="cursor:pointer;`:'style="'}font-size:10px;font-weight:800;color:${sh.status==='published'?'#0B7A55':'#92400E'};background:${sh.status==='published'?'#ECFDF5':'#FEF3C7'};border-radius:7px;padding:5px 3px;text-align:center" title="${esc(sh.note||'')}${sh.status==='draft'?' (draft)':''}">${esc(sh.start)}–${esc(sh.end)}</div>`;
-    if(off)return canMng
-      ?`<button onclick="App._shEdit('${u.id}','${d2}')" title="Add a shift (any day, including Sundays)" style="width:100%;border:1px dashed var(--c-border);background:transparent;border-radius:7px;color:var(--c-text-3);font-size:11px;cursor:pointer;padding:4px 0">+</button>`
-      :`<div style="text-align:center;color:var(--c-text-3);font-size:10px;padding:5px 0">—</div>`;
+    if(off)return `<div ${canOff?`onclick="App._shOffDays('${u.id}','${d2}')" role="button" tabindex="0"`:''} title="${canOff?'Weekly off-day — click to change their off-days':'Weekly off-day'}" style="${canOff?'cursor:pointer;':''}font-size:10px;font-weight:800;color:var(--c-text-3);background:var(--c-surface-2);border:1px dashed var(--c-border);border-radius:7px;padding:5px 4px;text-align:center">OFF</div>`;
     return canMng?`<button onclick="App._shEdit('${u.id}','${d2}')" style="width:100%;border:1px dashed var(--c-border);background:transparent;border-radius:7px;color:var(--c-text-3);font-size:11px;cursor:pointer;padding:4px 0">+</button>`:'<div style="text-align:center;color:var(--c-text-3);font-size:10px;padding:5px 0">—</div>';
   };
   const draftN=(DB.shifts||[]).filter(s=>s.status==='draft'&&week.includes(s.date)).length;
   return `<div class="fade">${hdr('Shifts','Weekly roster — publish so colleagues see their shifts',(canMng?btn('Copy last week',`App._shCopyWeek('${week[0]}')`,{variant:'ghost',icon:'copy'}):'')+(canMng&&draftN?btn('Publish week ('+draftN+')','App._shPublish(\''+week[0]+'\',\''+week[6]+'\')',{variant:'primary',icon:'check'}):''))}
     ${_howBar('shifts')}
-    ${offToday.length?`<div class="ui-card" style="padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:11.5px;font-weight:800;color:var(--c-text-2)">Off / on leave today:</span>${offToday.slice(0,10).map(u=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--c-text-2)">${avatar(u,'w-5 h-5','text-[8px]')}${esc(fullName(u))}</span>`).join('')}</div>`:''}
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
       <button onclick="S.filters.shWk--;rr()" class="ui-btn ui-btn-ghost ui-btn-sm">‹ Prev</button>
       <button onclick="S.filters.shWk=0;rr()" class="ui-btn ui-btn-ghost ui-btn-sm">This week</button>
@@ -42,11 +43,33 @@ function shiftsPage(){
     </div>
     <div class="ui-card" style="padding:0;overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:720px">
       <thead><tr><th style="text-align:left;padding:9px 12px;font-size:10px;font-weight:800;color:var(--c-text-3);text-transform:uppercase">Person</th>${week.map(d2=>`<th style="padding:9px 6px;font-size:10px;font-weight:800;color:${d2===today?'var(--c-brand-ink)':'var(--c-text-3)'};text-transform:uppercase">${dayAbbr(d2)} ${new Date(d2+'T00:00:00').getDate()}</th>`).join('')}</tr></thead>
-      <tbody>${people.map(u=>`<tr style="border-top:1px solid var(--c-border)"><td style="padding:8px 12px"><div style="display:flex;align-items:center;gap:8px">${avatar(u,'w-7 h-7','text-[10px]')}<span style="font-size:12.5px;font-weight:700;color:var(--c-text);white-space:nowrap">${esc(fullName(u))}</span></div></td>${week.map(d2=>`<td style="padding:5px 4px;min-width:78px">${cell(u,d2)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="8">${empty('clock','Nobody to roster','')}</td></tr>`}</tbody>
+      <tbody>${people.map(u=>`<tr style="border-top:1px solid var(--c-border)"><td style="padding:8px 12px"><div ${canOff?`onclick="App._shOffDays('${u.id}')" role="button" tabindex="0" title="Edit ${esc(fullName(u))}'s weekly off-days" style="cursor:pointer"`:''}><div style="display:flex;align-items:center;gap:8px">${avatar(u,'w-7 h-7','text-[10px]')}<span style="font-size:12.5px;font-weight:700;color:var(--c-text);white-space:nowrap">${esc(fullName(u))}</span></div></div></td>${week.map(d2=>`<td style="padding:5px 4px;min-width:78px">${cell(u,d2)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="8">${empty('clock','Nobody to roster','')}</td></tr>`}</tbody>
     </table></div>
-    ${canMng?'<div style="font-size:11px;color:var(--c-text-3);margin-top:8px">Amber = draft (only you see it) · green = published. Click a cell to edit.</div>':''}
+    ${canMng?'<div style="font-size:11px;color:var(--c-text-3);margin-top:8px">Amber = draft (only you see it) · green = published. Click a cell to edit'+(canOff?' · click OFF or a name to change someone’s weekly off-days':'')+'.</div>':''}
   </div>`;
 }
+/* R13 — Weekly off-days editor, right from the roster. ONE source of truth: writes
+   u.hrm.schedule.offDays (the same field the user editor sets), so the change shows up
+   everywhere at once — user profile, attendance calendar, absentee logic, My-attendance
+   card, who's-in buckets AND this roster. Synced via the user_hrm table like any HR edit. */
+App._shOffDays=(uid2,date)=>{
+  if(!(can('employees','edit')||can('scheduling','manage'))){toast('Not allowed','err');return;}
+  const u=uById(uid2);if(!u)return;_ensureHrm(u);
+  const off=new Set(u.hrm?.schedule?.offDays||[]);
+  modalShell({title:'Weekly off-days',sub:fullName(u)+' — same setting as the user profile; updates everywhere',size:'max-w-sm',
+    body:`<div style="display:flex;gap:6px;flex-wrap:wrap">${DAYS3.map(d=>`<button type="button" class="dchip${off.has(d)?' on':''}" onclick="this.classList.toggle('on')" data-shoff="${d}">${d}</button>`).join('')}</div>
+      ${date?`<button onclick="App.closeModal();App._shEdit('${uid2}','${date}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="margin-top:14px">${ic('plus','w-3.5 h-3.5')}Add a shift on ${fmtS(date)} anyway</button>`:''}`,
+    footer:btnG('Cancel','App.closeModal()')+btnP('Save off-days',`App._shOffDaysSave('${uid2}')`)});
+};
+App._shOffDaysSave=(uid2)=>{
+  if(!(can('employees','edit')||can('scheduling','manage'))){toast('Not allowed','err');return;}
+  const u=uById(uid2);if(!u)return;_ensureHrm(u);
+  const days=[...document.querySelectorAll('.dchip.on[data-shoff]')].map(b=>b.dataset.shoff);
+  u.hrm.schedule=u.hrm.schedule||{};
+  u.hrm.schedule.offDays=days;
+  log(fullName(me()),'Off-days updated',fullName(u)+' → '+(days.join(', ')||'none'));
+  saveDB();closeModal();toast('Off-days saved — applied everywhere');rr();
+};
 App._shEdit=(uid2,date)=>{
   if(!can('scheduling','manage'))return;
   // Anti-self-edit guard: your own shift, created by someone else (your manager/HR) → locked for you.

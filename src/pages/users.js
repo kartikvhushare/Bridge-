@@ -22,7 +22,7 @@ function usersPage(){
   if(S.filters.stat)list=list.filter(u=>u.status===S.filters.stat);
   return`<div class="fade">${hdr('Users',scopedUsers('employees').length+' people',can('employees','create')?btnP('Add user','App.editUser()','plus'):'')}
   <div class="flex gap-2 mb-4 flex-wrap">
-    <div class="relative flex-1 min-w-[160px] md:hidden"><span class="absolute left-3 top-1/2 -translate-y-1/2" style="color:var(--c-text-3)">${ic('search','w-4 h-4')}</span><input oninput="S.search=this.value;rr()" value="${esc(S.search)}" placeholder="Search…" class="ui-input" style="padding-left:36px"/></div>
+    <div class="relative flex-1 min-w-[180px]"><span class="absolute left-3 top-1/2 -translate-y-1/2" style="color:var(--c-text-3)">${ic('search','w-4 h-4')}</span><input id="usr-q" oninput="S.search=this.value;App._searchRR('usr-q')" value="${esc(S.search)}" placeholder="Search people by name or email…" class="ui-input" style="padding-left:36px"/></div>
     <select onchange="S.filters.dep=this.value;rr()" class="ui-select" style="width:auto"><option value="">All depts</option>${DB.departments.map(d=>`<option ${S.filters.dep===d.name?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
     <select onchange="S.filters.stat=this.value;rr()" class="ui-select" style="width:auto"><option value="">Any status</option><option ${S.filters.stat==='Active'?'selected':''}>Active</option><option ${S.filters.stat==='Inactive'?'selected':''}>Inactive</option></select>
   </div>

@@ -540,8 +540,9 @@ describe('r8 - hierarchy popup and attendance mobile view', () => {
 describe('r9 - chart configs execute without errors', () => {
   const mkChartStub = () => {
     const seen = [];
+    HTMLCanvasElement.prototype.getContext = () => null; // silence jsdom 'not implemented' noise
     window.Chart = class { constructor(ctx, cfg) { seen.push(cfg); } destroy() {} };
-    window.Chart.defaults = { font: {}, plugins: { tooltip: {}, legend: { labels: {} } }, elements: { bar: {}, line: {}, point: {} } };
+    window.Chart.defaults = { font: {}, animation: {}, plugins: { tooltip: {}, legend: { labels: {} } }, elements: { bar: {}, line: {}, point: {} } };
     window.Chart.__bridged = 0;
     return seen;
   };
@@ -607,8 +608,9 @@ describe('r10 - My attendance card (range defaults to current month)', () => {
     expect(html).toContain('Current month'); // default range badge
     expect(html.includes('Completions trend')).toBe(false); // old confusing charts gone
     document.body.innerHTML = '<div id="content">' + html + '</div>';
-    const seen = []; window.Chart = class { constructor(c, cfg) { seen.push(cfg); } destroy() {} };
-    window.Chart.defaults = { font: {}, plugins: { tooltip: {}, legend: { labels: {} } }, elements: { bar: {}, line: {}, point: {} } };
+    const seen = []; HTMLCanvasElement.prototype.getContext = () => null;
+    window.Chart = class { constructor(c, cfg) { seen.push(cfg); } destroy() {} };
+    window.Chart.defaults = { font: {}, animation: {}, plugins: { tooltip: {}, legend: { labels: {} } }, elements: { bar: {}, line: {}, point: {} } };
     window.Chart.__bridged = 0;
     W._drawHomeCharts();
     expect(seen.length).toBe(1);
@@ -633,5 +635,53 @@ describe('r11 - leave requests list is compact with row-level delete', () => {
     W.App._delLeaveRec('r11lv');
     expect(W.DB.leaveRequests.some(r => r.id === 'r11lv')).toBe(false);
     W.S.uid = 'sa1'; W.S.filters = {};
+  });
+});
+
+/* ── Round 12: people search + ticket filters ── */
+describe('r12 - people search bar + better ticket filters', () => {
+  it('People page shows the search bar on all screens and it filters', () => {
+    W.S.uid = 'sa1'; W.S.route = 'users'; W.S.filters = {}; W.S.search = '';
+    let html = W.pageContent();
+    expect(html).toContain('usr-q');
+    expect(html.includes('md:hidden"><span class="absolute')).toBe(false); // no longer mobile-only
+    W.S.search = 'zzz-no-such-person';
+    html = W.pageContent();
+    expect(html).toContain('No users');
+    W.S.search = '';
+  });
+  it('Tickets page has search, assignee, priority, sort filters and they work', () => {
+    W.S.uid = 'sa1'; W.S.route = 'tickets'; W.S.filters = {};
+    W.DB.tickets.push(
+      { id: 'r12t1', title: 'Fridge broken', description: 'x', priority: 'High', status: 'Open', assignedTo: 'emp1', submitterId: 'emp1', createdAt: '2026-07-10T00:00:00Z' },
+      { id: 'r12t2', title: 'Printer jam', description: 'y', priority: 'Low', status: 'Open', assignedTo: 'sa1', submitterId: 'emp1', createdAt: '2026-07-11T00:00:00Z' });
+    let html = W.pageContent();
+    for (const bit of ['tk-q','All assignees','Any priority','Newest first']) expect(html).toContain(bit);
+    W.S.filters.tkQ = 'fridge';
+    html = W.pageContent();
+    expect(html).toContain('Fridge broken');
+    expect(html.includes('Printer jam')).toBe(false);
+    expect(html).toContain('Clear');
+    W.S.filters = {};
+    W.DB.tickets = W.DB.tickets.filter(t => t.id !== 'r12t1' && t.id !== 'r12t2');
+  });
+});
+
+/* ── Round 13: shifts off-days integration ── */
+describe('r13 - roster off-days: strip gone, OFF cells, two-way edit', () => {
+  it('strip removed; OFF cell rendered from the user schedule; editor saves to the same field', () => {
+    W.S.uid = 'sa1'; W.S.route = 'shifts'; W.S.filters = {};
+    const emp = W.uById('emp1'); W._ensureHrm(emp);
+    emp.hrm.schedule = emp.hrm.schedule || {}; emp.hrm.schedule.offDays = ['Sun','Sat'];
+    const html = W.pageContent();
+    expect(html.includes('Off / on leave today:')).toBe(false);   // strip gone
+    expect(html).toContain('>OFF<');                              // off-day marker in the grid
+    expect(html).toContain('_shOffDays');                         // editable from the roster
+    // simulate the editor save: chips in DOM → save → user record updated (single source of truth)
+    document.body.innerHTML = '<button class="dchip on" data-shoff="Mon"></button><button class="dchip on" data-shoff="Sun"></button>';
+    W.App._shOffDaysSave('emp1');
+    expect(emp.hrm.schedule.offDays.sort().join(',')).toBe('Mon,Sun');
+    // and the roster reflects it immediately (Mon now OFF) — same field the user editor reads
+    emp.hrm.schedule.offDays = ['Sun'];
   });
 });

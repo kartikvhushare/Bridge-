@@ -15,6 +15,7 @@ let COLL={};  // Hierarchy collapse state
    Reuses _clockWidget, _leaveChainView — no new data model, all presentation/composition. */
 function homeDash(){
   const u=me();const today=todayISO();
+  if(!u)return''; // R12 hardening: transient render while the session user isn't resolvable yet
   const hr=new Date().getHours();
   const greet=hr<12?'Good morning':hr<18?'Good afternoon':'Good evening';
   // Today's checklist status
