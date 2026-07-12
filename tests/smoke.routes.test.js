@@ -819,3 +819,24 @@ describe('r18 - inbox hub lands on Alerts', () => {
     expect(W._hubHome('inbox')).toBe('notifications'); // …but Alerts still comes first
   });
 });
+
+/* ── Round 19: payroll writes all lines in ONE batched upsert (no partial saves) ── */
+describe('r19 - payroll persists every line in a single batched write', () => {
+  const sbSrc = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'supabase.js'), 'utf8');
+  const plSrc = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'pages', 'payroll.js'), 'utf8');
+  it('_pushRows batch helper exists and is window-exposed', () => {
+    expect(sbSrc).toContain('function _pushRows(');
+    expect(sbSrc).toContain('window._pushRows=_pushRows');
+  });
+  it('the payroll draft run uses _pushRows for items, NOT a forEach of _pushRow', () => {
+    const i = plSrc.indexOf('App._payRun=');
+    const body = plSrc.slice(i, i + 1200);
+    expect(body).toContain("_pushRows('payroll_items'");
+    expect(/items\.forEach\(i=>_pushRow\('payroll_items'/.test(body)).toBe(false);
+  });
+  it('verify-all also batches its item writes', () => {
+    const i = plSrc.indexOf('App._payVerifyAll=');
+    const body = plSrc.slice(i, i + 900);
+    expect(body).toContain("_pushRows('payroll_items'");
+  });
+});

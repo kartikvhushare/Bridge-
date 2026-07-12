@@ -100,14 +100,14 @@ App._payRun=()=>{
   const items=people.map(u=>{const c=_payCompute(u,month);return{id:uid('pi'),runId:run.id,userId:u.id,...c,verified:false,verifiedBy:null};});
   run.totals={net:items.reduce((a,i)=>a+i.net,0),people:items.length};
   DB.payrollRuns.push(run);items.forEach(i=>DB.payrollItems.push(i));
-  _pushRow('payroll_runs',_pRunRow(run),'payroll');items.forEach(i=>_pushRow('payroll_items',_pItemRow(i),'payroll'));
+  _pushRow('payroll_runs',_pRunRow(run),'payroll');_pushRows('payroll_items',items.map(_pItemRow),'payroll'); // R19: one batched write, not 24 racing upserts
   log(fullName(me()),'Payroll draft created',month+' · '+items.length+' people');
   saveDB();toast('Draft run created — verify each line');rr();
 };
 App._payVerifyAll=()=>{
   if(!can('payroll','verify'))return toast('You need Payroll → Verify','err');
   const month=S.filters.pyMonth;const run=(DB.payrollRuns||[]).find(r=>r.month===month&&r.status!=='RolledBack');if(!run)return;
-  (DB.payrollItems||[]).filter(i=>i.runId===run.id&&!i.verified).forEach(i=>{i.verified=true;i.verifiedBy=S.uid;_pushRow('payroll_items',_pItemRow(i),'payroll');});
+  const _toVerify=(DB.payrollItems||[]).filter(i=>i.runId===run.id&&!i.verified);_toVerify.forEach(i=>{i.verified=true;i.verifiedBy=S.uid;});_pushRows('payroll_items',_toVerify.map(_pItemRow),'payroll'); // R19: batched
   log(fullName(me()),'Payroll verified all lines',month);
   saveDB();toast('All lines verified');rr();
 };
