@@ -257,12 +257,29 @@ function _myLeaveView(){
     </div>`;
   }).join('');
   const mine=(DB.leaveRequests||[]).filter(r=>r.userId===u.id).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  // R11 — COMPACT ROWS (owner request): one slim line per request — details (reason + approval
+  // progress) expand on tap. Delete lives right on the row: Rejected/Cancelled → requester or
+  // approver; Approved → approvers only ("Delete & reverse", restores balance + attendance).
   const _reqCard=r=>{const lt=ltById(r.leaveTypeId);const tone=r.status==='Approved'?'success':r.status==='Rejected'?'danger':r.status==='Cancelled'?'neutral':'warn';
-    return `<div class="ui-card" style="padding:16px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:start;gap:10px"><div><div style="font-size:14.5px;font-weight:700">${esc(lt?lt.name:'Leave')}${r.halfDay?' <span style="font-size:11px;color:var(--c-warn)">(half-day)</span>':''}</div><div style="font-size:12.5px;color:var(--c-text-2);margin-top:3px">${fmtD(r.start)} → ${fmtD(r.end)} · ${r.workingDays} day${r.workingDays===1?'':'s'}</div></div>${badge(r.status==='Pending'?('Pending — '+(r.stage==='manager'?'Manager':'HR')):r.status,tone)}</div>
-      ${r.reason?`<div style="font-size:12.5px;color:var(--c-text-2);margin-top:8px">${esc(r.reason)}</div>`:''}
-      ${_leaveChainView(r)}
-      ${r.status==='Pending'?`<button onclick="App.cancelLeave('${r.id}')" class="ui-btn ui-btn-subtle ui-btn-sm" style="margin-top:10px;color:var(--c-danger-ink)">Cancel request</button>`:''}
+    const exp=S.filters.lvExp===r.id;
+    const canDel=(r.status==='Rejected'||r.status==='Cancelled')?(r.userId===S.uid||can('leaveRequests','approve'))
+                :(r.status==='Approved'?can('leaveRequests','approve'):false);
+    const icBtn='width:26px;height:26px;display:grid;place-items:center;border-radius:7px;border:none;background:transparent;cursor:pointer;flex-shrink:0';
+    return `<div class="ui-card" style="padding:0;margin-bottom:6px;overflow:hidden">
+      <div onclick="S.filters.lvExp=S.filters.lvExp==='${r.id}'?null:'${r.id}';rr()" role="button" tabindex="0" title="${exp?'Hide':'Show'} details" style="display:flex;align-items:center;gap:9px;padding:9px 12px;cursor:pointer">
+        <div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          <span style="font-size:13.5px;font-weight:700;color:var(--c-text)">${esc(lt?lt.name:'Leave')}</span>${r.halfDay?' <span style="font-size:10.5px;font-weight:700;color:var(--c-warn)">(half-day)</span>':''}
+          <span style="font-size:12px;color:var(--c-text-2)"> · ${fmtS(r.start)} → ${fmtS(r.end)} · ${r.workingDays}d</span>
+        </div>
+        ${badge(r.status==='Pending'?('Pending — '+(r.stage==='manager'?'Manager':'HR')):r.status,tone)}
+        ${r.status==='Pending'?`<button onclick="event.stopPropagation();App.cancelLeave('${r.id}')" title="Cancel this request" style="${icBtn};color:var(--c-danger-ink)">${ic('x','w-4 h-4')}</button>`:''}
+        ${canDel?`<button onclick="event.stopPropagation();App._delLeaveRec('${r.id}')" title="${r.status==='Approved'?'Delete & reverse (restores balance)':'Delete this record'}" style="${icBtn};color:var(--c-text-3)" onmouseover="this.style.color='var(--c-danger-ink)'" onmouseout="this.style.color='var(--c-text-3)'">${ic('trash','w-3.5 h-3.5')}</button>`:''}
+        <span style="color:var(--c-text-3);transform:rotate(${exp?90:0}deg);transition:transform .15s;flex-shrink:0">${ic('chevR','w-4 h-4')}</span>
+      </div>
+      ${exp?`<div style="border-top:1px solid var(--c-border);background:var(--c-surface-2);padding:10px 14px">
+        ${r.reason?`<div style="font-size:12.5px;color:var(--c-text-2)">${esc(r.reason)}</div>`:''}
+        ${_leaveChainView(r)}
+      </div>`:''}
     </div>`;};
   // Segregated + collapsible: requests still in flight stay visible; decided ones fold away per year.
   let list;

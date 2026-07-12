@@ -617,3 +617,21 @@ describe('r10 - My attendance card (range defaults to current month)', () => {
     W.S.uid = 'sa1';
   });
 });
+
+/* ── Round 11: compact leave rows with delete ── */
+describe('r11 - leave requests list is compact with row-level delete', () => {
+  it('cancelled rows are slim, expandable, and deletable by an approver', () => {
+    W.S.uid = 'emp1'; W.S.route = 'leave'; W.S.filters = {};
+    W.DB.leaveRequests.push({ id: 'r11lv', userId: 'emp1', leaveTypeId: (W.DB.leaveTypes[0]||{}).id || 'ltX', leaveYear: '2026', start: '2026-07-05', end: '2026-07-06', workingDays: 1, status: 'Cancelled', flow: [{type:'manager'}], stageIndex: 0, createdAt: '2026-07-05T00:00:00Z' });
+    let html = W.pageContent();
+    expect(html).toContain('_delLeaveRec(\'r11lv\')');          // delete on the row (requester)
+    expect(html.includes('APPROVAL PROGRESS')||html.includes('Approval progress')).toBe(false); // collapsed by default
+    W.S.filters.lvExp = 'r11lv';                                // expand one row
+    html = W.pageContent();
+    expect(html.toLowerCase()).toContain('stage');              // details visible when expanded
+    global.confirm = () => true;
+    W.App._delLeaveRec('r11lv');
+    expect(W.DB.leaveRequests.some(r => r.id === 'r11lv')).toBe(false);
+    W.S.uid = 'sa1'; W.S.filters = {};
+  });
+});
