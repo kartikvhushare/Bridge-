@@ -138,11 +138,13 @@ function loadDB(){
 /* ===== STATE ===== */
 let S={uid:null,route:'dashboard',search:'',calDate:todayISO(),calWk:0,expandedCl:null,filters:{},filterOpen:false,tvUser:null,tvCalDate:null,tvCalWk:0,tvExpanded:null,afOpen:null};
 const me=()=>DB.users.find(u=>u.id===S.uid);
-const isAdmin=()=>me()?.role==='Admin';
-// 'Admin' (internal value, unchanged in DB) is displayed as "Super Admin".
-// 'SubAdmin' (new internal value) is displayed as "Admin": manager powers + the All Checklists tab.
-const isSubAdmin=()=>me()?.role==='SubAdmin';
-const roleLabel=r=>r==='Admin'?'Super Admin':r==='SubAdmin'?'Admin':(r||'User');
+// R20: the legacy role field (Admin/SubAdmin/User) is retired. Access Control is the ONLY role
+// system: u.hrm.roleProfileId → DB.roleProfiles. 'superadmin' is the one hard-coded superuser id.
+const _pidOf=u=>u?.hrm?.roleProfileId||null;
+const isSuperU=u=>_pidOf(u)==='superadmin';
+const isAdmin=()=>isSuperU(me());
+// Display name of a user's Access Control role (e.g. "Super Admin", "HR", "Basic Employee").
+const roleName=u=>{const p=_pidOf(u);return (p&&DB.roleProfiles?.[p]?.name)||'Basic Employee';};
 const hasDocAccess=()=>{const u=me();if(!u)return false;if(isAdmin())return true;const da=u.docAccess||{};return Object.values(da.departments||{}).some(p=>p.view)||Object.values(da.locations||{}).some(p=>p.view);};
 function subTree(uid,_seen=new Set()){if(_seen.has(uid))return[];_seen.add(uid);const direct=DB.users.filter(u=>u.managerId===uid&&u.id!==uid);return direct.flatMap(u=>[u,...subTree(u.id,_seen)]);}
 // ── Date-aware manager lookup (uses managerHistory; falls back to current managerId) ──
@@ -246,4 +248,4 @@ const subForCl=(c,uid,date)=>{
 };
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.log=log;window.LS_KEY=LS_KEY;window.saveDB=saveDB;window.loadDB=loadDB;window.S=S;window.me=me;window.isAdmin=isAdmin;window.isSubAdmin=isSubAdmin;window.roleLabel=roleLabel;window.hasDocAccess=hasDocAccess;window.subTree=subTree;window._mgrOfOn=_mgrOfOn;window._underOn=_underOn;window.isMgr=isMgr;window.visU=visU;window.isHR=isHR;window._canReport=_canReport;window.activeProfile=activeProfile;window.userProfileId=userProfileId;window.userProfile=userProfile;window._ensureHrm=_ensureHrm;window.isDesc=isDesc;window.uById=uById;window.clById=clById;window.locById=locById;window.myCls=myCls;window.subFor=subFor;window.subForCl=subForCl;
+window.log=log;window.LS_KEY=LS_KEY;window.saveDB=saveDB;window.loadDB=loadDB;window.S=S;window.me=me;window.isAdmin=isAdmin;window._pidOf=_pidOf;window.isSuperU=isSuperU;window.roleName=roleName;window.hasDocAccess=hasDocAccess;window.subTree=subTree;window._mgrOfOn=_mgrOfOn;window._underOn=_underOn;window.isMgr=isMgr;window.visU=visU;window.isHR=isHR;window._canReport=_canReport;window.activeProfile=activeProfile;window.userProfileId=userProfileId;window.userProfile=userProfile;window._ensureHrm=_ensureHrm;window.isDesc=isDesc;window.uById=uById;window.clById=clById;window.locById=locById;window.myCls=myCls;window.subFor=subFor;window.subForCl=subForCl;

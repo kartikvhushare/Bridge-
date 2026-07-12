@@ -181,7 +181,7 @@ App.newTicket=()=>{
   if(!can('tickets','create')){toast('Not allowed','err');return;}
   const u=me();
   const hasMgr=!!_mgrOfOn(u,todayISO());
-  const hasHR=DB.users.some(x=>x.hrm?.isHR&&x.status==='Active'&&x.role!=='Admin');
+  const hasHR=DB.users.some(x=>x.hrm?.isHR&&x.status==='Active'&&!isSuperU(x));
   const routeOpts=[];
   if(hasMgr)routeOpts.push(['manager','My Manager']);
   if(hasHR)routeOpts.push(['hr','HR']);
@@ -205,7 +205,7 @@ App.createTicket=()=>{
   let assignee=null;
   if(route==='manager'){assignee=_mgrOfOn(me(),todayISO())||me()?.managerId||null;}
   else if(route.startsWith('user:')){assignee=route.slice(5);}
-  else{const hr=DB.users.find(x=>x.hrm?.isHR&&x.status==='Active'&&x.role!=='Admin');assignee=hr?hr.id:null;}
+  else{const hr=DB.users.find(x=>x.hrm?.isHR&&x.status==='Active'&&!isSuperU(x));assignee=hr?hr.id:null;}
   if(!assignee){toast(route==='manager'?'You have no manager assigned':'No active HR user found','err');return;}
   const date=todayISO();
   const ticket={id:uid('tk'),title,description,priority,status:'Open',assignedTo:assignee,createdBy:S.uid,

@@ -96,7 +96,7 @@ App._payRun=()=>{
   const month=S.filters.pyMonth||todayISO().slice(0,7);
   if((DB.payrollRuns||[]).some(r=>r.month===month&&r.status!=='RolledBack'))return toast('A run already exists for '+month,'warn');
   const run={id:uid('pr'),month,status:'Draft',cutoffDay:Number(DB.hrmConfig?.alerts?.payrollCutoff)||23,totals:{},sign:{},createdBy:S.uid,createdAt:new Date().toISOString()};
-  const people=DB.users.filter(u=>u.status==='Active'&&u.role!=='Admin');
+  const people=DB.users.filter(u=>u.status==='Active'&&!isSuperU(u));
   const items=people.map(u=>{const c=_payCompute(u,month);return{id:uid('pi'),runId:run.id,userId:u.id,...c,verified:false,verifiedBy:null};});
   run.totals={net:items.reduce((a,i)=>a+i.net,0),people:items.length};
   DB.payrollRuns.push(run);items.forEach(i=>DB.payrollItems.push(i));

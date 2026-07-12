@@ -37,7 +37,7 @@ const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJl
 if(typeof supabase==='undefined'){var _a=document.getElementById('app');if(_a)_a.innerHTML='<div style="max-width:640px;margin:56px auto;padding:28px;font:15px/1.6 system-ui,-apple-system,sans-serif;color:#1f232b;border:1px solid #e8eaee;border-radius:16px"><h2 style="margin:0 0 10px;font-size:20px">Open Evarca in a web browser</h2><p style="margin:0 0 8px">This app loads Tailwind and Supabase from the internet, so it can\u2019t run inside a preview pane.</p><p style="margin:0">Save this file and open it directly in <b>Chrome</b> or <b>Safari</b> with an internet connection \u2014 it will load normally.</p></div>';throw new Error('Supabase library not loaded (offline or blocked CDN) \u2014 open in a real browser.');}
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _unesc(s){if(!s)return s;let p=String(s),c;do{c=p;p=p.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");}while(p!==c);return p;}
-function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:_unesc(p.first_name)||'',lastName:_unesc(p.last_name)||'',email:p.email||'',phone:_unesc(p.phone)||'',position:_unesc(p.position)||'',department:_unesc(p.department)||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,managerHistory:p.manager_history||[],rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,emailEnabled:p.email_enabled!==false,cities:Array.isArray(p.cities)?p.cities:[],password:'***'}));}
+function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:_unesc(p.first_name)||'',lastName:_unesc(p.last_name)||'',email:p.email||'',phone:_unesc(p.phone)||'',position:_unesc(p.position)||'',department:_unesc(p.department)||'',status:p.status||'Active',managerId:p.manager_id||null,managerHistory:p.manager_history||[],rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,emailEnabled:p.email_enabled!==false,cities:Array.isArray(p.cities)?p.cities:[],password:'***'}));}
 function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:(c.selected_dates||[]).map(x=>x==='L'?'L':Number(x)),customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:(()=>{const raw=c.question_configs||{};const fixed={};Object.keys(raw).forEach(k=>{const clean=k.startsWith('"')&&k.endsWith('"')?JSON.parse(k):k;fixed[clean]=raw[k];});return fixed;})(),scheduleTime:c.schedule_time||null,status:c.status||'Active',anyOne:c.any_one||false,createdBy:c.created_by||null}));}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
@@ -56,24 +56,28 @@ function _mOKRCheckin(rows){return(rows||[]).map(c=>({id:c.id,okrId:c.okr_id,use
 function _mOKRLog(rows){return(rows||[]).map(l=>({id:l.id,okrId:l.okr_id,actorId:l.actor_id||null,action:l.action||'',details:(l.details&&typeof l.details==='object')?l.details:{},createdAt:l.created_at}));}
 function _okrRow(o){return{id:o.id,parent_id:o.parentId||null,title:o.title||'',description:o.description||'',department_id:o.departmentId||null,sub_department_id:o.subDepartmentId||null,owner_id:o.ownerId||null,metric_type:o.metricType||'number',start_value:(o.startValue===null||o.startValue===undefined||o.startValue==='')?0:o.startValue,target_value:(o.targetValue===null||o.targetValue===undefined||o.targetValue==='')?null:o.targetValue,unit:o.unit||'',direction:o.direction||'up',frequency:o.frequency||{},period_start:o.periodStart||null,period_end:o.periodEnd||null,status_mode:o.statusMode||'auto',status_manual:o.statusManual||null,sort:o.sort||0,created_by:o.createdBy||null,created_at:o.createdAt||new Date().toISOString(),updated_at:new Date().toISOString()};}
 function _okrCheckinRow(c){return{id:c.id,okr_id:c.okrId,user_id:c.userId||null,date:c.date,value:(c.value===null||c.value===undefined||c.value==='')?null:c.value,comment:c.comment||'',photos:(c.photos||[]).filter(p=>typeof p==='string'&&p!=='[photo]'),status_mark:c.statusMark||null,edit_count:c.editCount||0,created_at:c.createdAt||new Date().toISOString(),updated_at:new Date().toISOString()};}
-function _roleCtx(){const _uid=S.uid;const _isAdmin=isAdmin();const _isSubAdmin=isSubAdmin();const _isMgr=isMgr();const _teamIds=(_isMgr&&!_isAdmin)?new Set([_uid,...subTree(_uid).map(u=>u.id)]):null;return{_uid,_isAdmin,_isSubAdmin,_isMgr,_teamIds};}
+/* R20: visibility context is SCOPE-driven (Access Control), not legacy-role-driven.
+   _seesAllCl = checklists scope 'everyone' (superadmin/admin bundles) — the exact set the old
+   Admin/SubAdmin names produced, but now honoring whatever the Access Control editor grants.
+   _seesAllTk = tickets scope 'everyone'. */
+function _roleCtx(){const _uid=S.uid;const _isAdmin=isAdmin();const _seesAllCl=_isAdmin||scopeOf('checklists')==='everyone';const _seesAllTk=_isAdmin||scopeOf('tickets')==='everyone';const _isMgr=isMgr();const _teamIds=(_isMgr&&!_seesAllCl)?new Set([_uid,...subTree(_uid).map(u=>u.id)]):null;return{_uid,_isAdmin,_seesAllCl,_seesAllTk,_isMgr,_teamIds};}
 // Apply helpers — shared by the startup bulk load AND the lazy per-tab loaders so the
-// role-based visibility filtering can never drift between the two paths.
+// scope-based visibility filtering can never drift between the two paths.
 function _applySubmissions(subs,{merge=false}={}){
-  const {_uid,_isAdmin,_isSubAdmin,_isMgr,_teamIds}=_roleCtx();
+  const {_uid,_seesAllCl,_isMgr,_teamIds}=_roleCtx();
   const allSubs=_mS(subs||[]);
   let visible;
-  if(_isAdmin||_isSubAdmin){visible=allSubs;}
+  if(_seesAllCl){visible=allSubs;}
   else if(_isMgr){const _grpIds=new Set(DB.checklists.filter(c=>c.anyOne&&(c.assignees||[]).includes(_uid)).map(c=>c.id));visible=allSubs.filter(s=>_teamIds.has(s.userId)||_grpIds.has(s.checklistId));}
   else{const _grpIds=new Set(DB.checklists.filter(c=>c.anyOne&&(c.assignees||[]).includes(_uid)).map(c=>c.id));visible=allSubs.filter(s=>s.userId===_uid||_grpIds.has(s.checklistId));}
   if(merge){const byId=new Map((DB.submissions||[]).map(s=>[s.id,s]));visible.forEach(s=>byId.set(s.id,s));DB.submissions=[...byId.values()];}
   else{DB.submissions=visible;}
 }
 function _applyApprovals(appr){
-  const {_uid,_isAdmin,_isSubAdmin,_isMgr,_teamIds}=_roleCtx();
+  const {_uid,_seesAllCl,_isMgr,_teamIds}=_roleCtx();
   const _dead=new Set(DB.approvals_deleted||[]); // R7: deleted approval records never resurrect
   const allAppr=_mA(appr||[]).filter(a=>!_dead.has(a.id));
-  if(_isAdmin||_isSubAdmin){DB.approvals=allAppr;}
+  if(_seesAllCl){DB.approvals=allAppr;}
   else if(_isMgr){DB.approvals=allAppr.filter(a=>_teamIds.has(a.requesterId)||a.requesterId===_uid);}
   else{DB.approvals=allAppr.filter(a=>a.requesterId===_uid);}
 }
@@ -84,9 +88,9 @@ function _applyNotifications(notifs){
 }
 function _applyFeedback(feedbackRows){
   if(!feedbackRows){DB.feedback=DB.feedback||[];return;}
-  const {_uid,_isAdmin,_isSubAdmin,_isMgr,_teamIds}=_roleCtx();
+  const {_uid,_seesAllCl,_isMgr,_teamIds}=_roleCtx();
   const allFb=feedbackRows.map(fb=>({id:fb.id,checklistId:fb.checklist_id||null,userId:fb.user_id,managerId:fb.manager_id,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',taskName:fb.task_name||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledgedAt:fb.acknowledged_at||null,reply:fb.reply||null,repliedAt:fb.replied_at||null,replies:fb.replies||[],createdAt:fb.created_at}));
-  if(_isAdmin||_isSubAdmin){DB.feedback=allFb;}
+  if(_seesAllCl){DB.feedback=allFb;}
   else if(_isMgr){DB.feedback=allFb.filter(fb=>fb.managerId===_uid||_teamIds.has(fb.userId));}
   else{DB.feedback=allFb.filter(fb=>fb.userId===_uid);}
 }
@@ -104,10 +108,10 @@ function _applyDocuments(docRows){
   DB.documents=docRows.filter(d=>!_delDocs.has(d.id)&&!_delFolders.has(d.folder_id||'')).map(d=>({id:d.id,name:d.name,folderId:d.folder_id||null,type:d.type,scope:d.scope,url:d.url,storagePath:d.storage_path||null,fileType:d.file_type||null,fileSize:d.file_size||null,uploadedBy:d.uploaded_by||null,uploaderName:d.uploader_name||null,uploadedAt:d.uploaded_at,approvalStatus:d.approval_status||null,approverId:d.approver_id||null,decidedBy:d.decided_by||null,decidedAt:d.decided_at||null,decisionNote:d.decision_note||null}));
 }
 function _applyTickets(rows){
-  const {_uid,_isAdmin,_isSubAdmin}=_roleCtx();
+  const {_uid,_seesAllTk}=_roleCtx();
   const allTk=_mapTk(rows||[]);
-  // Admin/subadmin see all; everyone else only tickets assigned to them.
-  const visible=(_isAdmin||_isSubAdmin)?allTk:allTk.filter(t=>t.assignedTo===_uid);
+  // Tickets scope 'everyone' sees all; everyone else only tickets assigned to them.
+  const visible=_seesAllTk?allTk:allTk.filter(t=>t.assignedTo===_uid);
   // Keep any local-only tickets (just created, or older than the 30-day window) that the
   // server query didn't return — never drop them.
   const fromSB=new Set(allTk.map(t=>t.id));
@@ -409,14 +413,11 @@ async function loadFromSB(){
     console.error('loadFromSB failed:',e.message);
     return; // Keep existing cached data
   }
-  // ── Role-based IDs for filtering ──
+  // ── Scope-based IDs for filtering (R20: Access Control drives visibility) ──
   // NOTE: DB.users is populated below from profiles, but we need it for subTree.
-  // Use the already-loaded DB.users from local cache for role checks here.
-  const _uid=S.uid;
-  const _isAdmin=isAdmin();
-  const _isSubAdmin=isSubAdmin();
-  const _isMgr=isMgr();
-  const _teamIds=(_isMgr&&!_isAdmin)?new Set([_uid,...subTree(_uid).map(u=>u.id)]):null;
+  // Use the already-loaded DB.users from local cache for scope checks here
+  // (boot/login await _refreshMyAccess() first, so my hrm + role bundles are current).
+  const {_uid,_seesAllCl,_isMgr,_teamIds}=_roleCtx();
 
   // ── Departments + Locations: everyone sees all ──
   const _delDepts=new Set(DB.departments_deleted||[]);
@@ -441,7 +442,7 @@ async function loadFromSB(){
     if(mapped.length===0&&DB.checklists.length>0){
       // Nothing from Supabase — keep local cache (RLS may be blocking)
       _visible=DB.checklists.filter(c=>!_delCls.has(c.id));
-    } else if(_isAdmin||_isSubAdmin){
+    } else if(_seesAllCl){
       _visible=mapped;
     } else if(_isMgr){
       // Manager: checklists he created OR assigned to him OR assigned to his team
@@ -461,8 +462,8 @@ async function loadFromSB(){
   // ── Approvals (role filtering via shared helper) ──
   _applyApprovals(appr);
 
-  // ── Audit logs: admin + subadmin ──
-  if(_isAdmin||_isSubAdmin){
+  // ── Audit logs: whoever Access Control grants audit.view ──
+  if(can('audit','view')){
     DB.audit=(audit||[]).map(l=>({id:l.id,actor:l.actor||'',action:l.action||'',target:l.target||'',time:l.created_at}));
   } else {
     DB.audit=[];

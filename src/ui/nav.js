@@ -180,8 +180,8 @@ function _navItemHTML([r,i,l]){
 }
 function shell(content){
   const u=me();
-  // Mobile nav: base array; add 'questions' for questionsAccess non-admin users
-  let mob=isAdmin()?[...MOB_ADM]:(isMgr()||isSubAdmin())?[...MOB_MGR]:[...MOB_USR];
+  // Mobile nav: base array; grouping follows Access Control (team-view rights ⇒ manager layout)
+  let mob=isAdmin()?[...MOB_ADM]:(isMgr()||can('teamview','view'))?[...MOB_MGR]:[...MOB_USR];
 
   const {daily,sections}=navSectionsFor();
   S._navCollapsed=S._navCollapsed||{};

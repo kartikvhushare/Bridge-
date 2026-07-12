@@ -58,12 +58,16 @@ import './pages/reviews.js';
       if(S.uid){_hrmInit();S.route=_deepLink||S.route||'dashboard';_recoverEditingSubmissions();render();}
       const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
       if(profile&&profile.status==='Active'){
-        const mapped={id:profile.id,firstName:_unesc(profile.first_name)||'',lastName:_unesc(profile.last_name)||'',email:profile.email||'',phone:_unesc(profile.phone)||'',position:_unesc(profile.position)||'',department:_unesc(profile.department)||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,emailEnabled:profile.email_enabled!==false,cities:Array.isArray(profile.cities)?profile.cities:[],password:'***'};
+        const mapped={id:profile.id,firstName:_unesc(profile.first_name)||'',lastName:_unesc(profile.last_name)||'',email:profile.email||'',phone:_unesc(profile.phone)||'',position:_unesc(profile.position)||'',department:_unesc(profile.department)||'',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,emailEnabled:profile.email_enabled!==false,cities:Array.isArray(profile.cities)?profile.cities:[],password:'***'};
         const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1){mapped.hrm=DB.users[idx].hrm;DB.users[idx]=mapped;}else DB.users.push(mapped);
         _ensureHrm(mapped);
         S.uid=mapped.id;
         if(_deepLink)S.route=_deepLink;
         else if(!S.route||S.route==='login')S.route='dashboard'; // W2.1: role-aware home
+        // R20: my access (u.hrm.roleProfileId + role bundles) now decides ALL visibility, and it
+        // lives in user_hrm/workspace_settings — pull it BEFORE the big load so the scope-based
+        // filtering inside loadFromSB resolves correctly even on a cold cache.
+        try{await _refreshMyAccess();}catch(e){}
         // CRITICAL: Always load from Supabase FIRST before any sync
         // This prevents empty local state from overwriting real server data
         await loadFromSB();
@@ -146,13 +150,14 @@ function _persistDlSent(){
 }
 async function _runDeadlineChecks(){
   if(_dlRunning||!S.uid)return;
-  if(!(isAdmin()||isSubAdmin()||isMgr()))return; // only roles that hold the needed submission data run it
+  const _allCl=isAdmin()||scopeOf('checklists')==='everyone'; // R20: scope-driven, mirrors _roleCtx
+  if(!(_allCl||isMgr()))return; // only people who hold the needed submission data run it
   _dlRunning=true;
   try{
     await _loadDlSent();
     if(!_ns)await _loadNS();
     const today=todayISO(),nowM=nowHM();
-    const adminish=isAdmin()||isSubAdmin();
+    const adminish=_allCl;
     const teamSet=adminish?null:new Set(subTree(S.uid).map(u=>u.id)); // a manager only holds their reports' data
     let changed=false;
     (DB.checklists||[]).forEach(c=>{

@@ -35,7 +35,7 @@ function _acPeopleTab(){
     const nOv=Object.keys(u.hrm.perms||{}).length;
     const hrTag=u.hrm.isHR?'<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;background:#FCE7F3;color:#9D174D" title="HR approver stage">HR</span>':'';
     return `<tr id="acu-${u.id}" style="${hi===u.id?'background:var(--c-brand-soft);':''}border-bottom:1px solid var(--c-border)">
-      <td style="padding:11px 16px"><div style="display:flex;align-items:center;gap:11px;min-width:0">${avatar(u,'w-8 h-8','text-[11px]')}<div style="min-width:0"><div style="font-size:13px;font-weight:700;color:var(--c-text);display:flex;align-items:center;gap:6px">${esc(fullName(u))} ${hrTag}</div><div style="font-size:11px;color:var(--c-text-3)">${esc(u.department||'—')} · ${esc(roleLabel(u.role))}</div></div></div></td>
+      <td style="padding:11px 16px"><div style="display:flex;align-items:center;gap:11px;min-width:0">${avatar(u,'w-8 h-8','text-[11px]')}<div style="min-width:0"><div style="font-size:13px;font-weight:700;color:var(--c-text);display:flex;align-items:center;gap:6px">${esc(fullName(u))} ${hrTag}</div><div style="font-size:11px;color:var(--c-text-3)">${esc(u.department||'—')} · ${esc(u.position||roleName(u))}</div></div></div></td>
       <td style="padding:11px 8px">${canMng
         ?`<select onchange="App._acAssignRole('${u.id}',this.value)" class="ui-select" style="width:200px;font-size:12.5px;min-height:0;height:36px;padding:4px 26px 4px 12px">${roles.map(r=>`<option value="${r.id}" ${rid===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}${rid&&!DB.roleProfiles[rid]?`<option value="${esc(rid)}" selected>${esc(rid)} (missing)</option>`:''}${!rid?'<option value="" selected>— No role —</option>':''}</select>`
         :`<span style="font-size:12px;font-weight:700;color:var(--c-text-2)">${esc((DB.roleProfiles[rid]||{}).name||'— No role —')}</span>`}</td>
@@ -68,9 +68,7 @@ App._acAssignRole=(uid2,roleId)=>{
     if(canUser(u,'accessControl',act)&&!newGrants(act)&&!_acLockoutSafe(u.id,act)){rr();return toast('Blocked — '+fullName(u)+' is the last person with Access Control ('+act+')','err');}
   }
   u.hrm.roleProfileId=roleId;u.hrm.permsV3=1;
-  // ONE role: derive the legacy base-role field from the access role so nothing is set twice.
-  const baseRole=roleId==='superadmin'?'Admin':roleId==='admin'?'SubAdmin':'User';
-  if(u.role!==baseRole){u.role=baseRole;sb.from('profiles').update({role:baseRole}).eq('id',u.id).then(()=>{}).catch(()=>{});}
+  // R20: the access role IS the only role — no legacy base-role field to mirror any more.
   u.hrm.isHR=(roleId==='hr'); // ONE concept: the HR role IS the HR approver stage
   log(fullName(me()),'Role assigned',fullName(u)+' → '+(DB.roleProfiles[roleId].name||roleId));
   _acPushHrm(u); // R14: the assignment lives on u.hrm — push NOW so a reload can't revert it

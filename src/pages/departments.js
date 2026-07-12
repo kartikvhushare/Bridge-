@@ -225,7 +225,7 @@ function deptsPage(){
       +(stab2==='users'
         ?('<div class="space-y-2">'
           +(dUsers.length
-            ?dUsers.map(u=>'<div style="display:flex;align-items:center;gap:12px;background:#fff;border-radius:14px;border:1px solid #ECEDF0;padding:12px 14px">'+avatar(u,'w-10 h-10','text-xs')+'<div style="flex:1"><div style="font-size:14px;font-weight:600">'+esc(fullName(u))+'</div><div style="font-size:12px;color:#9CA3AF">'+esc(u.position||u.role)+'</div></div>'+chip(u.status)+'</div>').join('')
+            ?dUsers.map(u=>'<div style="display:flex;align-items:center;gap:12px;background:#fff;border-radius:14px;border:1px solid #ECEDF0;padding:12px 14px">'+avatar(u,'w-10 h-10','text-xs')+'<div style="flex:1"><div style="font-size:14px;font-weight:600">'+esc(fullName(u))+'</div><div style="font-size:12px;color:#9CA3AF">'+esc(u.position||roleName(u))+'</div></div>'+chip(u.status)+'</div>').join('')
             :empty('users','No users','No users assigned to this department.')
           )+'</div>')
         :'')

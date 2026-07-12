@@ -97,11 +97,12 @@ function okrDueOn(o,date){
 function okrDueForUser(uid2,date){return(DB.okrs||[]).filter(o=>o.ownerId===uid2&&okrDueOn(o,date));}
 function okrCheckinFor(okrId,uid2,date){return(DB.okrCheckins||[]).find(c=>c.okrId===okrId&&c.userId===uid2&&c.date===date);}
 /* ── Visibility ──
-   Super Admin / Admin → everything. Manager → own + team-owned nodes + everything below those.
+   okr.viewAll (Access Control toggle; the superadmin/admin bundles carry it) → everything.
+   Manager → own + team-owned nodes + everything below those.
    Everyone else → nodes they own + everything below them ("his level and below him"). */
 function okrVisible(){
   const all=DB.okrs||[];
-  if(isAdmin()||isSubAdmin())return all;
+  if(isAdmin()||can('okr','viewAll'))return all;
   const mine=new Set();
   const team=isMgr()?new Set([S.uid,...subTree(S.uid).map(u=>u.id)]):new Set([S.uid]);
   all.forEach(o=>{if(team.has(o.ownerId)||o.createdBy===S.uid)mine.add(o.id);});

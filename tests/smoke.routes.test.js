@@ -11,10 +11,11 @@ const ROUTES = ['dashboard','users','departments','locations','checklists','allc
 
 let sa, emp;
 beforeAll(() => {
-  sa  = W.__mkUser({ id: 'sa1',  role: 'Admin' });
+  sa  = W.__mkUser({ id: 'sa1' }); // superadmin — assigned below
   emp = W.__mkUser({ id: 'emp1' });
   W.DB.users.push(sa, emp);
   [sa, emp].forEach(u => W._ensureHrm(u));
+  sa.hrm.roleProfileId = 'superadmin'; // R20: roles are assigned in Access Control, never derived
   W._seedRoleProfiles();
   W._permsV3Migrate();
   W._seedHRMPlan();
@@ -708,7 +709,7 @@ describe('r14 - super admin appears in the shift roster', () => {
 describe('r15 - role scopes bind SubAdmins (no page-level bypass)', () => {
   let lee, savedSched, savedCk;
   beforeAll(() => {
-    lee = W.__mkUser({ id: 'lee1', role: 'SubAdmin', firstName: 'Lee', lastName: 'Mascarenhas' });
+    lee = W.__mkUser({ id: 'lee1', firstName: 'Lee', lastName: 'Mascarenhas' });
     W.DB.users.push(lee); W._ensureHrm(lee);
     lee.hrm.roleProfileId = 'admin';
     savedSched = JSON.stringify(W.DB.roleProfiles.admin.perms.scheduling);

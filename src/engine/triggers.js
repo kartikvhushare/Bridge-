@@ -192,7 +192,7 @@ App._flowStartGo=(kind)=>{
   const el=document.getElementById('flw-user');if(!el)return;
   const tpl=((DB.hrmConfig||{}).flowTemplates||{})[kind]||[];
   const owners=tpl.map((t,i)=>{const s2=document.getElementById('fs-own-'+i);return s2?s2.value:null;});
-  _flowStart(kind,el.value,owners);closeModal();toast('Flow started');rr();
+  _flowStart(kind,el.value,owners);closeModal();toast('Flow started');_lcRR(); // R20: scoped refresh — no full-page flash
 };
 App._flowStep=(fid,sid)=>{
   const f=(DB.flows||[]).find(x=>x.id===fid);if(!f)return;
@@ -204,10 +204,10 @@ App._flowStep=(fid,sid)=>{
   if(f.steps.every(x=>x.done)){f.status='Completed';f.completedAt=new Date().toISOString();if(u)notify(f.createdBy||S.uid,'✅ '+f.kind+' flow completed for '+fullName(u),'lifecycle');}
   else f.status='Active';
   _pushRow('flows',_flowRow(f),'flow');log(fullName(me()),(st.done?'Completed':'Reopened')+' flow step',st.title);
-  saveDB();rr();
+  saveDB();_lcRR(); // R20: scoped refresh — no full-page flash
 };
 App._flowForm=(fid,sid,val)=>{const f=(DB.flows||[]).find(x=>x.id===fid);if(!f)return;const st=f.steps.find(x=>x.id===sid);if(!st)return;st.formText=val;clearTimeout(App._flwT);App._flwT=setTimeout(()=>{_pushRow('flows',_flowRow(f),'flow');saveDB();},1200);};
-App._flowDel=(fid)=>{if(!can('lifecycle','manage'))return;const f=(DB.flows||[]).find(x=>x.id===fid);if(!f)return;if(!confirm('Delete this flow?'))return;DB.flows=DB.flows.filter(x=>x.id!==fid);_delRow('flows',fid,'flow');log(fullName(me()),'Deleted flow',f.kind);saveDB();rr();};
+App._flowDel=(fid)=>{if(!can('lifecycle','manage'))return;const f=(DB.flows||[]).find(x=>x.id===fid);if(!f)return;if(!confirm('Delete this flow?'))return;DB.flows=DB.flows.filter(x=>x.id!==fid);_delRow('flows',fid,'flow');log(fullName(me()),'Deleted flow',f.kind);saveDB();_lcRR();};
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
 window.notify=notify;window._notifyOnce=_notifyOnce;window.NOTIF_KINDS=NOTIF_KINDS;window._kindKey=_kindKey;window._inappOn=_inappOn;window._hrUsers=_hrUsers;window._mgrOf=_mgrOf;window._seedHRMPlan=_seedHRMPlan;window._runEventTriggers=_runEventTriggers;window._flowStart=_flowStart;

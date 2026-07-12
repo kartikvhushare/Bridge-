@@ -606,7 +606,7 @@ App._submitRun=async(clId,date)=>{
     const apprText='🔔 Approval needed: '+fullName(u)+' submitted "'+c.name+'" — awaiting your review';
     const _subNotifOn=_inappOn('checklist')&&(!_ns||_ns.inapp_submission_submitted!==false);
     if(mgrId&&_subNotifOn)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:apprText,time:new Date().toISOString(),read:false,kind:'submission'});
-    const adminU2=DB.users.find(x=>x.role==='Admin');
+    const adminU2=DB.users.find(x=>isSuperU(x));
     if(adminU2&&adminU2.id!==mgrId&&_subNotifOn)DB.notifications.unshift({id:uid('n'),userId:adminU2.id,text:apprText,time:new Date().toISOString(),read:false,kind:'submission'});
   }
   log(fullName(u),'Submitted '+run.status,c.name);
@@ -679,7 +679,7 @@ App._sendReq=(clId,date)=>{
   if(mgrId){if(_edReqNotifOn)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'✏️ Edit request from '+fullName(u)+' for "'+clName+'" on '+fmtS(date),time:new Date().toISOString(),read:false,kind:'edit'});
     if(typeof queueEmail==='function')queueEmail('approval_requested',mgrId,clId,date,{checklist_name:clName,employee_name:fullName(u)});} // FINAL-FIX
   // Notify admin if not same as manager
-  const admin=DB.users.find(x=>x.role==='Admin');
+  const admin=DB.users.find(x=>isSuperU(x));
   if(admin&&admin.id!==mgrId&&_edReqNotifOn)DB.notifications.unshift({id:uid('n'),userId:admin.id,text:'Edit request: '+fullName(u)+' — '+clName,time:new Date().toISOString(),read:false,kind:'edit'});
   _invalidateNotifCache();log(fullName(u),'Edit request',clName);
   toast('Edit request sent to your manager');saveDB();closeModal();render();

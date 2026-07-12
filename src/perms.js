@@ -5,8 +5,8 @@
    - DB.roleProfiles: named permission bundles (object keyed by id).
    - u.hrm.roleProfileId: per-user assignment (null = base-role floor).
    - can()/scopeOf()/scopeFilter(): the resolver every gate calls.
-   - _baseCan()/_baseScope(): back-compat shim = TODAY's exact access
-     for any user with NO assigned profile. This is the safety net.
+   - R20: the legacy base-role shim is gone. Anyone with no resolvable
+     role falls back to the Basic Employee bundle (superadmin id exempt).
    ═══════════════════════════════════════════════════════════════ */
 // `group` partitions the Access-Control editor into labelled sections (rendering only — does not
 // affect can()/scope resolution). Every `actions` entry below is an action that is actually enforced
@@ -30,7 +30,7 @@ const PERM_AREAS=[
   {key:'documentsPersonal',label:'Personal documents',desc:'Files on a person\'s profile',actions:['view','create','delete','download'],scoped:true,group:'Work & Content'},
   {key:'analytics',label:'Dashboard — Company',desc:'Operational analytics dashboard (checklists, compliance, tickets)',actions:['view'],scoped:false,group:'Dashboards & Inbox'},
   {key:'reports',label:'Dashboard — HRM Analytics',desc:'HR analytics dashboard & CSV exports',actions:['view','download'],scoped:true,group:'Dashboards & Inbox'},
-  {key:'okr',label:'OKRs',desc:'Hierarchical objectives (L0 → L1 → L2), each level measured independently. Level owners + upper-level owners always keep their built-in rights; these toggles grant the same powers to a role on top.',actions:['view','create','edit','manage','editEntries','changeOwner','deleteLogs'],scoped:false,group:'Dashboards & Inbox'},
+  {key:'okr',label:'OKRs',desc:'Hierarchical objectives (L0 → L1 → L2), each level measured independently. Level owners + upper-level owners always keep their built-in rights; these toggles grant the same powers to a role on top.',actions:['view','viewAll','create','edit','manage','editEntries','changeOwner','deleteLogs'],scoped:false,group:'Dashboards & Inbox'},
   {key:'announcements',label:'Announcements',desc:'Company-wide messages',actions:['view','create'],scoped:false,group:'Work & Content'},
   {key:'locations',label:'Locations',desc:'Offices and GPS boundary',actions:['view','create','edit','manage'],scoped:false,group:'Administration'},
   {key:'departments',label:'Departments',desc:'Department list',actions:['view','create','edit'],scoped:false,group:'Administration'},
@@ -48,7 +48,7 @@ const PERM_AREAS=[
   {key:'accessControl',label:'Access Control',desc:'The role-profile system itself',actions:['view','manage'],scoped:false,group:'Administration'},
 ];
 // Plain-language labels used by the Access Control editor + live summary.
-const PERM_ACTION_LABEL={view:'View',create:'Create',edit:'Edit',delete:'Delete',deactivate:'Deactivate',approve:'Approve',download:'Download / Export',manage:'Manage',manageSettings:'Manage settings',assign:'Assign',assignRole:'Assign role profile',assignManager:'Assign manager',grant:'Grant / Remove',submit:'Submit',upload:'Upload',manageGeofence:'Manage geofence',issue:'Issue',verify:'Verify',run:'Run',finalize:'Finalize',rollback:'Roll back',editEntries:'Edit / delete inputs (any OKR)',changeOwner:'Change owner (any OKR)',deleteLogs:'Delete log entries (any OKR)'};
+const PERM_ACTION_LABEL={view:'View',create:'Create',edit:'Edit',delete:'Delete',deactivate:'Deactivate',approve:'Approve',download:'Download / Export',manage:'Manage',manageSettings:'Manage settings',assign:'Assign',assignRole:'Assign role profile',assignManager:'Assign manager',grant:'Grant / Remove',submit:'Submit',upload:'Upload',manageGeofence:'Manage geofence',issue:'Issue',verify:'Verify',run:'Run',finalize:'Finalize',rollback:'Roll back',editEntries:'Edit / delete inputs (any OKR)',changeOwner:'Change owner (any OKR)',deleteLogs:'Delete log entries (any OKR)',viewAll:'See every OKR (org-wide)'};
 const SCOPE_ORDER=['none','self','team','department','location','everyone'];
 const SCOPE_LABEL={none:'None',self:'Only their own',team:'Their team',department:'Their department',location:'Their office',everyone:'Everyone'};
 const _areaByKey=k=>PERM_AREAS.find(a=>a.key===k);
@@ -132,17 +132,18 @@ function _seedRoleProfiles(){
       reviews:A('self','view','submit'),
     }},
   };
-  const V='7'; // v7: OKR granular actions (editEntries/changeOwner/deleteLogs) // v6: Phase 4 'reviews' area // v5: reports scoped, surveys
+  const V='8'; // v8 (R20): okr.viewAll — org-wide OKR visibility is a toggle, not a legacy role name // v7: OKR granular actions // v6: Phase 4 'reviews' area
   Object.values(presets).forEach(p=>{
     const cur=DB.roleProfiles[p.id];
     if(!cur||(cur.builtin&&cur._v!==V)){p._v=V;DB.roleProfiles[p.id]=p;} // upgrade built-ins once; never touch custom roles
   });
 }
 
-// ── Resolver v3 (roles-first, fully toggle-driven) ──
+// ── Resolver v4 (R20: roles-first, fully toggle-driven — the legacy base-role shim is GONE) ──
 // Priority: 1) per-user AREA OVERRIDE (u.hrm.perms — beats everything, even Super Admin)
 //           2) ASSIGNED ROLE (u.hrm.roleProfileId → DB.roleProfiles)
-//           3) legacy fallbacks for anyone not yet migrated (Admin default-all, HR floor, base shim).
+//           3) safety nets: the superadmin id is always all-powerful (even if its bundle is
+//              missing), and anyone with NO resolvable role gets the Basic Employee bundle.
 function _myProfile(){const u=me();if(!u)return null;const id=u.hrm?.roleProfileId;return id?(DB.roleProfiles?.[id]||null):null;}
 function _roleOf(u){const id=u&&u.hrm&&u.hrm.roleProfileId;return id?(DB.roleProfiles?.[id]||null):null;}
 function _userPermArea(u,area){const p=u&&u.hrm&&u.hrm.perms;return(p&&typeof p==='object'&&p[area]&&typeof p[area]==='object')?p[area]:null;}
@@ -152,9 +153,9 @@ function can(area,action){
   if(o)return !!(o.actions&&o.actions[action]);
   const rp=_roleOf(u);
   if(rp)return !!(rp.perms&&rp.perms[area]&&rp.perms[area].actions&&rp.perms[area].actions[action]);
-  if(isAdmin())return true;
-  if(_hrFloor(area,action))return true;
-  return _baseCan(area,action);
+  if(isSuperU(u))return true; // superadmin never locks itself out, even if its bundle is missing
+  const b=DB.roleProfiles?.basic; // no resolvable role → Basic Employee floor
+  return !!(b&&b.perms&&b.perms[area]&&b.perms[area].actions&&b.perms[area].actions[action]);
 }
 // Evaluate for ANOTHER user (Access Control editor + lockout guard).
 function canUser(u,area,action){
@@ -163,16 +164,16 @@ function canUser(u,area,action){
   if(o)return !!(o.actions&&o.actions[action]);
   const rp=_roleOf(u);
   if(rp)return !!(rp.perms&&rp.perms[area]&&rp.perms[area].actions&&rp.perms[area].actions[action]);
-  return u.role==='Admin';
+  if(isSuperU(u))return true;
+  const b=DB.roleProfiles?.basic;
+  return !!(b&&b.perms&&b.perms[area]&&b.perms[area].actions&&b.perms[area].actions[action]);
 }
 // Lockout guard: would ANY other active user still hold accessControl.<action> if `uid2` loses it?
 function _acLockoutSafe(uid2,action){
   return (DB.users||[]).some(x=>x.id!==uid2&&x.status==='Active'&&canUser(x,'accessControl',action));
 }
-// Which built-in role matches a user's legacy standing? (migration + base-role changes)
+// Default role for a user with none assigned (new users; the legacy role field is retired).
 function _roleIdForUser(u){
-  if(u.role==='Admin')return 'superadmin';
-  if(u.role==='SubAdmin')return 'admin';
   if(u.hrm&&u.hrm.isHR===true)return 'hr';
   if((DB.users||[]).some(x=>x.managerId===u.id&&x.id!==u.id))return 'manager';
   return 'basic';
@@ -201,16 +202,6 @@ function _permsV3Migrate(){
   });
   if(n){console.log('[perms] v3 roles assigned to',n,'user(s)');saveDB();}
 }
-// HR-role floor — legacy fallback for users with NO assigned role (pre-migration edge only).
-function _hrFloor(area,action){
-  if(!isHR())return false;
-  if(area==='leaveBalances')return action==='view'||action==='edit'||action==='grant';
-  if(area==='hrSettings')return action==='view'||action==='edit';
-  if(area==='leaveRequests')return action==='view'||action==='approve';
-  if(area==='attendance')return action==='view'||action==='edit';
-  if(area==='documentsOrg')return action==='approve';
-  return false;
-}
 // scopeOf(area) → 'none'|'self'|'team'|'department'|'location'|'everyone'
 function scopeOf(area){
   const u=me();if(!u)return 'none';
@@ -218,14 +209,15 @@ function scopeOf(area){
   if(o)return o.scope||'none';
   const rp=_roleOf(u);
   if(rp){const a=rp.perms&&rp.perms[area];return a?(a.scope||'none'):'none';}
-  if(isAdmin())return 'everyone';
-  return _baseScope(area);
+  if(isSuperU(u))return 'everyone';
+  const b=DB.roleProfiles?.basic;const a=b&&b.perms&&b.perms[area];
+  return a?(a.scope||'none'):'none';
 }
 // scopeFilter(area) → predicate(userId)=>bool ("can I see this person under <area>'s scope").
 function scopeFilter(area){
   const sc=scopeOf(area),myId=S.uid,u=me();
   if(sc==='none')return ()=>false;
-  if(sc==='everyone')return id=>{const t=uById(id);return !!t&&(t.role!=='Admin'||isAdmin());};
+  if(sc==='everyone')return id=>{const t=uById(id);return !!t&&(!isSuperU(t)||isAdmin());};
   if(sc==='self')return id=>id===myId;
   if(sc==='team'){const set=new Set([myId,...subTree(myId).map(x=>x.id)]);return id=>set.has(id);}
   if(sc==='department'){const d=u?.department;return id=>!!d&&uById(id)?.department===d;}
@@ -234,51 +226,5 @@ function scopeFilter(area){
 }
 function scopedUsers(area){const f=scopeFilter(area);return DB.users.filter(u=>f(u.id));}
 
-// ── Legacy base-role shim (only reachable for users with NO role assigned — pre-migration) ──
-const _canReportLegacy=()=>{const p=me()?.hrm?.reportPerms||{};return Object.values(p).some(Boolean);};
-function _baseCan(area,action){
-  const sub=isSubAdmin(),mgr=isMgr(),hr=isHR(),q=!!me()?.questionsAccess,doc=hasDocAccess();
-  switch(area){
-    case 'dashboard':return true;
-    case 'attendance':return action==='view'?true:(sub||hr);
-    case 'leaveRequests':return action==='approve'?(sub||mgr||hr):(action==='download'?(sub||hr):true);
-    case 'leaveBalances':return action==='view'?(sub||mgr||hr):((action==='grant'||action==='edit')?hr:false);
-    case 'hrSettings':return hr;
-    case 'employees':
-      if(action==='deactivate'||action==='assignManager')return sub;
-      if(action==='assignRole')return false;
-      return action==='view'?(sub||mgr):sub;
-    case 'hierarchy':return true;
-    case 'scheduling':return action==='view'?true:(sub||mgr||hr);
-    case 'checklists':return action==='view'?true:(sub||mgr);
-    case 'analytics':return (sub||mgr||hr);
-    case 'questions':return q||sub;
-    case 'tickets':return action==='manage'?(sub||mgr):true;
-    case 'documentsOrg':return action==='approve'?hr:doc;
-    case 'documentsPersonal':return true;
-    case 'reports':return (action==='download')?(hr||_canReportLegacy()):(hr||mgr||_canReportLegacy());
-    case 'announcements':return action==='view'?true:hr;
-    case 'locations':return action==='view'?doc:false;
-    case 'departments':return doc;
-    case 'teamview':return sub||mgr;
-    case 'allChecklists':return sub;
-    case 'approvals':return sub||mgr||hr;
-    case 'audit':return false;
-    case 'settings':return false;
-    case 'accessControl':return false;
-    case 'okr':
-      if(action==='view')return sub||mgr||(DB.okrs||[]).some(o=>o.ownerId===S.uid);
-      return sub||mgr;
-  }
-  return false;
-}
-function _baseScope(area){
-  if(area==='employees')return 'team';
-  if(isSubAdmin())return 'everyone';
-  if(isHR()&&['attendance','leaveRequests','leaveBalances','reports','scheduling','expenses'].includes(area))return 'everyone';
-  if(isMgr())return 'team';
-  return 'self';
-}
-
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.PERM_GROUPS=PERM_GROUPS;window.PERM_AREAS=PERM_AREAS;window.PERM_ACTION_LABEL=PERM_ACTION_LABEL;window.SCOPE_ORDER=SCOPE_ORDER;window.SCOPE_LABEL=SCOPE_LABEL;window._areaByKey=_areaByKey;window._seedRoleProfiles=_seedRoleProfiles;window._myProfile=_myProfile;window._roleOf=_roleOf;window._userPermArea=_userPermArea;window.can=can;window.canUser=canUser;window._acLockoutSafe=_acLockoutSafe;window._roleIdForUser=_roleIdForUser;window._permsV3Migrate=_permsV3Migrate;window._hrFloor=_hrFloor;window.scopeOf=scopeOf;window.scopeFilter=scopeFilter;window.scopedUsers=scopedUsers;window._canReportLegacy=_canReportLegacy;window._baseCan=_baseCan;window._baseScope=_baseScope;
+window.PERM_GROUPS=PERM_GROUPS;window.PERM_AREAS=PERM_AREAS;window.PERM_ACTION_LABEL=PERM_ACTION_LABEL;window.SCOPE_ORDER=SCOPE_ORDER;window.SCOPE_LABEL=SCOPE_LABEL;window._areaByKey=_areaByKey;window._seedRoleProfiles=_seedRoleProfiles;window._myProfile=_myProfile;window._roleOf=_roleOf;window._userPermArea=_userPermArea;window.can=can;window.canUser=canUser;window._acLockoutSafe=_acLockoutSafe;window._roleIdForUser=_roleIdForUser;window._permsV3Migrate=_permsV3Migrate;window.scopeOf=scopeOf;window.scopeFilter=scopeFilter;window.scopedUsers=scopedUsers;

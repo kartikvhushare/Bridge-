@@ -56,7 +56,7 @@ for (const m of order) await import(m);
 window.__mkUser = (over = {}) => Object.assign({
   id: 'u' + Math.random().toString(36).slice(2, 8),
   firstName: 'T', lastName: 'U', email: 't@u.com', phone: '', position: 'Staff',
-  department: 'Ops', role: 'User', status: 'Active', managerId: null,
+  department: 'Ops', status: 'Active', managerId: null,
   rules: { past: true, future: true, edit: true },
   approval: { past: false, future: false, edited: false },
   docAccess: { departments: {}, locations: {} }, questionsAccess: false,

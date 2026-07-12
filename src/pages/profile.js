@@ -9,12 +9,12 @@ function profilePage(){
       ${avatar(u,'w-14 h-14','text-xl')}
       <div>
         <h2 class="fd text-xl font-bold">${esc(fullName(u))}</h2>
-        <p class="text-ink-400 text-sm">${isAdmin()?'Admin':isMgr()?'Manager':'Member'} · ${esc(u.department||'')}</p>
+        <p class="text-ink-400 text-sm">${esc(roleName(u))} · ${esc(u.department||'')}</p>
         <div class="mt-1.5">${chip(u.status)}</div>
       </div>
     </div>
     <div class="grid sm:grid-cols-2 gap-x-6 gap-y-3 border-t border-ink-100 pt-4 mb-4">
-      ${[['Email',u.email],['Phone',u.phone||'—'],['Department',u.department||'—'],['Role',u.role],
+      ${[['Email',u.email],['Phone',u.phone||'—'],['Department',u.department||'—'],['Role',roleName(u)],
          ['Reports to',u.managerId?fullName(uById(u.managerId)):'—'],
          ['Direct reports',subTree(u.id).length]].map(([k,v])=>`
         <div><div class="text-[10px] font-bold text-ink-400 uppercase tracking-wide">${k}</div>

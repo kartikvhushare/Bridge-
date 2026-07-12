@@ -828,7 +828,7 @@ function _processEscalations(checklistId,date,responses){
       // In-app notification to assignee
       if(_inappOn('escalation'))DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation',kind:'escalation'});
       // In-app notification to admin
-      const adminU=DB.users.find(x=>x.role==='Admin');
+      const adminU=DB.users.find(x=>isSuperU(x));
       if(adminU&&adminU.id!==escalateTo&&adminU.id!==S.uid&&_inappOn('escalation')){
         DB.notifications.unshift({id:uid('n'),userId:adminU.id,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation',kind:'escalation'});
       }

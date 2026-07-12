@@ -3,7 +3,7 @@
 /* ===== USERS ===== */
 function _disableBtn(u){
   if(!can('employees','deactivate')||!scopeFilter('employees')(u.id))return''; // C2: gate enable/disable button to the dedicated permission
-  if(u.role==='Admin'&&!isAdmin())return''; // never offer to disable a Super Admin to a non-admin
+  if(isSuperU(u)&&!isAdmin())return''; // never offer to disable a Super Admin to a non-admin
   const isActive=u.status==='Active';
   const bg=isActive?'transparent':'#FEF3C7';
   const col=isActive?'#9CA3AF':'#D97706';
@@ -13,8 +13,7 @@ function _disableBtn(u){
 
 function usersPage(){
   // Directory scoped by the resolver (employees area). Keep Super Admin out of the people list
-  // for non-admins exactly as before — scopeFilter('employees') handles that. For unassigned
-  // users _baseScope yields today's behavior (Admin/SubAdmin → everyone, manager → team).
+  // for non-admins exactly as before — scopeFilter('employees') handles that.
   const _canEdit=can('employees','edit'),_canDel=can('employees','delete');
   let list=scopedUsers('employees');const q=S.search.toLowerCase();
   if(q)list=list.filter(u=>fullName(u).toLowerCase().includes(q)||u.email.toLowerCase().includes(q));
@@ -28,7 +27,7 @@ function usersPage(){
   </div>
   <div class="hidden md:block bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
     <table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-5 py-3 font-semibold">Name</th><th class="px-5 py-3 font-semibold">Department</th><th class="px-5 py-3 font-semibold">Role</th><th class="px-5 py-3 font-semibold">Reports to</th><th class="px-5 py-3 font-semibold">Status</th><th class="px-5 py-3"></th></tr></thead>
-    <tbody class="divide-y divide-ink-50">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;const isMgrUser=subTree(u.id).length>0;return`<tr class="hover:bg-ink-50/50"><td class="px-5 py-3"><div class="flex items-center gap-3">${avatar(u,'w-9 h-9','text-xs')}<div><div class="font-semibold">${esc(fullName(u))}</div><div class="text-xs text-ink-400">${esc(u.email)}</div></div></div></td><td class="px-5 py-3">${esc(u.department)}<div class="text-xs text-ink-400">${esc(u.position)}</div></td><td class="px-5 py-3">${u.role==='Admin'?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#15171C;color:#fff">Super Admin</span>':u.role==='SubAdmin'?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#EEF2FF;color:#4338CA">Admin</span>':isMgrUser?'<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">Manager</span>':'<span class="text-xs text-ink-400">User</span>'}</td><td class="px-5 py-3 text-sm">${mgr?esc(fullName(mgr)):'<span class="text-ink-300">—</span>'}</td><td class="px-5 py-3">${chip(u.status)}</td><td class="px-5 py-3"><div class="flex gap-1 justify-end">${(_canEdit||_canDel)?`${_canEdit?`<button onclick="App.editUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('edit','w-4 h-4')}</button><button onclick="App.resetPw('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'" title="Reset password">${ic('key','w-4 h-4')}</button>${_disableBtn(u)}`:''}${(_canDel&&u.role!=='Admin')?`<button onclick="App.delUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.color='#BE123C'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('trash','w-4 h-4')}</button>`:''}`:'<span class="text-ink-200">—</span>'}</div></td></tr>`;}).join('')}</tbody></table>
+    <tbody class="divide-y divide-ink-50">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;const isMgrUser=subTree(u.id).length>0;return`<tr class="hover:bg-ink-50/50"><td class="px-5 py-3"><div class="flex items-center gap-3">${avatar(u,'w-9 h-9','text-xs')}<div><div class="font-semibold">${esc(fullName(u))}</div><div class="text-xs text-ink-400">${esc(u.email)}</div></div></div></td><td class="px-5 py-3">${esc(u.department)}<div class="text-xs text-ink-400">${esc(u.position)}</div></td><td class="px-5 py-3">${isSuperU(u)?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#15171C;color:#fff">Super Admin</span>':_pidOf(u)==='admin'?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#EEF2FF;color:#4338CA">'+esc(roleName(u))+'</span>':isMgrUser?'<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">Manager</span>':'<span class="text-xs text-ink-400">'+esc(roleName(u))+'</span>'}</td><td class="px-5 py-3 text-sm">${mgr?esc(fullName(mgr)):'<span class="text-ink-300">—</span>'}</td><td class="px-5 py-3">${chip(u.status)}</td><td class="px-5 py-3"><div class="flex gap-1 justify-end">${(_canEdit||_canDel)?`${_canEdit?`<button onclick="App.editUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('edit','w-4 h-4')}</button><button onclick="App.resetPw('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'" title="Reset password">${ic('key','w-4 h-4')}</button>${_disableBtn(u)}`:''}${(_canDel&&!isSuperU(u))?`<button onclick="App.delUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.color='#BE123C'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('trash','w-4 h-4')}</button>`:''}`:'<span class="text-ink-200">—</span>'}</div></td></tr>`;}).join('')}</tbody></table>
     ${list.length?'':empty('users','No users','')}
   </div>
   <div class="md:hidden space-y-2">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4" ${_canEdit?`onclick="App.editUser('${u.id}')" style="cursor:pointer"`:''}>
@@ -123,7 +122,7 @@ App._assetAdd=(userId)=>{
   u.hrm.assets.push({id:uid('ast'),name,category:$('#ast-c')?.value||'Other',serial:($('#ast-s')?.value||'').trim(),assignedDate:$('#ast-d')?.value||todayISO(),notes:($('#ast-no')?.value||'').trim(),status:'Assigned',returnDate:null,assignedBy:S.uid,createdAt:new Date().toISOString()});
   log(fullName(me()),'Asset assigned',name+' → '+fullName(u));
   _acPushHrm(u);saveDB();toast('Asset added');
-  if(document.getElementById('u-role'))App.editUser(userId);else rr();
+  if(document.getElementById('u-fn'))App.editUser(userId);else rr();
 };
 App._assetReturn=(userId,assetId)=>{
   const u=uById(userId);if(!u)return;
@@ -132,7 +131,7 @@ App._assetReturn=(userId,assetId)=>{
   a.status='Returned';a.returnDate=todayISO();
   log(fullName(me()),'Asset returned',a.name+' ← '+fullName(u));
   _acPushHrm(u);saveDB();toast('Marked returned');
-  if(document.getElementById('u-role'))App.editUser(userId);else rr();
+  if(document.getElementById('u-fn'))App.editUser(userId);else rr();
 };
 App._assetDel=(userId,assetId)=>{
   const u=uById(userId);if(!u)return;
@@ -142,7 +141,7 @@ App._assetDel=(userId,assetId)=>{
   u.hrm.assets=(u.hrm.assets||[]).filter(x=>x.id!==assetId);
   log(fullName(me()),'Asset record removed',a.name+' ('+fullName(u)+')');
   _acPushHrm(u);saveDB();toast('Removed','warn');
-  if(document.getElementById('u-role'))App.editUser(userId);else rr();
+  if(document.getElementById('u-fn'))App.editUser(userId);else rr();
 };
 // City (location) scope checkboxes for the user modal — requirement #6.
 function _cityScopeChips(u){
@@ -158,10 +157,9 @@ App.editUser=(id=null)=>{
     if(!can('employees','edit')||!scopeFilter('employees')(id)){toast('Not allowed','err');return;}
   }else if(!can('employees','create')){toast('Not allowed','err');return;}
   const u=id?uById(id):null;
-  // ONE ROLE CONCEPT: the access role (Access Control → People) is the only role anyone sets.
-  // The legacy base-role field is derived from it automatically and shown read-only here.
-  const roleSelHtml=(()=>{const rid=u?.hrm?.roleProfileId;const rname=(DB.roleProfiles?.[rid]||{}).name||(u?roleLabel(u.role):'Basic Employee');
-    return `<div><label class="block text-xs font-semibold text-ink-500 mb-1">Access role</label><div class="w-full bg-ink-50 border border-ink-200 rounded-xl px-3 py-2.5 text-sm text-ink-500">${esc(rname)}</div><input type="hidden" id="u-role" value="${esc(u?.role||'User')}"><p style="font-size:11px;color:#9CA3AF;margin-top:4px">Set in <strong>Access Control → People</strong> — one dropdown decides everything this person sees.</p></div>`;})();
+  // ONE ROLE CONCEPT (R20): the Access Control role is the only role that exists — shown read-only here.
+  const roleSelHtml=(()=>{const rname=u?roleName(u):'Basic Employee';
+    return `<div><label class="block text-xs font-semibold text-ink-500 mb-1">Access role</label><div class="w-full bg-ink-50 border border-ink-200 rounded-xl px-3 py-2.5 text-sm text-ink-500">${esc(rname)}</div><p style="font-size:11px;color:#9CA3AF;margin-top:4px">Set in <strong>Access Control → People</strong> — one dropdown decides everything this person sees.</p></div>`;})();
   const mgrOpts=DB.users.filter(x=>!u||x.id!==u.id&&!isDesc(x.id,u.id));
   const v=(f,d='')=>esc(u?u[f]??d:d);
   modalShell({title:`${u?'Edit':'New'} user`,size:'max-w-2xl',
@@ -226,25 +224,12 @@ App.saveUser=async(id)=>{
     hrm.roleProfileId=curRP;
   }
 
-  // SEC-1: never let a non-Super-Admin assign or change an elevated role.
-  // Non-admins: force role 'User' on create, and preserve the existing role on edit.
-  // Also: only a Super Admin may change a Super Admin's role.
-  const reqRole=$('#u-role')?.value||'User';
+  // R20: the legacy role field is gone. Roles are assigned ONLY in Access Control → People
+  // (u.hrm.roleProfileId), which _acAssignRole already guards (accessControl.manage + lockout).
   const existing=id?uById(id):null;
-  let role;
-  if(isAdmin()){
-    role=reqRole;
-  }else if(id){
-    // preserve existing role verbatim; non-admins can never touch role on edit
-    role=existing?existing.role:'User';
-  }else{
-    role='User';
-  }
-  if(existing&&existing.role==='Admin'&&!isAdmin())role=existing.role; // can't demote a Super Admin
-  if(!isAdmin()&&(role==='Admin'||role==='SubAdmin')&&(!existing||existing.role!==role)){toast('Not allowed','err');return;}
   const pd={first_name:fn,last_name:ln,email,
     phone:g('u-phone'),position:g('u-pos'),
-    department:$('#u-dep')?.value,role,
+    department:$('#u-dep')?.value,
     status:$('#u-status')?.value,manager_id:mId||null,
     rules,approval_settings,
     doc_access:docAccess,questions_access:questionsAccess,
@@ -264,16 +249,12 @@ App.saveUser=async(id)=>{
       u.managerHistory=h;
       pd.manager_history=h;
     }
-    const _roleChanged=u&&u.role!==pd.role;
     if(u)Object.assign(u,{firstName:fn,lastName:ln,email,
       phone:pd.phone,position:pd.position,department:pd.department,
-      role:pd.role,status:pd.status,managerId:mId,
+      status:pd.status,managerId:mId,
       rules,approval:approval_settings,
       questionsAccess,emailEnabled:email_enabled,cities,
       docAccess,hrm});
-    // perms v3: a base-role change assigns the matching built-in access ROLE and clears
-    // per-user overrides (fine-tune afterwards in Access Control).
-    if(_roleChanged&&u){_ensureHrm(u);u.hrm.roleProfileId=_roleIdForUser(u);u.hrm.perms=null;u.hrm.permsV3=1;log(fullName(me()),'Access role assigned (base-role change)',fn+' '+ln+' → '+u.hrm.roleProfileId);}
     log(fullName(me()),'Edited user',fn+' '+ln);
     toast('Saved');closeModal();saveDB();render();
     // Sync all fields including doc_access to Supabase in background
@@ -298,7 +279,7 @@ App.saveUser=async(id)=>{
     if(!newId){toast('User created — reload to see them','ok');closeModal();render();return;}
     DB.users.push(_ensureHrm({id:newId,firstName:fn,lastName:ln,email,
       phone:pd.phone,position:pd.position,department:pd.department,
-      role:pd.role,status:pd.status,managerId:mId,
+      status:pd.status,managerId:mId,
       rules:pd.rules,approval:pd.approval_settings,
       questionsAccess,emailEnabled:email_enabled,cities,
       docAccess,hrm,password:'***'}));
@@ -333,7 +314,7 @@ App.togUser=(id)=>{
   const u=uById(id);if(!u)return;
   // SEC-2/C2: require employees.deactivate (dedicated gate) + target in scope; never disable a Super Admin unless Super Admin.
   if(!can('employees','deactivate')||!scopeFilter('employees')(id)){toast('Not permitted','err');return;}
-  if(u.role==='Admin'&&!isAdmin()){toast('Not permitted','err');return;}
+  if(isSuperU(u)&&!isAdmin()){toast('Not permitted','err');return;}
   const enabling=u.status!=='Active';
   u.status=enabling?'Active':'Inactive';
   // M8: deactivating an employee must not strand their Pending leave / leak the reserved `pending` balance.
@@ -354,7 +335,7 @@ App.delUser=async(id)=>{
   const u=uById(id);if(!u)return;
   // SEC-2: require employees.delete + target in scope; never delete a Super Admin unless Super Admin.
   if(!can('employees','delete')||!scopeFilter('employees')(id)){toast('Not allowed','err');return;}
-  if(u.role==='Admin'&&!isAdmin()){toast('Not allowed','err');return;}
+  if(isSuperU(u)&&!isAdmin()){toast('Not allowed','err');return;}
   const name=fullName(u);
   // Referential-integrity guard: block while they still have live links (direct reports, assigned
   // checklists/OKRs/assets, pending approvals/leave/letters/expenses, upcoming shifts, open flows,
@@ -379,18 +360,8 @@ App.delUser=async(id)=>{
   DB.expenses=(DB.expenses||[]).filter(x=>x.userId!==id);
   DB.shifts=(DB.shifts||[]).filter(s=>s.userId!==id);
   DB.sopInstances=(DB.sopInstances||[]).filter(i=>i.userId!==id);
-  // FIX: If ex-manager now has 0 direct reports, downgrade to User
-  if(u.managerId){
-    const exMgr=uById(u.managerId);
-    if(exMgr&&exMgr.role==='Manager'){
-      const stillHasTeam=DB.users.some(x=>x.managerId===exMgr.id);
-      if(!stillHasTeam){
-        exMgr.role='User';
-        sb.from('profiles').update({role:'User'}).eq('id',exMgr.id).then(()=>{}).catch(()=>{});
-        toast(fullName(exMgr)+' has no team — role changed to User','warn');
-      }
-    }
-  }
+  // R20: manager-ness is structural (who reports to whom) — nothing to downgrade when the
+  // last report leaves; isMgr()/subTree() simply stop matching. Access roles live in Access Control.
   log(fullName(me()),'Deleted user',name);
   toast(name+' deleted','warn');
   render();saveDB();

@@ -435,7 +435,7 @@ function _approvalFlowEditor(prof){
   </div>`;
 }
 function _afRows(){
-  const users=DB.users.filter(u=>u.status==='Active'&&u.role!=='Admin').map(u=>[u.id,fullName(u)]);
+  const users=DB.users.filter(u=>u.status==='Active'&&!isSuperU(u)).map(u=>[u.id,fullName(u)]);
   return (_AF||[]).map((s,i)=>{
     const typeSel=`<select onchange="App._afSet(${i},'type',this.value)" class="bg-white border border-ink-200 rounded-lg px-2 py-1.5 text-sm rf">${[['manager','Manager'],['role','HR'],['user','Specific person']].map(([v,l])=>`<option value="${v}"${s.type===v?' selected':''}>${l}</option>`).join('')}</select>`;
     const userSel=s.type==='user'?`<select onchange="App._afSet(${i},'userId',this.value)" class="bg-white border border-ink-200 rounded-lg px-2 py-1.5 text-sm rf" style="flex:1;min-width:0"><option value="">— choose person —</option>${users.map(([v,l])=>`<option value="${v}"${s.userId===v?' selected':''}>${esc(l)}</option>`).join('')}</select>`:'';

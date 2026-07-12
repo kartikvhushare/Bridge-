@@ -232,7 +232,7 @@ function _docApprovers(exceptUid){
 // Does user `u` have documentsOrg.approve? (mirror can()/_hrFloor for an arbitrary user)
 function _canApproveDocAs(u){
   if(!u)return false;
-  if(u.role==='Admin')return true;
+  if(isSuperU(u))return true;
   if(u.hrm?.isHR)return true; // HR floor
   const pid=u.hrm?.roleProfileId;const p=pid?(DB.roleProfiles?.[pid]||null):null;
   if(p){const a=p.perms?.documentsOrg;return !!(a&&a.actions&&a.actions.approve);}

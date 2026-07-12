@@ -53,7 +53,7 @@ function _stageApprover(req,stageIndexOrStage){
   //   _isMgrApprover (_underOn). Valid approver ⇔ requester is in the approver's subtree on req.start.
   if(stage.type==='manager')return id=>{const a=uById(id);if(!a||a.status!=='Active')return false;return _underOn(req.userId,id,req.start);};
   if(stage.type==='user')return id=>!!stage.userId&&id===stage.userId;
-  if(stage.type==='role'&&stage.role==='hr')return id=>!!(uById(id)?.hrm?.isHR)&&uById(id)?.role!=='Admin';
+  if(stage.type==='role'&&stage.role==='hr')return id=>!!(uById(id)?.hrm?.isHR)&&!isSuperU(uById(id));
   return ()=>false;
 }
 // Can the CURRENT user act on the current stage of req? (permission + stage match; Admin universal; never own request)
@@ -79,7 +79,7 @@ function _stageTab(req){const st=_reqStage(req);return (st&&st.type==='manager')
 function _stageStranded(req){
   if(!req||req.status!=='Pending')return false;
   const pred=_stageApprover(req,(req.stageIndex!=null?req.stageIndex:0));
-  return !(DB.users||[]).some(x=>x.status==='Active'&&x.role!=='Admin'&&pred(x.id));
+  return !(DB.users||[]).some(x=>x.status==='Active'&&!isSuperU(x)&&pred(x.id));
 }
 // Bug 5 (binding decision #5): terminal escalation fallback. When a stage's approver predicate
 //   matches ZERO active users, route the request to all active HR users AND all active Admins
@@ -87,7 +87,7 @@ function _stageStranded(req){
 //   number of fallback approvers reached — 0 means NOBODY can act (caller hard-toasts the submitter).
 function _escalateStranded(req,msg){
   const submitterId=req.userId;
-  const fallback=(DB.users||[]).filter(x=>x.status==='Active'&&x.id!==submitterId&&(x.role==='Admin'||x.hrm?.isHR===true));
+  const fallback=(DB.users||[]).filter(x=>x.status==='Active'&&x.id!==submitterId&&(isSuperU(x)||x.hrm?.isHR===true));
   if(fallback.length){
     req.needsAdmin=true;
     if(_hnp('inapp_hrm_leave_submitted'))fallback.forEach(a=>_hrmNotify(a.id,msg,'leave'));
@@ -194,7 +194,7 @@ function _stageApproverNames(req,i){
   const f=_reqFlow(req);const stage=f[i]||null;if(!stage)return '';
   if(stage.type==='user'){const u=uById(stage.userId);return u?fullName(u):'(unassigned)';}
   const pred=_stageApprover(req,i);
-  const names=(DB.users||[]).filter(x=>x.status==='Active'&&x.role!=='Admin'&&x.id!==req.userId&&pred(x.id)).map(fullName);
+  const names=(DB.users||[]).filter(x=>x.status==='Active'&&!isSuperU(x)&&x.id!==req.userId&&pred(x.id)).map(fullName);
   if(!names.length)return stage.type==='role'?'HR team':'no approver';
   if(names.length<=2)return names.join(' or ');
   return names.slice(0,2).join(', ')+' +'+(names.length-2)+' more';

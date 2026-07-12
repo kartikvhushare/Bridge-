@@ -8,14 +8,15 @@ const W = window;
 let sa, adm, hr, mgr, emp, qEmp;
 
 beforeAll(() => {
-  sa  = W.__mkUser({ id: 'sa1',  role: 'Admin' });          // → superadmin
-  adm = W.__mkUser({ id: 'adm1', role: 'SubAdmin' });        // → admin
+  sa  = W.__mkUser({ id: 'sa1' });                           // → superadmin (assigned below)
+  adm = W.__mkUser({ id: 'adm1' });                          // → admin (assigned below)
   hr  = W.__mkUser({ id: 'hr1' });                           // → hr (flag below)
   mgr = W.__mkUser({ id: 'mgr1' });                          // → manager (has report)
   emp = W.__mkUser({ id: 'emp1', managerId: 'mgr1' });       // → basic
   qEmp = W.__mkUser({ id: 'qe1', managerId: 'mgr1', questionsAccess: true }); // legacy grant
   W.DB.users.push(sa, adm, hr, mgr, emp, qEmp);
   [sa, adm, hr, mgr, emp, qEmp].forEach(u => W._ensureHrm(u));
+  sa.hrm.roleProfileId = 'superadmin'; adm.hrm.roleProfileId = 'admin'; // R20: roles are assigned, never derived from a legacy field
   hr.hrm.isHR = true;
   W._seedRoleProfiles();
   W._permsV3Migrate();
@@ -26,8 +27,8 @@ describe('seeding', () => {
   it('seeds all five built-in roles', () => {
     expect(['superadmin', 'admin', 'manager', 'hr', 'basic'].every(k => W.DB.roleProfiles[k])).toBe(true); // 1
   });
-  it('stamps built-ins with version 7 (v7 adds granular OKR actions)', () => {
-    expect(W.DB.roleProfiles.superadmin._v).toBe('7');                                                     // 2
+  it('stamps built-ins with version 8 (v8 adds okr.viewAll)', () => {
+    expect(W.DB.roleProfiles.superadmin._v).toBe('8');                                                     // 2
   });
   it('never clobbers a custom role on reseed', () => {
     W.DB.roleProfiles.custom1 = { id: 'custom1', name: 'Custom', perms: { tickets: { scope: 'self', actions: { view: true } } } };
@@ -37,7 +38,7 @@ describe('seeding', () => {
 });
 
 describe('v3 migration', () => {
-  it('maps legacy standing → roles', () => {
+  it('keeps assigned roles and derives the rest (HR flag / has-reports / basic)', () => {
     expect(sa.hrm.roleProfileId).toBe('superadmin');                                                       // 4
     expect(adm.hrm.roleProfileId).toBe('admin');                                                           // 5
     expect(hr.hrm.roleProfileId).toBe('hr');                                                               // 6
@@ -103,5 +104,33 @@ describe('scopes', () => {
 describe('lockout guard', () => {
   it('removing AC from one holder is safe while another remains', () => {
     expect(W._acLockoutSafe('adm1', 'manage')).toBe(true);                                                 // 26
+  });
+});
+
+describe('r20 - legacy role field fully retired', () => {
+  it('a user with NO assigned role resolves against the Basic Employee bundle', () => {
+    const ghost = W.__mkUser({ id: 'gh1' });
+    W.DB.users.push(ghost); W._ensureHrm(ghost);
+    ghost.hrm.roleProfileId = null; ghost.hrm.permsV3 = 1; // simulate an unassigned account
+    as(ghost);
+    expect(W.can('leaveRequests', 'create')).toBe(true);   // basic grants this            // 27
+    expect(W.can('payroll', 'view')).toBe(false);          // basic lacks this             // 28
+    expect(W.scopeOf('attendance')).toBe('self');          // basic scope floor            // 29
+    W.DB.users = W.DB.users.filter(u => u.id !== 'gh1');
+  });
+  it('superadmin resolves purely from the profile id (no legacy field anywhere)', () => {
+    as(sa);
+    expect(sa.role).toBeUndefined();                                                       // 30
+    expect(W.isAdmin()).toBe(true);                                                        // 31
+    expect(W.isSuperU(sa)).toBe(true);                                                     // 32
+  });
+  it('v8 seeds okr.viewAll on superadmin/admin bundles but NOT manager (owner-tree stays)', () => {
+    expect(W.DB.roleProfiles.superadmin.perms.okr.actions.viewAll).toBe(true);             // 33
+    expect(W.DB.roleProfiles.admin.perms.okr.actions.viewAll).toBe(true);                  // 34
+    expect(!!W.DB.roleProfiles.manager.perms.okr.actions.viewAll).toBe(false);             // 35
+  });
+  it('roleName() reads the Access Control role, with a Basic Employee default', () => {
+    expect(W.roleName(sa)).toBe('Super Admin');                                            // 36
+    expect(W.roleName({ hrm: {} })).toBe('Basic Employee');                                // 37
   });
 });

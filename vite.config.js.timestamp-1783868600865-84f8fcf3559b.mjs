@@ -1,0 +1,15 @@
+import "node:module";
+import { defineConfig } from "vite";
+var vite_config_default = defineConfig({
+	build: { outDir: "dist" },
+	test: {
+		environment: "jsdom",
+		setupFiles: ["./tests/_env.js"],
+		pool: "threads",
+		poolOptions: { threads: { singleThread: true } }
+	}
+});
+//#endregion
+export { vite_config_default as default };
+
+//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidml0ZS5jb25maWcuanMiLCJuYW1lcyI6W10sInNvdXJjZXMiOlsiL3Nlc3Npb25zL2JyYXZlLWZ1bm55LWhvcHBlci9tbnQvQnJpZGdlLS1tYWluL3ZpdGUuY29uZmlnLmpzIl0sInNvdXJjZXNDb250ZW50IjpbImltcG9ydCB7IGRlZmluZUNvbmZpZyB9IGZyb20gJ3ZpdGUnO1xuXG5leHBvcnQgZGVmYXVsdCBkZWZpbmVDb25maWcoe1xuICAvLyBCZWhhdmlvci1wcmVzZXJ2aW5nIHNwbGl0IG9mIHRoZSBzaW5nbGUtZmlsZSBhcHA6IG1vZHVsZXMgYXR0YWNoIHRoZWlyXG4gIC8vIGdsb2JhbHMgdG8gd2luZG93OyBub3RoaW5nIGhlcmUgbWF5IGNoYW5nZSBydW50aW1lIHNlbWFudGljcy5cbiAgYnVpbGQ6IHsgb3V0RGlyOiAnZGlzdCcgfSxcbiAgdGVzdDoge1xuICAgIGVudmlyb25tZW50OiAnanNkb20nLFxuICAgIHNldHVwRmlsZXM6IFsnLi90ZXN0cy9fZW52LmpzJ10sXG4gICAgLy8gdGhlIGFwcCBtb2R1bGVzIHNoYXJlIG9uZSB3aW5kb3c7IHJ1biB0ZXN0IGZpbGVzIHNlcXVlbnRpYWxseSBpbiBvbmUgdGhyZWFkXG4gICAgcG9vbDogJ3RocmVhZHMnLFxuICAgIHBvb2xPcHRpb25zOiB7IHRocmVhZHM6IHsgc2luZ2xlVGhyZWFkOiB0cnVlIH0gfVxuICB9XG59KTtcbiJdLCJtYXBwaW5ncyI6Ijs7QUFFQSxJQUFBLHNCQUFlLGFBQWE7Q0FHMUIsT0FBTyxFQUFFLFFBQVEsT0FBTztDQUN4QixNQUFNO0VBQ0osYUFBYTtFQUNiLFlBQVksQ0FBQyxpQkFBaUI7RUFFOUIsTUFBTTtFQUNOLGFBQWEsRUFBRSxTQUFTLEVBQUUsY0FBYyxLQUFLLEVBQUU7Q0FDakQ7QUFDRixDQUFDIn0=
