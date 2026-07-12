@@ -10,7 +10,8 @@ function shiftsPage(){
   const week=Array.from({length:7},(_,i)=>{const d2=new Date(ref);d2.setDate(d2.getDate()+i);return d2.toISOString().slice(0,10);});
   // R14 (owner report: "my name is not showing in the shifts"): Super Admins are rosterable
   // people like everyone else — the old u.role!=='Admin' exclusion is gone.
-  let people=canMng?DB.users.filter(u=>u.status==='Active'&&(f(u.id)||isAdmin()||isSubAdmin())):[me()].filter(Boolean);
+  const _schAll=scopeOf('scheduling')==='everyone'; // R15: 'everyone' scope = full roster incl Super Admins (R14 parity)
+let people=canMng?DB.users.filter(u=>u.status==='Active'&&(f(u.id)||isAdmin()||_schAll)):[me()].filter(Boolean); // R15: the role's scheduling scope decides — no SubAdmin bypass
   // department / sub-department filter
   const FD=S.filters;
   const topD=topDepts();

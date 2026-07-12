@@ -135,14 +135,14 @@ App._importQCSV=(input)=>{
 // Admin always sees everything.
 function visibleQuestions(){
   const all=DB.questions||[];
-  if(isAdmin()||isSubAdmin())return all;
+  if(isAdmin()||can('questions','manage'))return all; // R15
   return all.filter(q=>q.isPublic!==false||q.createdBy===S.uid);
 }
 // Creator (or admin) can manage a question
 // perms M1: legacy = Super Admin / SubAdmin / the question's creator. For a user WITH a role profile,
 // also honor a profile granting questions.manage (lets a profile widen management beyond own questions).
 // Unassigned users hit only the legacy branch (_myProfile() is null), so today's behavior is unchanged.
-function canManageQ(q){return isAdmin()||isSubAdmin()||q.createdBy===S.uid||(_myProfile()&&can('questions','manage'));}
+function canManageQ(q){return isAdmin()||q.createdBy===S.uid||can('questions','manage');} // R15: toggle decides
 
 
 function qCard(q){
@@ -468,7 +468,7 @@ App._openClQuestionPicker=()=>{
 App._showClQPicker=()=>{
   const sel=App._clQSel||new Set();
   // Show questions the user can see, plus any already selected on this checklist (so existing private picks aren't lost)
-  const allQ=(DB.questions||[]).filter(q=>q.isPublic!==false||q.createdBy===S.uid||isAdmin()||isSubAdmin()||sel.has(q.id));
+  const allQ=(DB.questions||[]).filter(q=>q.isPublic!==false||q.createdBy===S.uid||isAdmin()||can('questions','manage')||sel.has(q.id)); // R15
   modalShell({title:'Add Questions',sub:'Select questions, then configure escalation',size:'max-w-md',
     body:`<div style="display:flex;flex-direction:column;gap:5px">
       ${!allQ.length

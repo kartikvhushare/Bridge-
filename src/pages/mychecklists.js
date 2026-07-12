@@ -30,7 +30,7 @@ function homeDash(){
   const notifN=DB.notifications.filter(n=>n.userId===S.uid&&!n.read).length;
   const apprN=_approvalPendingCount();
   const tkN=(DB.tickets||[]).filter(t=>t.assignedTo===S.uid&&!(t.viewedBy||[]).includes(S.uid)).length;
-  const canApprove=isAdmin()||isSubAdmin()||isMgr()||can('leaveRequests','approve');
+  const canApprove=isAdmin()||isMgr()||can('leaveRequests','approve'); // R15: SubAdmin needs the toggle
 
   // ── small "attention" tiles row ──
   const attTile=(label,n,route,tone,icon)=>{

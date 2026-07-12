@@ -10,14 +10,14 @@ window._OKR_EXP={};window._OKR_PANEL={};window._OKR_LOGS={};window._OKRED=null;w
 const _OKR_LVL_C=['#1C212B','#0EA5E9','#0E9F6E','#8B5CF6','#F59E0B','#EC4899'];
 function _okrCanManage(){return can('okr','manage');}
 function _okrCanCreate(){return can('okr','create')||_okrCanManage();}
-function _okrCanEditNode(o){return isAdmin()||isSubAdmin()||_okrCanManage()||o.createdBy===S.uid||okrIsUpOwner(o);}
+function _okrCanEditNode(o){return isAdmin()||can('okr','edit')||_okrCanManage()||o.createdBy===S.uid||okrIsUpOwner(o);} // R15: toggle decides
 function _okrCanCheckin(o){return o.ownerId===S.uid||_okrCanEditNode(o);}
 /* ── Granular rights (owner request #10): relationship first, role permission on top.
       Level owner + owner of any UPPER level always can; roles gain the same power via the
       okr.editEntries / okr.changeOwner / okr.deleteLogs toggles in Access Control. ── */
 function _okrCanEditEntry(o){return o.ownerId===S.uid||okrIsUpOwner(o)||can('okr','editEntries');}
 function _okrCanDeleteLog(o){return o.ownerId===S.uid||okrIsUpOwner(o)||can('okr','deleteLogs');}
-function _okrCanChangeOwner(o){return okrIsUpOwner(o)||can('okr','changeOwner')||_okrCanManage()||isAdmin()||isSubAdmin();}
+function _okrCanChangeOwner(o){return okrIsUpOwner(o)||can('okr','changeOwner')||_okrCanManage()||isAdmin();} // R15
 function _okrLvlChip(lvl){const c=_OKR_LVL_C[lvl%_OKR_LVL_C.length];return`<span style="flex-shrink:0;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;background:${c};color:#fff;letter-spacing:.03em">L${lvl}</span>`;}
 App._okrTogExp=(id)=>{_OKR_EXP[id]=!_OKR_EXP[id];rr();};
 App._okrTogPanel=(id,which)=>{_OKR_PANEL[id]=_OKR_PANEL[id]===which?null:which;rr();};

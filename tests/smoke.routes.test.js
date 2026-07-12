@@ -704,3 +704,42 @@ describe('r14 - super admin appears in the shift roster', () => {
     expect(pushed && typeof pushed.hrm).toBe('object');
   });
 });
+
+describe('r15 - role scopes bind SubAdmins (no page-level bypass)', () => {
+  let lee, savedSched, savedCk;
+  beforeAll(() => {
+    lee = W.__mkUser({ id: 'lee1', role: 'SubAdmin', firstName: 'Lee', lastName: 'Mascarenhas' });
+    W.DB.users.push(lee); W._ensureHrm(lee);
+    lee.hrm.roleProfileId = 'admin';
+    savedSched = JSON.stringify(W.DB.roleProfiles.admin.perms.scheduling);
+    savedCk    = JSON.stringify(W.DB.roleProfiles.admin.perms.checklists);
+  });
+  it('scheduling scope self → roster shows ONLY Lee (the reported bug)', () => {
+    W.DB.roleProfiles.admin.perms.scheduling = { scope: 'self', actions: { view: true, manage: true } };
+    W.S.uid = 'lee1'; W.S.route = 'shifts'; W.S.filters = {};
+    const html = W.pageContent();
+    expect(html).toContain('Lee Mascarenhas');
+    expect(html.includes(W.esc(W.fullName(W.uById('sa1'))))).toBe(false);
+  });
+  it("scheduling scope everyone → full roster incl the Super Admin (r14 parity)", () => {
+    W.DB.roleProfiles.admin.perms.scheduling = JSON.parse(savedSched);
+    W.S.uid = 'lee1'; W.S.route = 'shifts'; W.S.filters = {};
+    const html = W.pageContent();
+    expect(html).toContain('Lee Mascarenhas');
+    expect(html).toContain(W.esc(W.fullName(W.uById('sa1'))));
+  });
+  it('checklists scope self → builder lists only own/assigned checklists', () => {
+    W.DB.roleProfiles.admin.perms.checklists = { scope: 'self', actions: { view: true, create: true, edit: true } };
+    W.DB.checklists.push(
+      { id: 'r15a', name: 'R15MineCL',  assignees: ['lee1'], createdBy: 'sa1', frequency: 'Daily', schedule: 'Every day', department: '', tasks: [], questionIds: [], locationIds: [] },
+      { id: 'r15b', name: 'R15OtherCL', assignees: ['emp1'], createdBy: 'sa1', frequency: 'Daily', schedule: 'Every day', department: '', tasks: [], questionIds: [], locationIds: [] });
+    W.S.uid = 'lee1'; W.S.route = 'checklists'; W.S.filters = {}; W.S.search = '';
+    const html = W.pageContent();
+    expect(html).toContain('R15MineCL');
+    expect(html.includes('R15OtherCL')).toBe(false);
+    // cleanup
+    W.DB.checklists = W.DB.checklists.filter(c => !String(c.id).startsWith('r15'));
+    W.DB.roleProfiles.admin.perms.checklists = JSON.parse(savedCk);
+    W.S.uid = 'sa1';
+  });
+});

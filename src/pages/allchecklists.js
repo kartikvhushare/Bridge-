@@ -42,9 +42,10 @@ function allClsPage(){
   const loc=S.filters.aclLoc||'';
   const filtCls=dd=>DB.checklists.filter(c=>clOn(c,dd)&&(!dep||c.department===dep)&&(!loc||(c.locationIds||[]).includes(loc)));
   // ── Hierarchy scope: Super Admin sees everyone; Admin (SubAdmin) / managers see themselves + their tree (users under them, and users under those users) ──
-  const scopeUsers=(isAdmin()||isSubAdmin()
+  const _acAll=isAdmin()||scopeOf('checklists')==='everyone';const _acF=scopeFilter('checklists'); // R15: results visibility follows the checklists scope
+  const scopeUsers=(_acAll
     ? DB.users
-    : [me(),...subTree(S.uid)].filter(Boolean)
+    : DB.users.filter(u=>_acF(u.id)||u.id===S.uid)
   ).filter(u=>u.status==='Active');
   const scopeIds=new Set(scopeUsers.map(u=>u.id));
   const cls=filtCls(d);
@@ -55,7 +56,7 @@ function allClsPage(){
     let sub=false,pend=false;
     dcls.forEach(c=>{
       if(c.anyOne){
-        if(!isAdmin()&&!isSubAdmin()&&!(c.assignees||[]).some(a=>scopeIds.has(a)))return;
+        if(!_acAll&&!(c.assignees||[]).some(a=>scopeIds.has(a)))return; // R15
         if(DB.submissions.some(x=>x.checklistId===c.id&&x.date===dd&&x.status!=='Editing'))sub=true;else pend=true;
       }
       else (c.assignees||[]).forEach(a=>{if(!scopeIds.has(a))return;if(subFor(c.id,a,dd))sub=true;else pend=true;});
@@ -90,7 +91,7 @@ function allClsPage(){
   //    secKey is prefixed into every expand key so the same checklist/user appearing under two
   //    locations expands independently. Returns '' when this section has nothing to show. ──
   const renderSection=(sectionCls,secKey)=>{
-    const sgrp=sectionCls.filter(c=>c.anyOne&&(isAdmin()||isSubAdmin()||(c.assignees||[]).some(a=>scopeIds.has(a))));
+    const sgrp=sectionCls.filter(c=>c.anyOne&&(_acAll||(c.assignees||[]).some(a=>scopeIds.has(a)))); // R15
     const sind=sectionCls.filter(c=>!c.anyOne);
     const sUserMap={};
     sind.forEach(c=>(c.assignees||[]).forEach(uid2=>{if(!scopeIds.has(uid2))return;const u=uById(uid2);if(!u||u.status!=='Active')return;(sUserMap[uid2]=sUserMap[uid2]||[]).push(c);}));
@@ -218,8 +219,8 @@ function allClsPage(){
     ${locationsHtml}
     ${!anyContent?`<div style="padding:60px 20px;text-align:center;background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);margin-top:8px">
       <div style="font-size:40px;margin-bottom:10px">\ud83d\udcc5</div>
-      <div class="fd" style="font-size:17px;font-weight:800;color:var(--c-text)">${!isAdmin()&&!isSubAdmin()&&scopeUsers.length<=1?'No users under you':'No checklists'}</div>
-      <p style="font-size:13px;color:var(--c-text-3);margin-top:6px">${!isAdmin()&&!isSubAdmin()&&scopeUsers.length<=1
+      <div class="fd" style="font-size:17px;font-weight:800;color:var(--c-text)">${!_acAll&&scopeUsers.length<=1?'No users in your scope':'No checklists'}</div>
+      <p style="font-size:13px;color:var(--c-text-3);margin-top:6px">${!_acAll&&scopeUsers.length<=1
         ?'This tab shows checklists for users in your reporting tree, but nobody reports to this account. Ask a Super Admin to set "Reports to" on your team members — or give the Admin role to the manager they already report to.'
         :`No checklists scheduled for this date${dep||loc?' with the selected filters':''}`}</p>
     </div>`:''}
