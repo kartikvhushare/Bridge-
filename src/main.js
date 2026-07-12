@@ -73,6 +73,10 @@ import './pages/reviews.js';
         _hrmInit();
         saveDB();
         render();
+        // R9-FIX: a deep link / refresh lands directly on a route WITHOUT App.go, so the per-tab
+        // cold loads (30-day submissions, 90-day attendance, audit, okr logs) never fired — the
+        // analytics trend then only showed the 7-day hot window. Trigger them for the landing route.
+        try{_lazyForRoute(S.route);}catch(e){}
         return;
       }
       await sb.auth.signOut();

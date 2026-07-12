@@ -9,20 +9,25 @@ function _aChartTheme(){
   // circular legend markers, soft dashed grid, gentle ease-out animation, consistent palette.
   if(typeof Chart!=='undefined'&&!Chart.__bridged){Chart.__bridged=1;
     try{
+      // R10 CRITICAL: MUTATE Chart.js v4 defaults property-by-property — NEVER replace the nested
+      // defaults objects. v4's defaults nodes carry non-enumerable resolver descriptors; replacing
+      // them (old code used {...spread} reassignment) broke tooltip/hover animations with
+      // "Uncaught TypeError: this._fn is not a function", which killed the shared animation loop —
+      // one HOVER blanked every chart on the page (the "shows 1 sec then empty" bug).
       Chart.defaults.font.family="'Hanken Grotesk',system-ui,sans-serif";
       Chart.defaults.font.weight='600';Chart.defaults.color='#787D89';
-      Chart.defaults.animation={duration:600,easing:'easeOutQuart'};
-      Chart.defaults.plugins.tooltip={...Chart.defaults.plugins.tooltip,
-        backgroundColor:'rgba(21,23,28,0.94)',titleColor:'#fff',bodyColor:'#D7DBE2',
-        titleFont:{size:12,weight:'800'},bodyFont:{size:11.5,weight:'600'},
-        padding:{top:10,bottom:10,left:12,right:12},cornerRadius:10,displayColors:true,
-        boxPadding:5,usePointStyle:true,caretSize:5};
-      Chart.defaults.plugins.legend.labels={...Chart.defaults.plugins.legend.labels,
-        usePointStyle:true,pointStyle:'circle',boxWidth:7,boxHeight:7,padding:14,font:{size:11,weight:'700'}};
-      Chart.defaults.elements.bar={...Chart.defaults.elements.bar,borderRadius:7,borderSkipped:false};
-      Chart.defaults.elements.line={...Chart.defaults.elements.line,borderWidth:2.5,tension:0.42};
-      Chart.defaults.elements.point={...Chart.defaults.elements.point,radius:0,hoverRadius:5,hoverBorderWidth:2,hoverBorderColor:'#fff'};
-    }catch(e){}}
+      Chart.defaults.animation.duration=600;
+      const tt=Chart.defaults.plugins.tooltip;
+      tt.backgroundColor='rgba(21,23,28,0.94)';tt.titleColor='#fff';tt.bodyColor='#D7DBE2';
+      tt.titleFont={size:12,weight:'800'};tt.bodyFont={size:11.5,weight:'600'};
+      tt.padding={top:10,bottom:10,left:12,right:12};tt.cornerRadius=10;tt.displayColors=true;
+      tt.boxPadding=5;tt.usePointStyle=true;tt.caretSize=5;
+      const ll=Chart.defaults.plugins.legend.labels;
+      ll.usePointStyle=true;ll.pointStyle='circle';ll.boxWidth=7;ll.boxHeight=7;ll.padding=14;ll.font={size:11,weight:'700'};
+      const eb=Chart.defaults.elements.bar;eb.borderRadius=7;eb.borderSkipped=false;
+      const el=Chart.defaults.elements.line;el.borderWidth=2.5;el.tension=0.42;
+      const ep=Chart.defaults.elements.point;ep.radius=0;ep.hoverRadius=5;ep.hoverBorderWidth=2;ep.hoverBorderColor='#fff';
+    }catch(e){console.warn('[charts theme]',e&&e.message);}}
   return {tick:'#8A93A3',grid:'rgba(138,147,163,0.13)',brand:'#0E9F6E',mint:'#34D399',soft:'#C9F3E3',neutral:'#E4E7EC',amber:'#F59E0B',rose:'#F43F5E',blue:'#38BDF8',sky:'#0EA5E9',violet:'#8B5CF6',indigo:'#6366F1',slate:'#94A3B8'};
 }
 /* PRO-VIZ: scriptable vertical gradient — line fills & vertical bars fade to transparent. */
