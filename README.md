@@ -92,6 +92,8 @@ Suite: **164 tests green**, build clean, fresh dist.
 
 **R9-FIX (verified on the live site):** a deep link / refresh landed on a route without `App.go`, so the per-tab cold loads never fired — analytics then showed only the 7-day hot window (and looked "empty-ish"). Boot now calls `_lazyForRoute(S.route)` after login. Confirmed live: firing the load took DB.submissions 49 → 201 and filled the full-month trend; on-time corrected 6% → 29%.
 
+**R10 — "My attendance" on My Day (owner request):** the two personal completion charts ("My last 30 days" + "Completions trend") were confusing — replaced with ONE attendance card: a day-breakdown doughnut (on-time / late / half-day / leave / absent / didn't-clock-out, center = present/workdays) + counter chips for everything (Present, Late in, Early out, Half days, On leave, Absent, Didn't clock out, WFH days, total Worked hours) + a FROM–TO range picker defaulting to the CURRENT MONTH ("This month" reset button when changed).
+
 **R10-FIX — THE "charts show for 1 sec then go empty" bug (root-caused live in Chrome):** the round-4 chart theme REPLACED Chart.js v4's nested defaults objects (`Chart.defaults.plugins.tooltip = {...spread}` etc.). v4 defaults nodes carry non-enumerable resolver descriptors; replacing them broke tooltip/hover animation resolution → `Uncaught TypeError: this._fn is not a function` inside chart.js's RAF loop → the SHARED animator died → every chart froze/blanked. Triggered by HOVERING a chart (which automated tests never did — the live console showed 4 uncaught exceptions from cdn.jsdelivr.net/chart.js). Fix: mutate defaults property-by-property, never replace nodes; verified stable on the live site with a hot-patch before shipping.
 
 ## Commands

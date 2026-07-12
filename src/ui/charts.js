@@ -41,7 +41,7 @@ const _ctp={id:'ctp',afterDraw(c){const t=c.config&&c.config.options&&c.config.o
   ctx.font="700 9.5px 'Hanken Grotesk',sans-serif";ctx.fillStyle='#8A93A3';ctx.fillText(String(t.l||'').toUpperCase(),x,y+12);ctx.restore();}};
 function _destroyACharts(){_aCharts.forEach(c=>{try{c.destroy();}catch(e){}});_aCharts=[];}
 function _paintCharts(){try{
-  const need=document.getElementById('aChartStatus')||document.getElementById('hChartOnTime')||document.getElementById('hrmChartWorked')||document.querySelector('canvas[data-okr-chart]');
+  const need=document.getElementById('aChartStatus')||document.getElementById('hChartMyAtt')||document.getElementById('hrmChartWorked')||document.querySelector('canvas[data-okr-chart]');
   // R9: if Chart.js hasn't arrived from the CDN yet, retry for ~3s, then say so VISIBLY instead of
   // leaving silent blank boxes (owner report "all graphs empty" — a blocked CDN looks exactly like that).
   if(need&&typeof Chart==='undefined'){
@@ -52,7 +52,7 @@ function _paintCharts(){try{
   }
   _paintCharts._r=0;
   if(document.getElementById('aChartStatus'))_drawAnalyticsCharts();
-  else if(document.getElementById('hChartOnTime'))_drawHomeCharts();
+  else if(document.getElementById('hChartMyAtt'))_drawHomeCharts();
   else if(document.getElementById('hrmChartWorked'))_drawHrmCharts();
   else if(document.querySelector('canvas[data-okr-chart]'))_drawOKRCharts();
   else _destroyACharts();
@@ -103,8 +103,8 @@ function _drawHomeCharts(){
   _destroyACharts();
   const T=_aChartTheme();
   const mk=(id,empty,cfg)=>{const cv=document.getElementById(id);if(!cv)return;if(empty){_emptyChart(id);return;}try{_aCharts.push(new Chart(cv.getContext('2d'),cfg));}catch(e){}};
-  mk('hChartOnTime',_allZero(_HData.donut),{type:'doughnut',plugins:[_ctp],data:{labels:['On time','Late','Pending'],datasets:[{data:_HData.donut,backgroundColor:[T.brand,T.rose,T.amber],borderWidth:0,hoverOffset:8,borderRadius:6,spacing:3}]},options:{responsive:true,maintainAspectRatio:false,cutout:'72%',_center:(()=>{const tot=_HData.donut.reduce((a,b)=>a+b,0);return{v:(tot?Math.round((_HData.donut[0]||0)/tot*100):0)+'%',l:'on time'};})(),plugins:{legend:{position:'bottom',labels:{color:T.tick}}}}});
-  mk('hChartTrend',_allZero(_HData.done),{type:'line',data:{labels:_HData.labels,datasets:[{label:'Completed',data:_HData.done,borderColor:T.brand,backgroundColor:_vfill(T.brand),fill:true}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:false}},scales:{x:{ticks:{color:T.tick,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:7},grid:{display:false}},y:{beginAtZero:true,ticks:{color:T.tick,font:{size:10},precision:0},grid:{color:T.grid}}}}});
+  // R10: "My attendance" day-breakdown doughnut (replaces the old completion charts).
+  if(_HData.myAtt)mk('hChartMyAtt',_allZero(_HData.myAtt.data),{type:'doughnut',plugins:[_ctp],data:{labels:_HData.myAtt.labels,datasets:[{data:_HData.myAtt.data,backgroundColor:[T.brand,T.amber,'#F97316',T.violet,T.rose,'#EAB308'],borderWidth:0,hoverOffset:8,borderRadius:6,spacing:3}]},options:{responsive:true,maintainAspectRatio:false,cutout:'70%',_center:{v:_HData.myAtt.present+'/'+_HData.myAtt.workdays,l:'days present'},plugins:{legend:{position:'bottom',labels:{color:T.tick}}}}});
 }
 // Export every visible chart as a PNG (white background) plus the data CSV.
 function _pngWithBg(cv){const c=document.createElement('canvas');c.width=cv.width||cv.clientWidth;c.height=cv.height||cv.clientHeight;const x=c.getContext('2d');x.fillStyle='#ffffff';x.fillRect(0,0,c.width,c.height);x.drawImage(cv,0,0);return c.toDataURL('image/png');}

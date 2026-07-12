@@ -93,12 +93,64 @@ function homeDash(){
     ${qa('My profile',"App.go('profile')",'user')}
   </div>`;
 
-  // ── personal 30-day data for the visual dashboard ──
-  const _h30=new Date(Date.now()-29*86400000).toISOString().slice(0,10);
-  const _hSubs=DB.submissions.filter(s=>s.userId===S.uid&&s.date>=_h30);
-  const _hDays=[];{let dd=new Date(_h30+'T00:00:00');const de=new Date(today+'T00:00:00');while(dd<=de&&_hDays.length<31){_hDays.push(dd.toISOString().slice(0,10));dd.setDate(dd.getDate()+1);}}
-  _HData={donut:[_hSubs.filter(s=>s.status==='On Time').length,_hSubs.filter(s=>s.status==='Late').length,_hSubs.filter(s=>['Pending','Pending Approval'].includes(s.status)).length],labels:_hDays.map(d=>d.slice(5)),done:_hDays.map(dt=>DB.submissions.filter(s=>s.userId===S.uid&&s.date===dt&&s.status!=='Editing'&&s.status!=='Rejected').length)};
-  const _hHasData=_hSubs.length>0;
+  // ── MY ATTENDANCE summary (owner request: replace the confusing completion charts) ──
+  // Everything in one place — present / late / early-out / half-day / leave / absent /
+  // didn't-clock-out / WFH — over a pickable range that DEFAULTS TO THE CURRENT MONTH.
+  const _maF=S.filters.myAttFrom||(today.slice(0,8)+'01');
+  const _maT=(S.filters.myAttTo&&S.filters.myAttTo>=_maF)?S.filters.myAttTo:today;
+  const MA=(()=>{
+    const out={present:0,late:0,early:0,half:0,leave:0,absent:0,noOut:0,wfh:0,off:0,worked:0,workdays:0};
+    const hols=new Set((DB.holidays||[]).filter(h=>h.profileId===userProfileId(u)).map(h=>h.date));
+    const offs=new Set(u.hrm?.schedule?.offDays||[]);
+    let d=_maF,g=0;
+    while(d<=_maT&&g++<92){
+      const rec=(DB.attendance||[]).find(a=>a.userId===S.uid&&a.date===d);
+      const isOff=offs.has(dayAbbr(d))||hols.has(d);
+      if(!isOff)out.workdays++;
+      if(rec&&rec.clockIn){
+        out.present++;out.worked+=Number(rec.hours)||0;
+        if((rec.flags||[]).includes('late'))out.late++;
+        if((rec.flags||[]).includes('early'))out.early++;
+        if((rec.flags||[]).includes('WFH'))out.wfh++;
+        if(rec.autoClosed||(rec.flags||[]).includes('forgot-clockout'))out.noOut++;
+        if(rec.status==='HalfDay')out.half++;
+      }
+      else if(rec&&rec.status==='HalfDay'){out.half++;}
+      else if(_onLeaveToday(S.uid,d)||(rec&&rec.status==='Leave')){out.leave++;}
+      else if(isOff){out.off++;}
+      else if(d<today){out.absent++;}
+      d=_isoAdd(d,1);
+    }
+    return out;
+  })();
+  _HData={myAtt:{labels:['On time','Late in','Half day','On leave','Absent','Didn’t clock out'],
+    data:[Math.max(0,MA.present-MA.late-MA.noOut),MA.late,MA.half,MA.leave,MA.absent,MA.noOut],
+    present:MA.present,workdays:MA.workdays}};
+  const _maChip=(n,label,fg,bg)=>`<div style="background:${bg||'var(--c-surface-2)'};border:1px solid var(--c-border);border-radius:11px;padding:9px 11px"><span class="fd" style="display:block;font-size:18px;font-weight:800;line-height:1;color:${fg||'var(--c-text)'}">${n}</span><span style="display:block;font-size:10.5px;font-weight:700;color:var(--c-text-2);margin-top:3px;white-space:nowrap">${label}</span></div>`;
+  const myAttCard=`<div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">My attendance</div>
+  <div class="ui-card" style="padding:16px;margin-bottom:16px">
+    <div class="hscroll" style="gap:8px;align-items:center;margin-bottom:14px">
+      <span style="font-size:10.5px;font-weight:800;color:var(--c-text-3);flex-shrink:0">FROM</span>
+      <input type="date" value="${_maF}" onchange="S.filters.myAttFrom=this.value;rr()" class="ui-input" style="width:auto;min-height:36px;padding:5px 10px;font-size:13px"/>
+      <span style="font-size:10.5px;font-weight:800;color:var(--c-text-3);flex-shrink:0">TO</span>
+      <input type="date" value="${_maT}" onchange="S.filters.myAttTo=this.value;rr()" class="ui-input" style="width:auto;min-height:36px;padding:5px 10px;font-size:13px"/>
+      ${(S.filters.myAttFrom||S.filters.myAttTo)?`<button onclick="delete S.filters.myAttFrom;delete S.filters.myAttTo;rr()" class="ui-btn ui-btn-ghost ui-btn-sm" style="flex-shrink:0">This month</button>`:`<span style="font-size:11px;font-weight:700;color:var(--c-text-3);flex-shrink:0">Current month</span>`}
+    </div>
+    <div class="grid md:grid-cols-2 gap-4 items-center">
+      <div style="position:relative;height:215px"><canvas id="hChartMyAtt" data-chart="my-attendance"></canvas></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:8px">
+        ${_maChip(MA.present,'Present days','var(--c-success-ink)','var(--c-success-soft)')}
+        ${_maChip(MA.late,'Late in',MA.late?'#B45309':undefined,MA.late?'#FFFBEB':undefined)}
+        ${_maChip(MA.early,'Early out',MA.early?'#B45309':undefined,MA.early?'#FFFBEB':undefined)}
+        ${_maChip(MA.half,'Half days')}
+        ${_maChip(MA.leave,'On leave','#5B2DBE','#F1ECFE')}
+        ${_maChip(MA.absent,'Absent',MA.absent?'var(--c-danger-ink)':undefined,MA.absent?'var(--c-danger-soft)':undefined)}
+        ${_maChip(MA.noOut,'Didn’t clock out',MA.noOut?'#866207':undefined,MA.noOut?'#FEF8E6':undefined)}
+        ${_maChip(MA.wfh,'WFH days','#0369A1','#EFF6FF')}
+        ${_maChip(fmtH(MA.worked),'Worked (total)','var(--c-brand-ink)','var(--c-brand-soft)')}
+      </div>
+    </div>
+  </div>`;
   // OKR v2: surface today's combined OKR check-in task on the landing page
   const _okrDueH=okrDueForUser(S.uid,today);
   const _okrDoneH=_okrDueH.filter(o=>okrCheckinFor(o.id,S.uid,today)).length;
@@ -124,10 +176,7 @@ function homeDash(){
     ${tiles?`<div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Needs you</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">${tiles}</div>`:''}
     <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Today</div>
     <div class="grid md:grid-cols-2 gap-4 items-start" style="margin-bottom:16px">${clCard}${leaveCard}${okrHomeCard}</div>
-    ${_hHasData?`<div class="grid md:grid-cols-2 gap-4 items-start" style="margin-bottom:16px">
-      <div class="ui-card" style="padding:18px"><div class="fd" style="font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:12px">My last 30 days</div><div style="position:relative;height:200px"><canvas id="hChartOnTime" data-chart="my-30-days"></canvas></div></div>
-      <div class="ui-card" style="padding:18px"><div class="fd" style="font-size:14px;font-weight:700;color:var(--c-text);margin-bottom:12px">Completions trend</div><div style="position:relative;height:200px"><canvas id="hChartTrend" data-chart="my-trend"></canvas></div></div>
-    </div>`:''}
+    ${myAttCard}
     ${(()=>{try{const yr=_leaveYearOf(u,today);const ts=_typesFor(userProfileId(u)).filter(t=>t.enabled&&!_isCompOffLt(t)).slice(0,4);if(!ts.length)return'';
       return `<div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Leave left · ${yr}</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">${ts.map(lt=>{const b=_balanceReadonly(u.id,lt.id,yr);const rem=_balRemaining(b);const ent=_r2((b.entitled||0)+(b.carriedIn||0));
         return `<button onclick="App.go('leave')" style="flex:1;min-width:128px;text-align:left;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px 12px;cursor:pointer"><span class="fd" style="font-size:19px;font-weight:800;color:var(--c-text)">${rem}</span><span style="font-size:11px;color:var(--c-text-3)"> / ${ent}d</span><span style="display:block;font-size:11px;font-weight:700;color:var(--c-text-2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(lt.name)}</span></button>`;}).join('')}</div>`;}catch(e){return'';}})()}

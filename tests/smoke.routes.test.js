@@ -590,3 +590,30 @@ describe('r9 - chart configs execute without errors', () => {
     W.S.uid = 'sa1';
   });
 });
+
+
+/* ── Round 10: My-Day attendance summary ── */
+describe('r10 - My attendance card (range defaults to current month)', () => {
+  it('shows all counters + range picker and builds the doughnut', () => {
+    W.S.uid = 'emp1'; W.S.route = 'dashboard'; W.S.filters = {};
+    const t = W.todayISO();
+    W.DB.attendance.push(
+      { id: 'r10a1', userId: 'emp1', date: t.slice(0,8)+'02', clockIn: 'x', inMin: 545, outMin: 1080, hours: 8.9, status: 'Present', flags: ['late'], createdAt: new Date().toISOString() },
+      { id: 'r10a2', userId: 'emp1', date: t.slice(0,8)+'03', clockIn: 'x', inMin: 540, outMin: 1000, hours: 7.6, status: 'Present', flags: ['early','WFH'], createdAt: new Date().toISOString() });
+    const html = W.pageContent();
+    expect(html).toContain('My attendance');
+    for (const label of ['Late in','Early out','Half days','On leave','Absent','Didn’t clock out','WFH days','Worked (total)']) expect(html).toContain(label);
+    expect(html).toContain('hChartMyAtt');
+    expect(html).toContain('Current month'); // default range badge
+    expect(html.includes('Completions trend')).toBe(false); // old confusing charts gone
+    document.body.innerHTML = '<div id="content">' + html + '</div>';
+    const seen = []; window.Chart = class { constructor(c, cfg) { seen.push(cfg); } destroy() {} };
+    window.Chart.defaults = { font: {}, plugins: { tooltip: {}, legend: { labels: {} } }, elements: { bar: {}, line: {}, point: {} } };
+    window.Chart.__bridged = 0;
+    W._drawHomeCharts();
+    expect(seen.length).toBe(1);
+    expect(seen[0].data.labels).toContain('Didn’t clock out');
+    W.DB.attendance = W.DB.attendance.filter(a => a.id !== 'r10a1' && a.id !== 'r10a2');
+    W.S.uid = 'sa1';
+  });
+});
