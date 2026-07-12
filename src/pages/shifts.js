@@ -8,7 +8,9 @@ function shiftsPage(){
   S.filters.shWk=S.filters.shWk||0;
   const ref=new Date(today+'T00:00:00');const dow=ref.getDay();ref.setDate(ref.getDate()+(dow===0?-6:1-dow)+S.filters.shWk*7);
   const week=Array.from({length:7},(_,i)=>{const d2=new Date(ref);d2.setDate(d2.getDate()+i);return d2.toISOString().slice(0,10);});
-  let people=canMng?DB.users.filter(u=>u.status==='Active'&&u.role!=='Admin'&&(f(u.id)||isAdmin()||isSubAdmin())):[me()].filter(Boolean);
+  // R14 (owner report: "my name is not showing in the shifts"): Super Admins are rosterable
+  // people like everyone else — the old u.role!=='Admin' exclusion is gone.
+  let people=canMng?DB.users.filter(u=>u.status==='Active'&&(f(u.id)||isAdmin()||isSubAdmin())):[me()].filter(Boolean);
   // department / sub-department filter
   const FD=S.filters;
   const topD=topDepts();
@@ -68,6 +70,7 @@ App._shOffDaysSave=(uid2)=>{
   u.hrm.schedule=u.hrm.schedule||{};
   u.hrm.schedule.offDays=days;
   log(fullName(me()),'Off-days updated',fullName(u)+' → '+(days.join(', ')||'none'));
+  _acPushHrm(u); // R14: schedule lives on u.hrm — push NOW so a reload can't revert it
   saveDB();closeModal();toast('Off-days saved — applied everywhere');rr();
 };
 App._shEdit=(uid2,date)=>{

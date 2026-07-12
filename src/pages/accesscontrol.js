@@ -73,6 +73,7 @@ App._acAssignRole=(uid2,roleId)=>{
   if(u.role!==baseRole){u.role=baseRole;sb.from('profiles').update({role:baseRole}).eq('id',u.id).then(()=>{}).catch(()=>{});}
   u.hrm.isHR=(roleId==='hr'); // ONE concept: the HR role IS the HR approver stage
   log(fullName(me()),'Role assigned',fullName(u)+' → '+(DB.roleProfiles[roleId].name||roleId));
+  _acPushHrm(u); // R14: the assignment lives on u.hrm — push NOW so a reload can't revert it
   saveDB();_syncRoleProfiles();toast(fullName(u)+' → '+(DB.roleProfiles[roleId].name||roleId));rr();
 };
 /* ── Per-person Customize modal: personal switches + doc access + per-area overrides ── */
@@ -177,6 +178,13 @@ function _acMark(){if(_ACD){_ACD.dirty=true;App._renderACUser();}}
 function _acPushProfile(u){
   sb.from('profiles').update({rules:u.rules||{},approval_settings:u.approval||{},cities:u.cities||[],doc_access:u.docAccess||{departments:{},locations:{}}}).eq('id',u.id).then(({error})=>{if(error)_syncErr('access change')(error);}).catch(_syncErr('access change'));
 }
+/* R14 (owner report: "I update the access and it's not getting updated"): permission overrides,
+   the HR flag and the assigned role all live on u.hrm — previously they reached the server only
+   via the DEBOUNCED background batch, so a quick reload (or one failed push) silently reverted
+   the change at next login. Access changes now push the user_hrm row IMMEDIATELY. */
+function _acPushHrm(u){
+  sb.from('user_hrm').upsert({user_id:u.id,hrm:_hrmStrip(u.hrm),updated_at:new Date().toISOString()},{onConflict:'user_id'}).then(({error})=>{if(error)_syncErr('access change (hrm)')(error);}).catch(_syncErr('access change (hrm)'));
+}
 App._acOvAdd=(area)=>{
   if(!_acGuard()||!_ACD)return;
   const u=uById(_ACD.uid);const role=_roleOf(u);
@@ -229,6 +237,7 @@ App._acSave=()=>{
   u.rules={...d.rules};u.approval={...d.approval};
   u.cities=d.cities.slice();u.docAccess=JSON.parse(JSON.stringify(d.docAccess));
   _acPushProfile(u);
+  _acPushHrm(u); // R14: perms/isHR live on u.hrm — push NOW, don't wait for the debounced batch
   log(fullName(me()),'Access updated',fullName(u));
   _ACD=null;
   saveDB();closeModal();toast('Access saved for '+fullName(u));rr();
@@ -380,4 +389,4 @@ function _syncRoleProfiles(){
 }
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window.accessControlPage=accessControlPage;window._acPeopleTab=_acPeopleTab;window._acDraft=_acDraft;window._acTogBtn=_acTogBtn;window._acGuard=_acGuard;window._acMark=_acMark;window._acPushProfile=_acPushProfile;window._acRolesTab=_acRolesTab;window._syncRoleProfiles=_syncRoleProfiles;
+window.accessControlPage=accessControlPage;window._acPeopleTab=_acPeopleTab;window._acDraft=_acDraft;window._acTogBtn=_acTogBtn;window._acGuard=_acGuard;window._acMark=_acMark;window._acPushProfile=_acPushProfile;window._acRolesTab=_acRolesTab;window._syncRoleProfiles=_syncRoleProfiles;window._acPushHrm=_acPushHrm;

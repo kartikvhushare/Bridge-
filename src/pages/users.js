@@ -122,7 +122,7 @@ App._assetAdd=(userId)=>{
   _ensureHrm(u);if(!Array.isArray(u.hrm.assets))u.hrm.assets=[];
   u.hrm.assets.push({id:uid('ast'),name,category:$('#ast-c')?.value||'Other',serial:($('#ast-s')?.value||'').trim(),assignedDate:$('#ast-d')?.value||todayISO(),notes:($('#ast-no')?.value||'').trim(),status:'Assigned',returnDate:null,assignedBy:S.uid,createdAt:new Date().toISOString()});
   log(fullName(me()),'Asset assigned',name+' → '+fullName(u));
-  saveDB();toast('Asset added');
+  _acPushHrm(u);saveDB();toast('Asset added');
   if(document.getElementById('u-role'))App.editUser(userId);else rr();
 };
 App._assetReturn=(userId,assetId)=>{
@@ -131,7 +131,7 @@ App._assetReturn=(userId,assetId)=>{
   const a=(u.hrm?.assets||[]).find(x=>x.id===assetId);if(!a)return;
   a.status='Returned';a.returnDate=todayISO();
   log(fullName(me()),'Asset returned',a.name+' ← '+fullName(u));
-  saveDB();toast('Marked returned');
+  _acPushHrm(u);saveDB();toast('Marked returned');
   if(document.getElementById('u-role'))App.editUser(userId);else rr();
 };
 App._assetDel=(userId,assetId)=>{
@@ -141,7 +141,7 @@ App._assetDel=(userId,assetId)=>{
   if(!confirm('Remove "'+a.name+'" from '+fullName(u)+'\'s asset record?'))return;
   u.hrm.assets=(u.hrm.assets||[]).filter(x=>x.id!==assetId);
   log(fullName(me()),'Asset record removed',a.name+' ('+fullName(u)+')');
-  saveDB();toast('Removed','warn');
+  _acPushHrm(u);saveDB();toast('Removed','warn');
   if(document.getElementById('u-role'))App.editUser(userId);else rr();
 };
 // City (location) scope checkboxes for the user modal — requirement #6.
@@ -280,6 +280,7 @@ App.saveUser=async(id)=>{
     sb.from('profiles').update(pd).eq('id',id).then(({error})=>{
       if(error)_syncErr('user changes')(error);
     }).catch(_syncErr('user changes'));
+    _acPushHrm(u); // R14: schedule/WFH/assets live on u.hrm — push NOW, not on the debounce
   } else {
     const pw=g('u-pw');if(!pw){toast('Password required','err');return;}
     const saveBtn=document.querySelector('[onclick*="saveUser"]');

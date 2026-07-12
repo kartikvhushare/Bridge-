@@ -685,3 +685,22 @@ describe('r13 - roster off-days: strip gone, OFF cells, two-way edit', () => {
     emp.hrm.schedule.offDays = ['Sun'];
   });
 });
+
+/* ── Round 14: admins in roster + immediate access-change push ── */
+describe('r14 - super admin appears in the shift roster', () => {
+  it('roster people include Admins for a managing viewer', () => {
+    W.S.uid = 'sa1'; W.S.route = 'shifts'; W.S.filters = {};
+    const html = W.pageContent();
+    const sa = W.uById('sa1');
+    expect(html).toContain(W.esc(W.fullName(sa))); // the Super Admin's own row is in the grid
+  });
+  it('access changes push the hrm row immediately (targeted, not debounced)', () => {
+    let pushed = null;
+    const realFrom = W.sb.from;
+    W.sb.from = (t) => t === 'user_hrm' ? ({ upsert: (row) => { pushed = row; return { then: (r) => { r({ error: null }); return { catch: () => {} }; } }; } }) : realFrom.call(W.sb, t);
+    W._acPushHrm(W.uById('emp1'));
+    W.sb.from = realFrom;
+    expect(pushed && pushed.user_id).toBe('emp1');
+    expect(pushed && typeof pushed.hrm).toBe('object');
+  });
+});
