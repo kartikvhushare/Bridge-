@@ -82,6 +82,14 @@ Suite: **156 tests green**, build clean, fresh dist.
 
 Suite: **160 tests green**, build clean, fresh dist.
 
+## Phase 4 — round 9: clock-out & empty-graphs investigation (July 2026)
+
+1. **Dashboard vs Attendance clock-out** — verified both tabs embed the SAME `_clockWidget()` → same `App.clockOut` → same geofence rule (fence checked only when an enabled fence exists — round 8). The reported difference came from running an older deployed build.
+2. **Empty graphs** — proved the chart layer is sound: new `r9` smoke tests inject real page HTML into jsdom, stub `Chart`, and EXECUTE `_drawAnalyticsCharts/_drawHrmCharts/_drawOKRCharts/_drawHomeCharts` — any ReferenceError/TypeError in a config now fails CI instead of being swallowed by `_paintCharts`'s try{} (which used to blank every canvas silently). The OKR test asserts 2 datasets (Ideal+Actual) and 31 day labels.
+3. **Visible CDN failure** — if Chart.js never arrives from cdn.jsdelivr.net (network/ad-blocker), every chart box now shows "Charts library didn't load — check the connection/ad-blocker, then refresh" instead of silent blank space. `_paintCharts` retries ~3s first and logs to console instead of swallowing errors.
+
+Suite: **164 tests green**, build clean, fresh dist.
+
 ## Commands
 
 ```

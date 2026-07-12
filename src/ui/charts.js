@@ -37,14 +37,21 @@ const _ctp={id:'ctp',afterDraw(c){const t=c.config&&c.config.options&&c.config.o
 function _destroyACharts(){_aCharts.forEach(c=>{try{c.destroy();}catch(e){}});_aCharts=[];}
 function _paintCharts(){try{
   const need=document.getElementById('aChartStatus')||document.getElementById('hChartOnTime')||document.getElementById('hrmChartWorked')||document.querySelector('canvas[data-okr-chart]');
-  if(need&&typeof Chart==='undefined'){if(!_paintCharts._r){_paintCharts._r=1;setTimeout(_paintCharts,250);}return;}
+  // R9: if Chart.js hasn't arrived from the CDN yet, retry for ~3s, then say so VISIBLY instead of
+  // leaving silent blank boxes (owner report "all graphs empty" — a blocked CDN looks exactly like that).
+  if(need&&typeof Chart==='undefined'){
+    _paintCharts._r=(_paintCharts._r||0)+1;
+    if(_paintCharts._r<12){setTimeout(_paintCharts,250);return;}
+    document.querySelectorAll('canvas[id^="aChart"],canvas[id^="hChart"],canvas[id^="hrmChart"],canvas[data-okr-chart]').forEach(cv=>{const p=cv.parentElement;if(p)p.innerHTML='<div style="height:100%;display:grid;place-items:center;color:var(--c-text-3);font-size:12px;text-align:center;padding:0 14px;line-height:1.5">Charts library didn\'t load —<br>check the connection / ad-blocker (cdn.jsdelivr.net), then refresh.</div>';});
+    return;
+  }
   _paintCharts._r=0;
   if(document.getElementById('aChartStatus'))_drawAnalyticsCharts();
   else if(document.getElementById('hChartOnTime'))_drawHomeCharts();
   else if(document.getElementById('hrmChartWorked'))_drawHrmCharts();
   else if(document.querySelector('canvas[data-okr-chart]'))_drawOKRCharts();
   else _destroyACharts();
-}catch(e){}}
+}catch(e){console.warn('[charts]',e&&e.message);}}
 function _drawHrmCharts(){
   if(typeof Chart==='undefined'||!_HRMData)return;
   _destroyACharts();

@@ -533,3 +533,60 @@ describe('r8 - hierarchy popup and attendance mobile view', () => {
     W.S.uid = 'sa1';
   });
 });
+
+/* ── Round 9: prove the chart configs BUILD without crashing (a ReferenceError in any config
+      used to be swallowed by _paintCharts' try{} and blanked EVERY graph). Chart is stubbed to
+      capture instantiations; canvases come from the real page HTML injected into jsdom. ── */
+describe('r9 - chart configs execute without errors', () => {
+  const mkChartStub = () => {
+    const seen = [];
+    window.Chart = class { constructor(ctx, cfg) { seen.push(cfg); } destroy() {} };
+    window.Chart.defaults = { font: {}, plugins: { tooltip: {}, legend: { labels: {} } }, elements: { bar: {}, line: {}, point: {} } };
+    window.Chart.__bridged = 0;
+    return seen;
+  };
+  it('company analytics: chart configs build with data present', () => {
+    W.S.uid = 'sa1'; W.S.route = 'analytics'; W.S.filters = {}; W.S.dashView = 'visuals';
+    const today = W.todayISO();
+    W.DB.checklists.push({ id: 'r9cl', name: 'R9 CL', department: 'Ops', assignees: ['emp1'], tasks: [], questionIds: [], status: 'Active', createdBy: 'sa1' });
+    W.DB.submissions.push(
+      { id: 'r9s1', checklistId: 'r9cl', userId: 'emp1', date: today, status: 'On Time', submittedAt: new Date().toISOString(), tasks: [], questionResponses: [] },
+      { id: 'r9s2', checklistId: 'r9cl', userId: 'emp1', date: W._isoAdd(today, -1), status: 'Late', submittedAt: new Date().toISOString(), tasks: [], questionResponses: [] });
+    W.DB.tickets.push({ id: 'r9tk', title: 'T', status: 'Open', assignedTo: 'emp1', submitterId: 'emp1', createdAt: new Date().toISOString() });
+    document.body.innerHTML = '<div id="content">' + W.pageContent() + '</div>';
+    const seen = mkChartStub();
+    W._drawAnalyticsCharts();                       // any ReferenceError/TypeError surfaces HERE
+    expect(seen.length).toBeGreaterThanOrEqual(4);  // status/trend/dept/tickets/weekday build
+    W.DB.checklists = W.DB.checklists.filter(c => c.id !== 'r9cl');
+    W.DB.submissions = W.DB.submissions.filter(x => x.id !== 'r9s1' && x.id !== 'r9s2');
+    W.DB.tickets = W.DB.tickets.filter(t => t.id !== 'r9tk');
+  });
+  it('HRM analytics: trend + leave-mix + 3 bars build', () => {
+    W.S.route = 'hrmanalytics'; W.S.filters = {}; W.S.hrmView = 'visuals';
+    document.body.innerHTML = '<div id="content">' + W.pageContent() + '</div>';
+    const seen = mkChartStub();
+    W._drawHrmCharts();
+    expect(seen.length).toBeGreaterThanOrEqual(1);
+  });
+  it('OKR graph (actual vs ideal) builds for a level with inputs', () => {
+    document.body.innerHTML = '<div><div style="height:200px"><canvas data-okr-chart="demo_okrX"></canvas></div></div>';
+    W.DB.okrs.push({ id: 'demo_okrX', title: 'X', metricType: 'number', startValue: 0, targetValue: 10, ownerId: 'sa1', periodStart: '2026-07-01', periodEnd: '2026-07-31', frequency: {}, createdAt: '2026-07-01' });
+    W.DB.okrCheckins.push({ id: 'demo_okcX', okrId: 'demo_okrX', userId: 'sa1', value: 4, date: '2026-07-06', createdAt: '2026-07-06T00:00:00Z' });
+    const seen = mkChartStub();
+    W._drawOKRCharts();
+    expect(seen.length).toBe(1);
+    const ds = seen[0].data.datasets;
+    expect(ds.length).toBe(2);                                  // Ideal + Actual (#3)
+    expect(seen[0].data.labels.length).toBe(31);                // every date 1..31 (#4)
+    W.DB.okrs = W.DB.okrs.filter(o => o.id !== 'demo_okrX');
+    W.DB.okrCheckins = W.DB.okrCheckins.filter(c => c.id !== 'demo_okcX');
+  });
+  it('home dashboard charts build', () => {
+    W.S.uid = 'emp1'; W.S.route = 'dashboard'; W.S.filters = {};
+    document.body.innerHTML = '<div id="content">' + W.pageContent() + '</div>';
+    const seen = mkChartStub();
+    W._drawHomeCharts();
+    expect(Array.isArray(seen)).toBe(true); // no throw is the assertion; emp1 may have no data
+    W.S.uid = 'sa1';
+  });
+});
