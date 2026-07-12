@@ -172,20 +172,38 @@ App._flowNew=(kind)=>{
   _seedHRMPlan();
   const users=DB.users.filter(u=>u.status==='Active');
   const tpl=((DB.hrmConfig||{}).flowTemplates||{})[kind]||[];
-  const hrUsers=users.filter(u=>u.hrm?.isHR===true||u.hrm?.roleProfileId==='hr');
+  const K={onboarding:['#ECFDF5','#0B7A55'],probation:['#EFF6FF','#1D4ED8'],exit:['#FFF1F2','#BE123C']}[kind]||['#F6F7F8','#6B7280'];
+  /* R20.1 (owner report: "the Start-flow UI is bad — all 3 kinds"): the owner <select> used the
+     full-width .ui-select default, crushing every step title to one word per line and overlapping
+     it. Each step is now a clean row: number badge + title (wraps naturally, with a due/type hint)
+     + a FIXED-WIDTH owner select that drops below the title on narrow screens. */
   const stepSel=(t,i)=>{
-    if(t.ownerType==='manager')return `<span style="font-size:11px;color:var(--c-text-3)">their manager (automatic)</span>`;
+    if(t.ownerType==='manager')return `<span style="font-size:11px;color:var(--c-text-3);font-weight:600;white-space:nowrap">their manager (automatic)</span>`;
     const pool=(t.ownerType==='role'||t.ownerType==='hr')
       ?users.filter(u=>u.hrm?.roleProfileId===(t.roleId||'hr'))
       :users.filter(u=>u.department===t.dept);
-    return `<select id="fs-own-${i}" class="ui-select rf" style="min-height:0;height:30px;font-size:11.5px;padding:3px 22px 3px 8px">${(pool.length?pool:users).map(u=>`<option value="${u.id}" ${t.ownerId===u.id?'selected':''}>${esc(fullName(u))}</option>`).join('')}</select>`;
+    return `<select id="fs-own-${i}" class="ui-select rf" style="width:100%;min-height:0;height:32px;font-size:12px;padding:3px 24px 3px 10px">${(pool.length?pool:users).map(u=>`<option value="${u.id}" ${t.ownerId===u.id?'selected':''}>${esc(fullName(u))}</option>`).join('')}</select>`;
   };
-  modalShell({title:'Start '+kind+' flow',size:'max-w-md',
-    body:`<div><label style="display:block;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase;margin-bottom:6px">Colleague</label>
-      <select id="flw-user" class="ui-select rf" style="margin-bottom:12px">${users.map(u=>`<option value="${u.id}">${esc(fullName(u))}</option>`).join('')}</select>
-      <label style="display:block;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase;margin-bottom:6px">Steps & owners</label>
-      ${tpl.map((t,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px dashed var(--c-border)"><span style="flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--c-text)">${esc(t.title)}</span>${stepSel(t,i)}</div>`).join('')}
-      <p style="font-size:11px;color:var(--c-text-3);margin-top:10px">HR steps offer HR-role people; department steps offer that department's people. Everyone picked is notified with a due date.</p></div>`,
+  const lab='display:block;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px';
+  const rows=tpl.map((t,i)=>{
+    const d=Number(t.offsetDays)||0;
+    const hint=(d?'due +'+d+(d===1?' day':' days'):'due on start day')
+      +(t.type==='form'?' · includes a write-up':t.type==='letter'?' · opens Letters':t.type==='payrollHold'?' · sets a payroll hold':'');
+    return `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;${i?'border-top:1px solid var(--c-border)':''}">
+      <span style="width:22px;height:22px;border-radius:50%;background:${K[0]};color:${K[1]};font-size:11px;font-weight:800;display:grid;place-items:center;flex-shrink:0">${i+1}</span>
+      <div style="flex:1 1 170px;min-width:0">
+        <div style="font-size:12.5px;font-weight:650;color:var(--c-text);line-height:1.35">${esc(t.title)}</div>
+        <div style="font-size:10.5px;color:var(--c-text-3);margin-top:2px">${hint}</div>
+      </div>
+      <div style="flex:0 1 200px;min-width:160px;margin-left:auto;display:flex;justify-content:flex-end;align-items:center">${stepSel(t,i)}</div>
+    </div>`;
+  }).join('')||`<div style="padding:14px;font-size:12px;color:var(--c-text-3)">No template steps yet — define them in HR Config → Flows.</div>`;
+  modalShell({title:'Start '+kind+' flow',size:'max-w-lg',
+    body:`<div><label style="${lab}">Colleague</label>
+      <select id="flw-user" class="ui-select rf" style="margin-bottom:16px">${users.map(u=>`<option value="${u.id}">${esc(fullName(u))}</option>`).join('')}</select>
+      <label style="${lab}">Steps & owners</label>
+      <div style="border:1px solid var(--c-border);border-radius:12px;overflow:hidden;background:var(--c-surface)">${rows}</div>
+      <p style="font-size:11px;color:var(--c-text-3);margin-top:10px;line-height:1.5">HR steps offer HR-role people; department steps offer that department's people. Everyone picked is notified with a due date.</p></div>`,
     footer:btnG('Cancel','App.closeModal()')+btnP('Start flow',`App._flowStartGo('${kind}')`)});
 };
 App._flowStartGo=(kind)=>{
