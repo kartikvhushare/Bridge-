@@ -84,11 +84,10 @@ App._orgProfile=(id)=>{
     body:`<div>
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px">${avatar(u,'w-14 h-14','text-lg')}<div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${chip(u.status)}${u.role==='Admin'?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--c-ink);color:#fff">Super Admin</span>':u.role==='SubAdmin'?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--c-info-soft);color:var(--c-info-ink)">Admin</span>':''}</div>${tenure?`<div style="font-size:12px;color:var(--c-text-2);margin-top:4px">With the company ${tenure}</div>`:''}</div></div>
       ${row('Email',u.email?`<a href="mailto:${esc(u.email)}" style="color:var(--c-brand-ink)">${esc(u.email)}</a>`:'')}
-      ${row('Phone',u.phone?esc(u.phone):'')}
       ${row('Department',u.department?esc(u.department):'')}
       ${row('Reports to',mgr?esc(fullName(mgr)):'—')}
       ${row('Direct reports',reports.length?esc(reports.slice(0,6).map(r=>fullName(r)).join(', '))+(reports.length>6?' +'+(reports.length-6)+' more':''):'')}
-      ${row('Office',loc?esc(loc.name):'')}
+      ${row('Office',loc?esc(loc.name):'—')}
       ${row('Joined',h.joiningDate?fmtD(h.joiningDate)+(tenure?' · '+tenure:''):'')}
       ${row('Birthday',h.dob?fmtD(h.dob):'')}
       ${row('Work week',h.schedule?esc((h.schedule.workWeek||5)+'-day · '+(h.schedule.in||'09:00')+'–'+(h.schedule.out||'18:00')):'')}

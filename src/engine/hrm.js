@@ -468,16 +468,10 @@ function _withGeofence(verb,onPass,lenient,retryFn){
   const cands=_candidateGeofences(me());
   const word='clock '+verb;
   const _fail=(m)=>{if(retryFn&&!lenient)toastAction(m,'err',{label:'Retry',fn:retryFn,ms:8000});else toast(m,'err');};
-  // Fail-closed (clock-in): the user must have at least one WORKING fence among their offices.
-  if(!cands.length){
-    if(lenient){onPass(null);return;} // H4: fence changed mid-shift — let the user clock out
-    const _adm=can('employees','edit')||can('hrSettings','edit');
-    const _u=me();const _hasScope=!!(_u&&((_u.hrm&&_u.hrm.locationId)||(Array.isArray(_u.cities)&&_u.cities.length)));
-    const _msg=!_hasScope
-      ?(_adm?'No office on your profile \u2014 Users \u2192 edit yourself \u2192 \u201COffice location (geofence)\u201D, or add City access chips':'No office assigned to you yet \u2014 ask HR to set your office or city access')
-      :(_adm?'Your office(s) have no working geofence \u2014 Locations \u2192 set coordinates + enable the fence':'Your office\u2019s location fence isn\u2019t set up yet \u2014 ask HR');
-    toast(_msg,'err');return;
-  }
+  // R8 (owner request): the office on a person's profile is JUST their workplace — it does not
+  // require a geofence. Location is only enforced when a WORKING, ENABLED fence exists for the
+  // person's office/cities. No fence configured → clock in/out freely (geo recorded as null).
+  if(!cands.length){onPass(null);return;}
   if(!navigator.geolocation){
     if(lenient){onPass(null);return;}
     _fail('Can\'t confirm your location to '+word+' — enable location access');return;

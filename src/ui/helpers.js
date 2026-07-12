@@ -39,7 +39,7 @@ window._toast=undefined;
 function toast(msg,type='ok'){
   let t=$('#toast');if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;z-index:500;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom));pointer-events:none';document.body.appendChild(t);}
   const bg=type==='ok'?'#15171C':type==='warn'?'#D97706':'#DC2626';
-  t.innerHTML=`<div class="pop" style="display:flex;align-items:center;gap:7px;background:${bg};color:#fff;padding:10px 18px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.25)">${type==='ok'?ic('check','w-3.5 h-3.5'):ic('alert','w-3.5 h-3.5')}<span>${esc(msg)}</span></div>`;
+  t.innerHTML=`<div class="pop" style="display:flex;align-items:flex-start;gap:7px;background:${bg};color:#fff;padding:10px 18px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.25);max-width:min(92vw,480px);line-height:1.45"><span style="flex-shrink:0;margin-top:1px">${type==='ok'?ic('check','w-3.5 h-3.5'):ic('alert','w-3.5 h-3.5')}</span><span style="min-width:0;overflow-wrap:anywhere">${esc(msg)}</span></div>`;
   clearTimeout(_toast);clearTimeout(_toastAction);_toast=setTimeout(()=>{if(t)t.innerHTML='';},2800);
 }
 /* toastAction(msg,type,{label,fn,ms}) — a toast with ONE inline action button (Undo / Retry).

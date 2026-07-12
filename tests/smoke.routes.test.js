@@ -134,15 +134,17 @@ describe('change #3 - per-feature in-app switches', () => {
 });
 
 /* ── Round 2 changes ── */
-describe('r2 #1 - clock-out enforces geofence like clock-in', () => {
-  it('clock-out is blocked when no working geofence confirms location', () => {
+describe('r2/r8 - geofence only applies when a fence is configured', () => {
+  it('no fence configured → clock-out succeeds freely (office is just a workplace)', () => {
     W.S.uid = 'emp1';
     const d = W.todayISO();
     let rec = (W.DB.attendance || []).find(a => a.userId === 'emp1' && a.date === d);
     if (!rec) { rec = { id: 'att_emp1_' + d, userId: 'emp1', date: d, clockIn: new Date().toISOString(), clockOut: null, inMin: 540, outMin: null, hours: null, status: 'Present', flags: [], createdAt: new Date().toISOString() }; W.DB.attendance.push(rec); }
     else { rec.clockIn = new Date().toISOString(); rec.inMin = 540; rec.clockOut = null; rec.outMin = null; }
-    W.App.clockOut(); // jsdom: no geofence candidates + strict mode → must NOT punch out
-    expect(rec.clockOut).toBe(null);
+    W.log = () => {};
+    W.App.clockOut(); // R8: no geofence candidates → no location requirement
+    expect(rec.clockOut).toBeTruthy();
+    W.DB.attendance = W.DB.attendance.filter(a => a.id !== rec.id);
     W.S.uid = 'sa1';
   });
 });
@@ -417,16 +419,19 @@ describe('r6 - alerts & approvals delete options', () => {
     expect(W.DB.approvals.some(a => a.id === 'r6a2')).toBe(true);
     W.DB.approvals = W.DB.approvals.filter(a => a.id !== 'r6a2');
   });
-  it('rejected leave records are deletable; approved never', () => {
+  it('rejected leave deletable by anyone involved; approved only by an APPROVER (r8)', () => {
     W.DB.leaveRequests.push(
       { id: 'r6l1', userId: 'emp1', leaveTypeId: 'ltX', start: '2026-07-01', end: '2026-07-02', status: 'Rejected', workingDays: 2 },
-      { id: 'r6l2', userId: 'emp1', leaveTypeId: 'ltX', start: '2026-07-03', end: '2026-07-04', status: 'Approved', workingDays: 2 });
+      { id: 'r6l2', userId: 'emp1', leaveTypeId: 'ltX', leaveYear: '2026', start: '2026-07-03', end: '2026-07-04', status: 'Approved', workingDays: 2, unpaid: true });
     global.confirm = () => true;
     W.App._delLeaveRec('r6l1');
     expect(W.DB.leaveRequests.some(r => r.id === 'r6l1')).toBe(false);
-    W.App._delLeaveRec('r6l2'); // approved → refused
+    W.S.uid = 'emp1'; // the requester is NOT an approver → approved delete refused
+    W.App._delLeaveRec('r6l2');
     expect(W.DB.leaveRequests.some(r => r.id === 'r6l2')).toBe(true);
-    W.DB.leaveRequests = W.DB.leaveRequests.filter(r => r.id !== 'r6l2');
+    W.S.uid = 'sa1';  // an approver deletes it (with reversal — unpaid here, so no balance math)
+    W.App._delLeaveRec('r6l2');
+    expect(W.DB.leaveRequests.some(r => r.id === 'r6l2')).toBe(false);
   });
 });
 
@@ -472,6 +477,59 @@ describe('r7 - cold archive plumbing', () => {
   it('Alerts page offers Load older', () => {
     W.S.uid = 'emp1'; W.S.route = 'notifications'; W.S.filters = {};
     expect(W.pageContent()).toContain('Load older');
+    W.S.uid = 'sa1';
+  });
+});
+
+
+/* ── Round 8 fixes ── */
+describe('r8 - counts and drills share one source (admins included)', () => {
+  it('a clocked-in SUPER ADMIN appears in both the count and the drill list', () => {
+    const d = W.todayISO();
+    const rec = { id: 'r8att_sa', userId: 'sa1', date: d, clockIn: new Date().toISOString(), clockOut: null, inMin: 540, outMin: null, hours: null, status: 'Present', flags: [], createdAt: new Date().toISOString() };
+    W.DB.attendance.push(rec);
+    const buckets = W._todayBuckets();
+    expect(buckets.IN.some(u => u.id === 'sa1')).toBe(true); // count source includes admins now
+    W.S.uid = 'sa1';
+    W.App._dashDrill('who-in');
+    const m = document.getElementById('modal');
+    expect(m.innerHTML.length).toBeGreaterThan(0);
+    W.App.closeModal();
+    W.DB.attendance = W.DB.attendance.filter(a => a.id !== 'r8att_sa');
+  });
+});
+
+describe('r8 - approved leave delete reverses balance + attendance', () => {
+  it('restores used days and clears the written leave day', () => {
+    W.S.uid = 'sa1';
+    const emp = W.uById('emp1'); W._ensureHrm(emp);
+    const lt = (W.DB.leaveTypes || [])[0] || { id: 'ltR8' };
+    const b = W._balanceFor('emp1', lt.id, '2026'); b.used = W._r2((b.used || 0) + 2);
+    const usedBefore = b.used;
+    W.DB.leaveRequests.push({ id: 'r8lv', userId: 'emp1', leaveTypeId: lt.id, leaveYear: '2026', start: '2026-07-08', end: '2026-07-09', workingDays: 2, unpaid: false, status: 'Approved', flow: [{ type: 'manager' }], stageIndex: 0 });
+    W.DB.attendance.push({ id: 'r8lvatt', userId: 'emp1', date: '2026-07-08', clockIn: null, clockOut: null, status: 'Leave', flags: [], createdAt: new Date().toISOString() });
+    global.confirm = () => true;
+    W.App._delLeaveRec('r8lv');
+    expect(W.DB.leaveRequests.some(r => r.id === 'r8lv')).toBe(false);
+    expect(b.used).toBe(W._r2(usedBefore - 2));                        // balance restored
+    expect(W.DB.attendance.some(a => a.id === 'r8lvatt')).toBe(false); // leave day cleared
+  });
+});
+
+describe('r8 - hierarchy popup and attendance mobile view', () => {
+  it('org profile popup shows office, never phone', () => {
+    const emp = W.uById('emp1'); emp.phone = '+971-55-0000000';
+    W.App._orgProfile('emp1');
+    const html = document.getElementById('modal').innerHTML;
+    expect(html.includes('+971-55-0000000')).toBe(false);
+    expect(html).toContain('Office');
+    W.App.closeModal();
+  });
+  it('attendance page includes the mobile card list', () => {
+    W.S.uid = 'emp1'; W.S.route = 'attendance'; W.S.filters = {};
+    const html = W.pageContent();
+    expect(html).toContain('md:hidden');
+    expect(html).toContain('hidden md:block');
     W.S.uid = 'sa1';
   });
 });

@@ -8,7 +8,7 @@ function _reportsHubHTML(){
   let head=[],rows=[];
   if(R==='absentee'){
     head=['Person','Department','Reason unknown since'];
-    DB.users.filter(u=>u.status==='Active'&&u.role!=='Admin').forEach(u=>{
+    DB.users.filter(u=>u.status==='Active').forEach(u=>{ // R8: include super admins in the absentee report
       const sch=u.hrm?.schedule||{};if((sch.offDays||[]).includes(dayAbbr(d)))return;
       if(_onLeaveToday(u.id,d))return;
       const rec=(DB.attendance||[]).find(a=>a.userId===u.id&&a.date===d&&a.clockIn);
@@ -285,7 +285,7 @@ function analyticsPage(){
   _AFiltered={subs:subs.slice(),tickets:aTickets.slice(),missed:_missedList,compliant:_comp,nonCompliant:_noncomp,dateMap:_dateMap};
   // Company hero: today's headline figures (permission-scoped: relevantUsers already honors report scope)
   const _hero=(()=>{try{
-    const scope=relevantUsers.filter(x=>x.status==='Active'&&x.role!=='Admin');
+    const scope=relevantUsers.filter(x=>x.status==='Active'); // R8: super admins count like everyone in reports
     const att=(DB.attendance||[]).filter(x2=>x2.date===today&&scope.some(x=>x.id===x2.userId));
     const present=att.filter(x2=>x2.clockIn).length;
     const wfh=att.filter(x2=>(x2.flags||[]).includes('WFH')&&x2.clockIn).length;

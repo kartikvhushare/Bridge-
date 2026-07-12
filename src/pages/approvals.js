@@ -98,6 +98,10 @@ function _inboxRow(x){
       if(x.status==='Pending'&&x.requestedBy===S.uid)return{call:"App.cancelLeave('"+esc(x._src.id)+"')",label:'Cancel request'};
       if((x.status==='Rejected'||x.status==='Cancelled')&&(x.requestedBy===S.uid||can('leaveRequests','approve')))
         return{call:"App._delLeaveRec('"+esc(x._src.id)+"')",label:'Delete record'};
+      // R8 (owner request): APPROVED leave is deletable too — approvers only; the delete fully
+      // reverses the approval (restores the balance days + clears the written leave days).
+      if(x.status==='Approved'&&can('leaveRequests','approve'))
+        return{call:"App._delLeaveRec('"+esc(x._src.id)+"')",label:'Delete & reverse'};
     }
     if(c==='overtime'&&x.status==='Rejected')return{call:"App._otDel('"+esc(x._src.id)+"')",label:'Remove'};
     return null;
@@ -132,16 +136,40 @@ App._delApprovalRec=(id)=>{
   saveDB();toast('Record deleted','warn');rr();
   sb.from('approvals').delete().eq('id',id).then(()=>{}).catch(()=>{});
 };
-/* Delete a Rejected/Cancelled leave record (Approved is never deletable — balances already applied). */
+/* Delete a leave record. Rejected/Cancelled: plain history cleanup (requester or approver).
+   R8 — APPROVED: approvers only; the delete REVERSES the approval — the used balance days are
+   restored and the leave days written into attendance are cleared. Fully logged. */
 App._delLeaveRec=(id)=>{
   const r=(DB.leaveRequests||[]).find(x=>x.id===id);if(!r)return;
-  if(!(r.status==='Rejected'||r.status==='Cancelled')){toast('Only rejected or cancelled leave records can be deleted','err');return;}
-  if(!(r.userId===S.uid||can('leaveRequests','approve'))){toast('Not allowed','err');return;}
-  if(!confirm('Delete this '+r.status.toLowerCase()+' leave record? This cannot be undone.'))return;
+  const emp=uById(r.userId);
+  if(r.status==='Approved'){
+    if(!can('leaveRequests','approve')){toast('Only an approver can delete an approved leave','err');return;}
+    if(!emp){toast('Employee no longer exists','err');return;}
+    if(!confirm('Delete this APPROVED leave?\n\nThis reverses the approval: '+(r.unpaid?'':(r.workingDays||0)+' day(s) go back to '+fullName(emp)+'\'s balance and ')+'the leave days are cleared from attendance.\n\nThis is logged and cannot be undone.'))return;
+    // 1) restore the balance the approval consumed (paid types only — unpaid never touched it)
+    if(!r.unpaid){const b=_balanceFor(r.userId,r.leaveTypeId,r.leaveYear||_leaveYearOf(emp,r.start));
+      b.used=_r2(Math.max(0,(b.used||0)-(r.workingDays||0)));}
+    // 2) clear the leave days _writeLeaveAttendance stamped (only pure leave rows — a day with a real
+    //    clock-in keeps its worked record and just loses the leave marking)
+    const _gone=[];let d=r.start,g=0;
+    while(d<=r.end&&g++<400){
+      const rec=(DB.attendance||[]).find(a=>a.userId===r.userId&&a.date===d);
+      if(rec&&(rec.status==='Leave'||rec.status==='HalfDay')){
+        if(rec.clockIn){rec.status='Present';rec.leaveType=null;}
+        else{_gone.push(rec.id);DB.attendance=DB.attendance.filter(a=>a.id!==rec.id);}
+      }
+      d=_isoAdd(d,1);
+    }
+    if(_gone.length)sb.from('attendance').delete().in('id',_gone).then(()=>{}).catch(()=>{});
+    hlog('Approved leave deleted & reversed',fullName(emp)+' · '+r.start+' → '+r.end);
+  }else if(r.status==='Rejected'||r.status==='Cancelled'){
+    if(!(r.userId===S.uid||can('leaveRequests','approve'))){toast('Not allowed','err');return;}
+    if(!confirm('Delete this '+r.status.toLowerCase()+' leave record? This cannot be undone.'))return;
+  }else{toast('Pending requests are cancelled, not deleted','err');return;}
   DB.leaveRequests=DB.leaveRequests.filter(x=>x.id!==id);
   DB.leaveRequests_deleted=DB.leaveRequests_deleted||[];if(!DB.leaveRequests_deleted.includes(id))DB.leaveRequests_deleted.push(id);if(DB.leaveRequests_deleted.length>800)DB.leaveRequests_deleted=DB.leaveRequests_deleted.slice(-800); // R7
-  log(fullName(me()),'Deleted leave record',(uById(r.userId)?fullName(uById(r.userId)):'')+' · '+r.start+' → '+r.end);
-  saveDB();toast('Record deleted','warn');rr();
+  log(fullName(me()),'Deleted leave record',(emp?fullName(emp):'')+' · '+r.start+' → '+r.end);
+  saveDB();toast(r.status==='Approved'?'Approved leave deleted — balance restored':'Record deleted','warn');rr();
   sb.from('leave_requests').delete().eq('id',id).then(()=>{}).catch(()=>{});
 };
 App._setInboxType=(k)=>{S.filters.inboxType=k;rr();};

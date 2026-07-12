@@ -10,7 +10,7 @@ function teamViewPage(){
     // see everyone. Never silently render My Checklists here — that read as a bug.
     const directReports=DB.users.filter(u=>u.managerId===S.uid&&u.id!==S.uid);
     const orgWide=isAdmin()||isSubAdmin()||scopeOf('employees')==='everyone';
-    const team=orgWide?DB.users.filter(u=>u.id!==S.uid&&u.status==='Active'&&u.role!=='Admin'):directReports;
+    const team=orgWide?DB.users.filter(u=>u.id!==S.uid&&u.status==='Active'):directReports; // R8: include super admins
     if(!team.length)return`<div class="fade">${hdr('Team','Live checklist status of your team')}${empty('users','No team members yet','Nobody reports to you. Ask an admin to set you as someone\'s manager in Users, or check Access Control → Team view.')}</div>`;
     return`<div class="fade">
       ${hdr('Team','Your people and every checklist — one place')}

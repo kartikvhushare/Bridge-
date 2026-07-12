@@ -44,7 +44,7 @@ function _hrmUserSection(u){
     <div class="grid grid-cols-2 gap-3">${fld('Date of birth','u-dob',h.dob||'','date')}${fld('Joining date','u-join',h.joiningDate||'','date')}</div>
     <div class="grid grid-cols-3 gap-3">${fld('Clock-in','u-cin',s.in||'09:00','time')}${fld('Clock-out','u-cout',s.out||'18:00','time')}${fld('Total hours','u-chrs',s.hours??9,'number')}</div>
     <div>${selF('Work week','u-ww',[['5','5-day week'],['6','6-day week']],String(s.workWeek||5))}</div>
-    ${selF('Office location (geofence)','u-loc',[['','— None —'],...DB.locations.filter(l=>l.status==='Active').map(l=>[l.id,l.name])],h.locationId||'')}
+    <div>${selF('Office location (where they work)','u-loc',[['','— None —'],...DB.locations.filter(l=>l.status==='Active').map(l=>[l.id,l.name])],h.locationId||'')}<p style="font-size:11px;color:#9CA3AF;margin-top:4px">Just their workplace. Clock-in/out only checks location if this office has a geofence enabled in Locations.</p></div>
     <div><label class="block text-xs font-semibold text-ink-500 mb-1.5">Weekly off-days</label><div style="display:flex;gap:6px;flex-wrap:wrap">${DAYS3.map(d=>`<button type="button" class="dchip${off.has(d)?' on':''}" onclick="this.classList.toggle('on')" data-day="${d}">${d}</button>`).join('')}</div></div>
     ${mkTog('u-wfh',h.wfhEligible===true,'Eligible for Work-from-Home')}
     ${fld('Probation ends','u-probend',h.probationEnd||'','date')}

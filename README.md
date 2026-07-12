@@ -71,6 +71,17 @@ Suite: **151 tests green**, build clean, fresh dist.
 
 Suite: **156 tests green**, build clean, fresh dist.
 
+## Phase 4 — round 8: small-bug sweep (July 2026)
+
+1. **Office ≠ geofence** — a person's office is just their workplace. Clock-in/out only checks location when that office actually has an ENABLED fence; no fence configured → free clocking (geo:null). Field renamed "Office location (where they work)" with a hint.
+2. **Approved leave deletable** — approvers see "Delete & reverse" on Approved leave in the inbox: restores the used balance days, clears the written leave days from attendance (a day with a real clock-in just loses its leave marking), tombstoned + fully logged. Rejected/Cancelled stay deletable by requester/approver; Pending still cancels.
+3. **Attendance log mobile view** — table is desktop-only; phones get a card list (date + status chip, in→out · hours, flag chips).
+4. **Hierarchy popup** — phone removed; Office always shown ('—' when unset).
+5. **Super admins count like everyone in reporting** — new `_todayBuckets()` is the single source for the who's-in widget AND its drill lists (fixes "In office 0 but the drill shows people"); admin-exclusion removed from: who's-in, dashboard drills, Company-analytics hero, absentee report, event triggers, org-wide team snapshot. (Deliberately still excluded from payroll runs / roster people pickers — those aren't reports.)
+6. **Toasts wrap on mobile** — max-width 92vw, multi-line safe.
+
+Suite: **160 tests green**, build clean, fresh dist.
+
 ## Commands
 
 ```

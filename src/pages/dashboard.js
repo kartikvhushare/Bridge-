@@ -2,9 +2,12 @@
 
 /* ── WHO'S IN / ON LEAVE dashboard widget ── */
 function _onLeaveToday(uid2,date){return (DB.leaveRequests||[]).some(r=>r.userId===uid2&&r.status==='Approved'&&r.start<=date&&date<=r.end);}
-function _whoIsInWidget(){
+/* ONE source of truth for "who is in today" — used by the widget cells AND the drill-down lists
+   so a count can never disagree with the names behind it (R8 bug: 'In office 0' but the drill
+   showed people). R8: Super Admins are included like everyone else in reporting counts. */
+function _todayBuckets(){
   const d=todayISO();const dy=dayAbbr(d);
-  const act=DB.users.filter(u=>u.status==='Active'&&u.role!=='Admin');
+  const act=DB.users.filter(u=>u.status==='Active');
   const IN=[],WFH=[],LEAVE=[],OFF=[],OUT=[];
   act.forEach(u=>{
     const rec=(DB.attendance||[]).find(a=>a.userId===u.id&&a.date===d);
@@ -13,6 +16,10 @@ function _whoIsInWidget(){
     if((u.hrm?.schedule?.offDays||[]).includes(dy)){OFF.push(u);return;}
     OUT.push(u);
   });
+  return{IN,WFH,LEAVE,OFF,OUT,date:d};
+}
+function _whoIsInWidget(){
+  const {IN,WFH,LEAVE,OFF,OUT}=_todayBuckets();
   const cell=(label,arr,bg,fg,drill)=>`<div ${drill?`onclick="App._dashDrill('${drill}')" role="button" tabindex="0" title="Tap for the list"`:''} style="flex:1;min-width:105px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px 12px;${drill?'cursor:pointer':''}">
     <div style="display:flex;align-items:baseline;gap:6px"><span class="fd" style="font-size:19px;font-weight:800;color:${fg}">${arr.length}</span><span style="font-size:11px;font-weight:700;color:var(--c-text-2)">${label}</span></div>
     <div style="display:flex;margin-top:6px">${arr.slice(0,6).map(u=>`<span style="margin-right:-6px" title="${esc(fullName(u))}">${avatar(u,'w-6 h-6','text-[9px]')}</span>`).join('')||'<span style="font-size:11px;color:var(--c-text-3)">—</span>'}${arr.length>6?`<span style="margin-left:10px;font-size:10px;color:var(--c-text-3);align-self:center">+${arr.length-6}</span>`:''}</div>
@@ -122,30 +129,23 @@ App._dashDrill=(kind)=>{
     rows=(DB.tickets||[]).filter(x=>x.status==='Open'||x.status==='In Progress').map(x=>{const u=x.assignedTo?uById(x.assignedTo):null;return row('',esc(x.title||('#'+String(x.id||'').slice(-6))),(u?esc(fullName(u)):'Unassigned')+(x.priority?' · '+esc(x.priority):'')+(x.status==='In Progress'?' · In progress':''));});
   }else if(kind==='onleave'){
     title='On leave today';route='attendance';routeLbl='Open Attendance';
-    rows=(DB.leaveRequests||[]).filter(r=>r.status==='Approved'&&r.start<=t&&t<=r.end&&attScope(uById(r.userId))).map(r=>{const u=uById(r.userId);const lt=ltById(r.leaveTypeId);return uRow(u,esc((lt&&lt.name)||'Leave')+' · back after '+fmtS(r.end));});
+    rows=_todayBuckets().LEAVE.filter(attScope).map(u=>{const r=(DB.leaveRequests||[]).find(x=>x.userId===u.id&&x.status==='Approved'&&x.start<=t&&t<=x.end);const lt=r?ltById(r.leaveTypeId):null;return uRow(u,r?(esc((lt&&lt.name)||'Leave')+' · back after '+fmtS(r.end)):'on approved leave');});
   }else if(kind==='wfh'){
+    // R8: identical source as the widget cell — counts and lists can never disagree.
     title='Working from home today';route='attendance';routeLbl='Open Attendance';
-    rows=attToday.filter(a=>(a.flags||[]).includes('WFH')&&attScope(uById(a.userId))).map(a=>uRow(uById(a.userId),a.clockIn?('clocked in '+_m2hm(a.inMin)):'not clocked in yet'));
+    rows=_todayBuckets().WFH.filter(attScope).map(u=>{const a=attToday.find(x=>x.userId===u.id);return uRow(u,a&&a.clockIn?('clocked in '+_m2hm(a.inMin)):'marked WFH');});
   }else if(kind==='who-in'){
-    title='Clocked in today';route='attendance';routeLbl='Open Attendance';
-    rows=attToday.filter(a=>a.clockIn&&!(a.flags||[]).includes('WFH')&&attScope(uById(a.userId))).map(a=>uRow(uById(a.userId),'in '+_m2hm(a.inMin)+(a.clockOut?' · out '+_m2hm(a.outMin)+' · '+fmtH(a.hours):'')));
+    title='Clocked in today (in office)';route='attendance';routeLbl='Open Attendance';
+    rows=_todayBuckets().IN.filter(attScope).map(u=>{const a=attToday.find(x=>x.userId===u.id);return uRow(u,a?('in '+_m2hm(a.inMin)+(a.clockOut?' · out '+_m2hm(a.outMin)+' · '+fmtH(a.hours):'')):'');});
   }else if(kind==='who-late'){
     title='Late today';route='attendance';routeLbl='Open Attendance';
     rows=attToday.filter(a=>(a.flags||[]).includes('late')&&attScope(uById(a.userId))).map(a=>uRow(uById(a.userId),'clocked in '+_m2hm(a.inMin)));
   }else if(kind==='who-off'){
     title='Day off today';
-    const dy=dayAbbr(t);
-    rows=actives.filter(u=>(u.hrm?.schedule?.offDays||[]).includes(dy)&&attScope(u)).map(u=>uRow(u,'weekly off-day'));
+    rows=_todayBuckets().OFF.filter(attScope).map(u=>uRow(u,'weekly off-day'));
   }else if(kind==='who-out'){
     title='Not in yet';route='attendance';routeLbl='Open Attendance';
-    rows=actives.filter(u=>{
-      if(!attScope(u)||u.role==='Admin')return false;
-      const rec=attToday.find(a=>a.userId===u.id);
-      if(rec&&rec.clockIn)return false;
-      if(_onLeaveToday(u.id,t))return false;
-      if((u.hrm?.schedule?.offDays||[]).includes(dayAbbr(t)))return false;
-      return true;
-    }).map(u=>uRow(u,'expected '+(u.hrm?.schedule?.in||'09:00')));
+    rows=_todayBuckets().OUT.filter(attScope).map(u=>uRow(u,'expected '+(u.hrm?.schedule?.in||'09:00')));
   }else if(kind==='flows'){
     title='Active lifecycle flows';route='lifecycle';routeLbl='Open Lifecycle';
     rows=(DB.flows||[]).filter(f=>f.status!=='Completed').map(f=>{const u=uById(f.userId);const done=(f.steps||[]).filter(s=>s.done).length;return uRow(u,esc(f.kind||'Flow')+' · '+done+'/'+(f.steps||[]).length+' steps done');});
@@ -330,4 +330,4 @@ function mgrDash(){
   </div></div>`;}
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._onLeaveToday=_onLeaveToday;window._whoIsInWidget=_whoIsInWidget;window._setupGuideWidget=_setupGuideWidget;window._pulseStrip=_pulseStrip;window.DASH_RANGES=DASH_RANGES;window._dashRangeBounds=_dashRangeBounds;window._inDashRange=_inDashRange;window._dashFilterBar=_dashFilterBar;window._dashTicketsPanel=_dashTicketsPanel;window._dashboardPage=_dashboardPage;window.adminDash=adminDash;window.mgrDash=mgrDash;
+window._onLeaveToday=_onLeaveToday;window._whoIsInWidget=_whoIsInWidget;window._setupGuideWidget=_setupGuideWidget;window._pulseStrip=_pulseStrip;window.DASH_RANGES=DASH_RANGES;window._dashRangeBounds=_dashRangeBounds;window._inDashRange=_inDashRange;window._dashFilterBar=_dashFilterBar;window._dashTicketsPanel=_dashTicketsPanel;window._dashboardPage=_dashboardPage;window.adminDash=adminDash;window.mgrDash=mgrDash;window._todayBuckets=_todayBuckets;

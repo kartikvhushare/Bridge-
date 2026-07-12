@@ -75,7 +75,7 @@ function _runEventTriggers(){
     if(!(can('hrSettings','view')||isAdmin()||isMgr()))return; // fire from an HR/manager/admin session
     const hrs=_hrUsers();
     const tellRMHoP=(u,text,kind)=>{const m=_mgrOf(u);if(m)_notifyOnce(m.id,text,kind);hrs.forEach(h=>{if(!m||h.id!==m.id)_notifyOnce(h.id,text,kind);});};
-    const act=DB.users.filter(u=>u.status==='Active'&&u.role!=='Admin');
+    const act=DB.users.filter(u=>u.status==='Active'); // R8: super admins tracked like everyone
     // 1) late arrival + no clock-in (after schedule.in + grace)
     if(A.late!==false){
       act.forEach(u=>{
