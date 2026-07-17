@@ -187,17 +187,14 @@ describe('r2 #4 - drafts (server-backed)', () => {
     W._draftDelete('checklist', 'clDr', '2026-07-12');
     expect(W._draftFor('checklist', 'clDr', '2026-07-12')).toBeFalsy();
   });
-  it('OKR check-in modal offers Save draft and restores one', () => {
+  it('OKR check-in modal opens (ported Bridge modal — drafts are checklist-only now)', () => {
     W.DB.okrs = W.DB.okrs || [];
     W.DB.okrs.push({ id: 'okDr', title: 'Test OKR', metricType: 'number', targetValue: 10, ownerId: 'sa1', createdAt: new Date().toISOString() });
-    W._draftSave('okr', 'okDr', null, { date: W.todayISO(), value: 7, comment: 'draft note', statusMark: null });
     W.App._okrCheckin('okDr');
     const m = document.getElementById('modal');
-    expect(m.innerHTML).toContain('Save draft');
-    expect(m.innerHTML).toContain('Draft restored');
-    expect(m.innerHTML).toContain('draft note');
+    expect(m.innerHTML).toContain('Add update');
+    expect(m.innerHTML).toContain('Mark status');
     W.App.closeModal();
-    W._draftDelete('okr', 'okDr', null);
     W.DB.okrs = W.DB.okrs.filter(o => o.id !== 'okDr');
   });
 });
@@ -283,45 +280,46 @@ describe('r4 - OKR independent levels + popups + permissions', () => {
     expect(W.okrProgress(W.okrById('r4L1'))).toBe(50);
     expect(W.okrProgress(W.okrById('r4L0'))).toBe(null);
   });
-  it('card shows Current → Target on the level page', () => {
+  it('compact card shows current / target and the two panel buttons', () => {
     W.S.route = 'okr'; W.S.filters = {};
     const html = W.pageContent();
-    expect(html).toContain('Current → Target');
-    expect(html).toContain('_okrMenu'); // compact rows: actions live in the ⋯ menu now
+    expect(html).toContain('Rules & Target');
+    expect(html).toContain('Progress & Updates');
+    expect(html).toContain(' / ');                 // plain "current / target" numbers
   });
-  it('Progress popup shows Start/Current/Target + Progress chip + chart canvas', () => {
-    W.App._okrPop('r4L1', 'progress');
+  it('Progress & Updates modal shows Start/Current/Target + chart canvas + feed', () => {
+    W.App._okrProgressModal('r4L1');
     const m = document.getElementById('modal');
     expect(m.innerHTML).toContain('Start');
     expect(m.innerHTML).toContain('Target');
-    expect(m.innerHTML).toContain('Progress 50%');
     expect(m.innerHTML).toContain('data-okr-chart="r4L1"');
-    expect(m.innerHTML).toContain('Actual vs ideal');
+    expect(m.innerHTML).toContain('Updates');
     W.App.closeModal();
   });
-  it('Rules popup opens with measurement rules', () => {
-    W.App._okrPop('r4L0', 'rules');
-    const m = document.getElementById('modal');
-    expect(m.innerHTML).toContain('Measured as');
-    expect(m.innerHTML).toContain('levels are independent');
-    W.App.closeModal();
+  it('Rules & Target opens as an inline panel with measurement rules', () => {
+    W.S.route = 'okr'; W.S.filters = {};
+    W.App._okrTogPanel('r4L0', 'rules');
+    const html = W.pageContent();
+    expect(html).toContain('Measured as');
+    expect(html).toContain('Progress source');
+    W.App._okrTogPanel('r4L0', 'rules');
   });
-  it('Logs popup is per-level and OKR entries no longer reach the Audit page', () => {
+  it('Change log modal is per-objective and OKR entries never reach the Audit page', () => {
     W.okrLog('r4L1', 'Check-in', { date: '2026-07-05', value: 5 });
-    W.App._okrPop('r4L1', 'logs');
+    W.App._okrNodeLogs('r4L1');
     const m = document.getElementById('modal');
-    expect(m.innerHTML).toContain('this level only');
+    expect(m.innerHTML).toContain('Change log');
     expect(m.innerHTML).toContain('Check-in');
     W.App.closeModal();
     W.S.route = 'audit'; W.S.filters = {};
     expect(W.pageContent().includes('(OKR)')).toBe(false);
   });
-  it('input edit/delete rights: owner + upper-level owner + permission', () => {
+  it('check-in rights follow the Bridge model: owner or role edit/manage', () => {
     const l1 = W.okrById('r4L1');
-    W.S.uid = 'emp1';  expect(W._okrCanEditEntry(l1)).toBe(true);  // level owner
-    W.S.uid = 'sa1';   expect(W._okrCanEditEntry(l1)).toBe(true);  // owns L0 above it
+    W.S.uid = 'emp1';  expect(W._okrCanCheckin(l1)).toBe(true);   // level owner updates it
+    W.S.uid = 'sa1';   expect(W._okrCanEditNode(l1)).toBe(true);  // superadmin role has okr.edit/manage
     const emp2 = W.__mkUser({ id: 'emp2' }); W.DB.users.push(emp2); W._ensureHrm(emp2); W._permsV3Migrate();
-    W.S.uid = 'emp2';  expect(W.okrIsUpOwner(l1)).toBe(false);     // unrelated: no relationship right
+    W.S.uid = 'emp2';  expect(W.okrIsUpOwner(l1)).toBe(false);    // compat helper still answers
     W.S.uid = 'sa1';
     W.DB.users = W.DB.users.filter(u => u.id !== 'emp2');
   });
@@ -329,16 +327,16 @@ describe('r4 - OKR independent levels + popups + permissions', () => {
     W.S.uid = 'emp1';
     const before = W.DB.okrCheckins.filter(c => c.okrId === 'r4L1').length;
     const logsBefore = (W.DB.okrLogs || []).filter(l => l.okrId === 'r4L1').length;
-    global.confirm = () => true;
-    W.App._okrCkDelete('r4L1', 'r4c1');
+    W.App._okrCkDelGo('r4L1', 'r4c1');
     expect(W.DB.okrCheckins.filter(c => c.okrId === 'r4L1').length).toBe(before - 1);
     expect((W.DB.okrLogs || []).filter(l => l.okrId === 'r4L1').length).toBe(logsBefore + 1);
     W.App.closeModal(); W.S.uid = 'sa1';
   });
-  it('new OKR permission actions exist in the permission matrix', () => {
+  it('OKR permission area is scoped with the Bridge action set', () => {
     const area = W.PERM_AREAS ? W.PERM_AREAS.find(a => a.key === 'okr') : null;
-    if (area) { expect(area.actions).toContain('editEntries'); expect(area.actions).toContain('deleteLogs'); expect(area.actions).toContain('changeOwner'); }
-    expect(W.DB.roleProfiles.superadmin.perms.okr.actions.editEntries).toBe(true);
+    if (area) { expect(area.scoped).toBe(true); expect(area.actions).toContain('checkin'); expect(area.actions).toContain('delete'); expect(area.actions.includes('editEntries')).toBe(false); }
+    expect(W.DB.roleProfiles.superadmin.perms.okr.actions.manage).toBe(true);
+    expect(W.DB.roleProfiles.superadmin.perms.okr.scope).toBe('everyone');
   });
 });
 
@@ -358,11 +356,11 @@ describe('r5 - locations visibility bugfix', () => {
 });
 
 describe('r5 - compact OKR rows + complete In-App tab', () => {
-  it('OKR page renders slim rows with an actions menu', () => {
+  it('OKR page renders the compact one-line cards with a slim action strip', () => {
     W.S.route = 'okr'; W.S.filters = {};
     const html = W.pageContent();
-    expect(html).toContain('_okrMenu');           // ⋯ action menu wired
-    expect(html.includes('Rules & Target</button>')).toBe(false); // bulky per-card buttons gone
+    expect(html).toContain('Progress & Updates'); // slim strip buttons
+    expect(html.includes('_okrMenu')).toBe(false); // old ⋯ menu is gone with the port
   });
   it('In-App tab lists HR events too', () => {
     W.S.route = 'settings'; W.S.filters = { stab: 'inapp' };

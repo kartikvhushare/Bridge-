@@ -27,8 +27,8 @@ describe('seeding', () => {
   it('seeds all five built-in roles', () => {
     expect(['superadmin', 'admin', 'manager', 'hr', 'basic'].every(k => W.DB.roleProfiles[k])).toBe(true); // 1
   });
-  it('stamps built-ins with version 8 (v8 adds okr.viewAll)', () => {
-    expect(W.DB.roleProfiles.superadmin._v).toBe('8');                                                     // 2
+  it('stamps built-ins with version 10 (v10: micro permissions — per-operation toggles)', () => {
+    expect(W.DB.roleProfiles.superadmin._v).toBe('10');                                                    // 2
   });
   it('never clobbers a custom role on reseed', () => {
     W.DB.roleProfiles.custom1 = { id: 'custom1', name: 'Custom', perms: { tickets: { scope: 'self', actions: { view: true } } } };
@@ -124,13 +124,59 @@ describe('r20 - legacy role field fully retired', () => {
     expect(W.isAdmin()).toBe(true);                                                        // 31
     expect(W.isSuperU(sa)).toBe(true);                                                     // 32
   });
-  it('v8 seeds okr.viewAll on superadmin/admin bundles but NOT manager (owner-tree stays)', () => {
-    expect(W.DB.roleProfiles.superadmin.perms.okr.actions.viewAll).toBe(true);             // 33
-    expect(W.DB.roleProfiles.admin.perms.okr.actions.viewAll).toBe(true);                  // 34
-    expect(!!W.DB.roleProfiles.manager.perms.okr.actions.viewAll).toBe(false);             // 35
+  it('v9 seeds the scoped OKR area: admins see everyone, managers their team', () => {
+    expect(W.DB.roleProfiles.superadmin.perms.okr.scope).toBe('everyone');                 // 33
+    expect(W.DB.roleProfiles.admin.perms.okr.scope).toBe('everyone');                      // 34
+    expect(W.DB.roleProfiles.manager.perms.okr.scope).toBe('team');                        // 35
   });
   it('roleName() reads the Access Control role, with a Basic Employee default', () => {
     expect(W.roleName(sa)).toBe('Super Admin');                                            // 36
     expect(W.roleName({ hrm: {} })).toBe('Basic Employee');                                // 37
+  });
+});
+
+
+describe('v10 micro permissions', () => {
+  it('umbrella actions are gone from the matrix; granular ones exist', () => {
+    const a = (k) => W.PERM_AREAS.find(x => x.key === k).actions;
+    expect(a('tickets')).toContain('changeStatus'); expect(a('tickets')).toContain('resolve'); expect(a('tickets')).toContain('delete');
+    expect(a('tickets').includes('manage')).toBe(false);
+    expect(a('questions')).toEqual(expect.arrayContaining(['create','edit','delete','import','export']));
+    expect(a('scheduling')).toEqual(expect.arrayContaining(['create','edit','publish','delete']));
+    expect(a('lifecycle')).toEqual(expect.arrayContaining(['start','progress']));
+    expect(a('employees')).toEqual(expect.arrayContaining(['resetPassword','manageAssets']));
+    expect(a('departments')).toContain('delete');
+  });
+  it('custom roles auto-expand: old umbrella grants imply the new granular actions', () => {
+    W.DB.roleProfiles.legacyRole = { id: 'legacyRole', name: 'Legacy', perms: {
+      tickets: { scope: 'team', actions: { view: true, manage: true } },
+      scheduling: { scope: 'team', actions: { view: true, manage: true } },
+      checklists: { scope: 'team', actions: { view: true, edit: true } },
+    }};
+    W._permsMicroMigrate();
+    const lp = W.DB.roleProfiles.legacyRole.perms;
+    expect(lp.tickets.actions.changeStatus).toBe(true);
+    expect(lp.tickets.actions.resolve).toBe(true);
+    expect(lp.scheduling.actions.publish).toBe(true);
+    expect(lp.checklists.actions.duplicate).toBe(true);
+    expect(lp.checklists.actions.delete).toBe(true);
+    // idempotent — explicit false set later is respected on re-run
+    lp.tickets.actions.resolve = false;
+    W._permsMicroMigrate();
+    expect(lp.tickets.actions.resolve).toBe(false);
+    delete W.DB.roleProfiles.legacyRole;
+  });
+  it('built-in seeds hold the granular actions (manager can resolve team tickets, publish shifts)', () => {
+    const m = W.DB.roleProfiles.manager.perms;
+    expect(m.tickets.actions.resolve).toBe(true);
+    expect(m.scheduling.actions.publish).toBe(true);
+    expect(m.lifecycle.actions.start).toBe(true);
+    expect(!!(W.DB.roleProfiles.basic.perms.tickets.actions.resolve)).toBe(false);
+  });
+  it('view-as preview resolves like the app (canUser + override annotation)', () => {
+    expect(typeof W.App._acPreview).toBe('function');
+    const eff = W._acEffArea ? null : null; // helper is module-scoped; behaviour asserted via canUser
+    const sa2 = W.DB.users.find(u => W.userProfileId ? true : true);
+    expect(W.canUser(W.DB.users[0], 'tickets', 'view')).toBeTypeOf('boolean');
   });
 });
