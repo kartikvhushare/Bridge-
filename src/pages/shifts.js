@@ -2,7 +2,7 @@
 
 /* ── SHIFT ROSTER (revived over the existing shifts table) ── */
 function shiftsPage(){
-  const canMng=can('scheduling','manage');
+  const canMng=can('scheduling','create')||can('scheduling','edit')||can('scheduling','publish')||can('scheduling','delete');
   const f=scopeFilter('scheduling');
   const today=todayISO();
   S.filters.shWk=S.filters.shWk||0;
@@ -56,7 +56,7 @@ let people=canMng?DB.users.filter(u=>u.status==='Active'&&(f(u.id)||isAdmin()||_
    everywhere at once — user profile, attendance calendar, absentee logic, My-attendance
    card, who's-in buckets AND this roster. Synced via the user_hrm table like any HR edit. */
 App._shOffDays=(uid2,date)=>{
-  if(!(can('employees','edit')||can('scheduling','manage'))){toast('Not allowed','err');return;}
+  if(!(can('employees','edit')||can('scheduling','edit'))){toast('Not allowed','err');return;}
   const u=uById(uid2);if(!u)return;_ensureHrm(u);
   const off=new Set(u.hrm?.schedule?.offDays||[]);
   modalShell({title:'Weekly off-days',sub:fullName(u)+' — same setting as the user profile; updates everywhere',size:'max-w-sm',
@@ -65,7 +65,7 @@ App._shOffDays=(uid2,date)=>{
     footer:btnG('Cancel','App.closeModal()')+btnP('Save off-days',`App._shOffDaysSave('${uid2}')`)});
 };
 App._shOffDaysSave=(uid2)=>{
-  if(!(can('employees','edit')||can('scheduling','manage'))){toast('Not allowed','err');return;}
+  if(!(can('employees','edit')||can('scheduling','edit'))){toast('Not allowed','err');return;}
   const u=uById(uid2);if(!u)return;_ensureHrm(u);
   const days=[...document.querySelectorAll('.dchip.on[data-shoff]')].map(b=>b.dataset.shoff);
   u.hrm.schedule=u.hrm.schedule||{};
@@ -75,7 +75,7 @@ App._shOffDaysSave=(uid2)=>{
   saveDB();closeModal();toast('Off-days saved — applied everywhere');rr();
 };
 App._shEdit=(uid2,date)=>{
-  if(!can('scheduling','manage'))return;
+  if(!(can('scheduling','create')||can('scheduling','edit')))return;
   // Anti-self-edit guard: your own shift, created by someone else (your manager/HR) → locked for you.
   const ex0=(DB.shifts||[]).find(s=>s.userId===uid2&&s.date===date);
   if(ex0&&ex0.userId===S.uid&&ex0.createdBy&&ex0.createdBy!==S.uid)return toast('This shift was set for you by '+(uById(ex0.createdBy)?fullName(uById(ex0.createdBy)):'your manager')+' — only they (or someone above) can change it','err');
@@ -93,7 +93,7 @@ App._shEdit=(uid2,date)=>{
     footer:(sh?btn('Remove',`App._shDel('${sh.id}')`,{variant:'danger',size:'sm'}):'')+btnG('Cancel','App.closeModal()')+btnP('Save shift',`App._shSave('${uid2}','${date}','${sh?sh.id:''}')`)});
 };
 App._shSave=(uid2,date,id)=>{
-  if(!can('scheduling','manage'))return;
+  {const _sx=id?(DB.shifts||[]).find(x=>x.id===id):null;if(_sx?!can('scheduling','edit'):!can('scheduling','create'))return toast(_sx?'You need Shifts → Edit':'You need Shifts → Create','err');}
   const _ex=id?(DB.shifts||[]).find(s=>s.id===id):null;
   if(_ex&&_ex.userId===S.uid&&_ex.createdBy&&_ex.createdBy!==S.uid)return toast('You can\'t change a shift set for you by someone else','err');
   const start=document.getElementById('sh-start')?.value,end=document.getElementById('sh-end')?.value;
@@ -107,12 +107,13 @@ App._shSave=(uid2,date,id)=>{
   saveDB();closeModal();toast('Shift saved (draft — publish the week to share)');rr();
 };
 App._shDel=(id)=>{
+  if(!can('scheduling','delete'))return toast('You need Shifts → Delete','err');
   const _ex=(DB.shifts||[]).find(s=>s.id===id);
   if(_ex&&_ex.userId===S.uid&&_ex.createdBy&&_ex.createdBy!==S.uid)return toast('You can\'t remove a shift set for you by someone else','err');
   if(_ex)log(fullName(me()),'Shift removed',fullName(uById(_ex.userId))+' · '+_ex.date);
   DB.shifts=(DB.shifts||[]).filter(s=>s.id!==id);sb.from('shifts').delete().eq('id',id).then(()=>{}).catch(()=>{});saveDB();closeModal();toast('Shift removed','warn');rr();};
 App._shCopyWeek=(ws)=>{
-  if(!can('scheduling','manage'))return;
+  if(!can('scheduling','create'))return toast('You need Shifts → Create','err');
   const start=new Date(ws+'T00:00:00');
   let n=0;
   for(let i=0;i<7;i++){
@@ -128,7 +129,7 @@ App._shCopyWeek=(ws)=>{
   saveDB();toast(n?n+' shifts copied as drafts — review then Publish':'Nothing to copy from last week',n?'ok':'warn');rr();
 };
 App._shPublish=(ws,we)=>{
-  if(!can('scheduling','manage'))return;
+  if(!can('scheduling','publish'))return toast('You need Shifts → Publish','err');
   const drafts=(DB.shifts||[]).filter(s=>s.status==='draft'&&s.date>=ws&&s.date<=we);
   drafts.forEach(s=>{s.status='published';s.publishedAt=new Date().toISOString();if(s.userId!==S.uid)notify(s.userId,'📅 Shift published: '+fmtS(s.date)+' '+s.start+'–'+s.end,'shift','shifts');});
   log(fullName(me()),'Roster published',ws+' → '+we+' ('+drafts.length+' shifts)');

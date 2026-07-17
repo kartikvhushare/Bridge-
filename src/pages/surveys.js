@@ -58,7 +58,7 @@ App._svSubmit=()=>{
   _SVF=null;saveDB();toast('Thanks — submitted');rr();
 };
 App._svNew=()=>{
-  if(!can('surveys','manage'))return toast('You need Surveys → Manage','err');
+  if(!can('surveys','create'))return toast('You need Surveys → Create','err');
   window._SVN={kind:'company',qs:[{id:uid('q'),text:'How satisfied are you overall?',type:'rating'}]};
   App._svRenderNew();
 };
@@ -77,6 +77,7 @@ App._svRenderNew=()=>{
     footer:btnG('Cancel','window._SVN=null;App.closeModal()')+btnP('Create survey','App._svCreate()')});
 };
 App._svCreate=()=>{
+  if(!can('surveys','create'))return toast('You need Surveys → Create','err');
   const d=window._SVN;if(!d)return;
   if(!(d.title||'').trim())return toast('Give it a title','err');
   const qs=d.qs.filter(q=>(q.text||'').trim());
@@ -86,9 +87,10 @@ App._svCreate=()=>{
   log(fullName(me()),'Survey created',sv.title);
   window._SVN=null;saveDB();closeModal();toast('Survey created — people are notified on the run date');rr();
 };
-App._svToggle=(id)=>{const sv=(DB.surveys||[]).find(s=>s.id===id);if(!sv)return;sv.status=sv.status==='Active'?'Closed':'Active';_pushRow('surveys',_svRow(sv),'survey');log(fullName(me()),'Survey '+sv.status.toLowerCase(),sv.title);saveDB();rr();};
-App._svDel=(id)=>{const sv=(DB.surveys||[]).find(s=>s.id===id);if(!sv)return;if(!confirm('Remove this survey from the list? Responses stay in the database and the deletion is logged.'))return;sv.status='Deleted';_pushRow('surveys',_svRow(sv),'survey');log(fullName(me()),'Deleted survey',sv.title);saveDB();toast('Removed (kept in database + audit)','warn');rr();};
+App._svToggle=(id)=>{if(!can('surveys','close'))return toast('You need Surveys → Open / Close','err');const sv=(DB.surveys||[]).find(s=>s.id===id);if(!sv)return;sv.status=sv.status==='Active'?'Closed':'Active';_pushRow('surveys',_svRow(sv),'survey');log(fullName(me()),'Survey '+sv.status.toLowerCase(),sv.title);saveDB();rr();};
+App._svDel=(id)=>{if(!can('surveys','delete'))return toast('You need Surveys → Delete','err');const sv=(DB.surveys||[]).find(s=>s.id===id);if(!sv)return;if(!confirm('Remove this survey from the list? Responses stay in the database and the deletion is logged.'))return;sv.status='Deleted';_pushRow('surveys',_svRow(sv),'survey');log(fullName(me()),'Deleted survey',sv.title);saveDB();toast('Removed (kept in database + audit)','warn');rr();};
 App._svCSV=(id)=>{
+  if(!can('surveys','export'))return toast('You need Surveys → Export','err');
   const sv=(DB.surveys||[]).find(s=>s.id===id);if(!sv)return;
   const rows=[['By','About','Score',...sv.questions.map(q=>q.text)]];
   (DB.surveyAnswers||[]).filter(a=>a.surveyId===id).forEach(a=>{

@@ -228,6 +228,8 @@ App._tkSetStatus=(el)=>{const id=el.dataset.id,status=el.dataset.st;App._ticketS
 App._tkFilter=(key,val)=>{if(key==='status')S.filters.tkStatus=val;else S.filters.tkPriority=val;rr();};
 App._ticketStatus=(id,status)=>{
   const t=(DB.tickets||[]).find(x=>x.id===id);if(!t)return;
+  const _own=t.assignedTo===S.uid||t.createdBy===S.uid;
+  if(!_own&&!can('tickets','changeStatus'))return toast('You need Tickets → Change status','err');
   t.status=status;
   if(status==='Resolved'&&!t.resolvedAt)t.resolvedAt=new Date().toISOString(); // FINAL-FIX: resolution timestamp for analytics
   if(status==='Open')t.resolvedAt=null;
@@ -245,6 +247,7 @@ App._resolveTicket=(id)=>{
 App._confirmResolve=(id)=>{
   const note=$('#tk-note')?.value?.trim()||'';
   const t=(DB.tickets||[]).find(x=>x.id===id);if(!t)return;
+  if(!(t.assignedTo===S.uid||can('tickets','resolve')))return toast('You need Tickets → Resolve','err');
   t.status='Resolved';t.resolvedAt=new Date().toISOString();t.resolveNote=note;
   // Notify the submitter
   if(t.submitterId&&t.submitterId!==S.uid){
@@ -256,7 +259,7 @@ App._confirmResolve=(id)=>{
 };
 
 App._delTicket=(id)=>{
-  if(!isAdmin()){toast('Not permitted','err');return;}
+  if(!can('tickets','delete')){toast('You need Tickets → Delete','err');return;}
   DB.tickets=(DB.tickets||[]).filter(t=>t.id!==id);
   saveDB();rr();
   sb.from('tickets').delete().eq('id',id).then(()=>{}).catch(e=>console.warn('del ticket:',e.message));

@@ -39,7 +39,7 @@ function _acPeopleTab(){
       <td style="padding:11px 8px">${canMng
         ?`<select onchange="App._acAssignRole('${u.id}',this.value)" class="ui-select" style="width:200px;font-size:12.5px;min-height:0;height:36px;padding:4px 26px 4px 12px">${roles.map(r=>`<option value="${r.id}" ${rid===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}${rid&&!DB.roleProfiles[rid]?`<option value="${esc(rid)}" selected>${esc(rid)} (missing)</option>`:''}${!rid?'<option value="" selected>— No role —</option>':''}</select>`
         :`<span style="font-size:12px;font-weight:700;color:var(--c-text-2)">${esc((DB.roleProfiles[rid]||{}).name||'— No role —')}</span>`}</td>
-      <td style="padding:11px 16px;text-align:right"><button onclick="App._acCustomize('${u.id}')" class="ui-btn ui-btn-ghost ui-btn-sm">${ic('cog','w-3.5 h-3.5')}Personal</button></td>
+      <td style="padding:11px 16px;text-align:right"><button onclick="App._acPreview('${u.id}')" title="What does this person actually see?" class="ui-btn ui-btn-ghost ui-btn-sm">${ic('eye','w-3.5 h-3.5')}Preview</button> <button onclick="App._acCustomize('${u.id}')" class="ui-btn ui-btn-ghost ui-btn-sm">${ic('cog','w-3.5 h-3.5')}Personal</button></td>
     </tr>`;
   }).join('');
   return `<div class="ui-card" style="padding:0;overflow:hidden">
@@ -283,7 +283,7 @@ function _acRolesTab(){
   return `<div>
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap">
       <p style="font-size:12.5px;color:var(--c-text-3);max-width:560px;line-height:1.5;margin:0">A role bundles every tab / feature / action toggle. Assign roles in the <b>People</b> tab. Built-in roles can be edited or duplicated as a starting point.</p>
-      ${canMng?btnP('New role','App._rpEdit(null)','plus'):''}
+      ${canMng?btnP('New role','App._rpNewChooser()','plus'):''}
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px">${cards||empty('shield','No roles yet','Create one to get started.')}</div>
   </div>`;
@@ -402,6 +402,72 @@ function _syncRoleProfiles(){
   sb.from('workspace_settings').upsert({key:'role_profiles',value:DB.roleProfiles,updated_at:new Date().toISOString()},{onConflict:'key'})
     .then(({error})=>{if(error)toast('Couldn\'t sync role profiles to server','err');}).catch(()=>toast('Couldn\'t sync role profiles to server','err'));
 }
+
+
+/* ═══ VIEW AS USER — read-only simulation of what a person can actually see & do ═══
+   Resolved with the SAME canUser/role/override rules the app enforces; nothing is switched. */
+const _AC_ROUTES=[
+  ['Dashboard & Inbox',[['Dashboard','dashboard','view'],['Approvals inbox','approvals','view'],['Company analytics','analytics','view'],['HRM analytics','reports','view'],['OKRs','okr','view']]],
+  ['Time & Leave',[['Attendance',null,null],['Leave',null,null],['Shifts / roster','scheduling','view'],['Overtime','overtime','view']]],
+  ['Work & Content',[['My checklists',null,null],['Checklist builder','checklists','create'],['All results','allChecklists','view'],['Team view','teamview','view'],['Questions','questions','view'],['Tickets','tickets','view'],['Announcements','announcements','view'],['Letters','letters','view']]],
+  ['People & Org',[['People directory','employees','view'],['Hierarchy','hierarchy','view'],['Lifecycle','lifecycle','view'],['Discipline','discipline','view'],['Surveys','surveys','view'],['Reviews','reviews','view']]],
+  ['Pay & Admin',[['Payroll','payroll','view'],['Departments','departments','view'],['Locations','locations','view'],['HR Config','hrSettings','view'],['Audit log','audit','view'],['Settings','settings','view'],['Access Control','accessControl','view']]],
+];
+function _acEffArea(u,areaKey){
+  const o=_userPermArea(u,areaKey);
+  if(o)return{actions:o.actions||{},scope:o.scope||'none',src:'override'};
+  const rp=_roleOf(u);
+  const a=rp&&rp.perms&&rp.perms[areaKey];
+  if(a)return{actions:a.actions||{},scope:a.scope||'none',src:rp.name||'role'};
+  const base=DB.roleProfiles&&DB.roleProfiles.basic&&DB.roleProfiles.basic.perms&&DB.roleProfiles.basic.perms[areaKey];
+  return{actions:(base&&base.actions)||{},scope:(base&&base.scope)||'none',src:'Basic fallback'};
+}
+App._acPreview=(uid2)=>{
+  const u=uById(uid2);if(!u)return;
+  const role=_roleOf(u);
+  const routeChip=(label,ok)=>`<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:700;background:${ok?'var(--c-success-soft)':'var(--c-surface-2)'};color:${ok?'var(--c-success-ink)':'var(--c-text-3)'};${ok?'':'text-decoration:line-through;opacity:.7'}">${esc(label)}</span>`;
+  const routes=_AC_ROUTES.map(([grp,items])=>`<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">${esc(grp)}</div><div style="display:flex;gap:5px;flex-wrap:wrap">${items.map(([label,area,act])=>routeChip(label,area?canUser(u,area,act):true)).join('')}</div></div>`).join('');
+  const rows=PERM_AREAS.map(a=>{
+    const eff=_acEffArea(u,a.key);
+    const on=a.actions.filter(x=>eff.actions[x]);
+    if(!on.length)return'';
+    return`<div style="display:grid;grid-template-columns:minmax(130px,190px) 1fr;gap:4px 12px;padding:7px 0;border-top:1px solid var(--c-border);align-items:baseline">
+      <div style="font-size:12px;font-weight:700;color:var(--c-text)">${esc(a.label)}${eff.src==='override'?' <span style="font-size:9px;font-weight:800;color:#92400E;background:#FEF3C7;padding:1px 6px;border-radius:8px;vertical-align:middle">OVERRIDE</span>':''}</div>
+      <div style="font-size:11.5px;color:var(--c-text-2);line-height:1.6">${on.map(x=>esc(PERM_ACTION_LABEL[x]||x)).join(' · ')}${a.scoped?` <span style="color:var(--c-text-3)">— sees ${esc(SCOPE_LABEL[eff.scope]||eff.scope)}</span>`:''}</div>
+    </div>`;
+  }).join('');
+  modalShell({title:'Access preview — '+fullName(u),sub:(role?('Role: '+role.name):'No role (Basic fallback)')+' · read-only simulation, resolved exactly like the app does',size:'max-w-2xl',
+    body:`<div>
+      <div style="font-size:10.5px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Pages they can open</div>
+      ${routes}
+      <div style="font-size:10.5px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 2px">Everything they can do (action by action)</div>
+      ${rows||'<p style="font-size:12.5px;color:var(--c-text-3);padding:8px 0">Nothing granted.</p>'}
+    </div>`,
+    footer:btnG('Close','App.closeModal()')+(can('accessControl','manage')?btnP('Edit personal settings',`App.closeModal();App._acCustomize('${u.id}')`):'')});
+};
+
+/* ═══ NEW ROLE FROM TEMPLATE — start from a built-in bundle instead of a blank sheet ═══ */
+App._rpNewFrom=(tplId)=>{
+  if(!can('accessControl','manage'))return toast('You need Access Control → Manage','err');
+  closeModal();
+  if(!tplId){App._rpEdit(null);return;}
+  const tpl=DB.roleProfiles[tplId];if(!tpl){App._rpEdit(null);return;}
+  App._rpEdit(null);
+  if(window._RPD){_RPD.perms=JSON.parse(JSON.stringify(tpl.perms||{}));_RPD.description='Based on '+(tpl.name||tplId);_RPD.dirty=true;App._renderRPEdit();}
+};
+App._rpNewChooser=()=>{
+  if(!can('accessControl','manage'))return toast('You need Access Control → Manage','err');
+  const opt=(id,label,desc)=>`<button onclick="App._rpNewFrom(${id?`'${id}'`:'null'})" class="ui-card" style="width:100%;text-align:left;padding:12px 14px;cursor:pointer;display:block;border:1px solid var(--c-border);margin-bottom:8px">
+    <div style="font-size:13.5px;font-weight:800;color:var(--c-text)">${esc(label)}</div>
+    <div style="font-size:11.5px;color:var(--c-text-3);margin-top:2px;line-height:1.45">${esc(desc)}</div></button>`;
+  modalShell({title:'New role — start from…',sub:'Pick a starting point; every toggle stays editable before you save.',size:'max-w-md',
+    body:`<div>${opt(null,'Blank','No permissions on — build it up toggle by toggle.')}
+      ${opt('basic','Basic Employee template','Own checklists, attendance, leave, tickets.')}
+      ${opt('manager','Team Lead / Manager template','Team-scoped operations across checklists, tickets, shifts, OKRs.')}
+      ${opt('hr','HR template','HR modules org-wide: leave, lifecycle, letters, reviews, payroll prep.')}
+      ${opt('admin','Administrator template','Everything except Access Control itself.')}</div>`,
+    footer:btnG('Cancel','App.closeModal()')});
+};
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
 window.accessControlPage=accessControlPage;window._acPeopleTab=_acPeopleTab;window._acDraft=_acDraft;window._acTogBtn=_acTogBtn;window._acGuard=_acGuard;window._acMark=_acMark;window._acPushProfile=_acPushProfile;window._acRolesTab=_acRolesTab;window._syncRoleProfiles=_syncRoleProfiles;window._acPushHrm=_acPushHrm;

@@ -114,6 +114,7 @@ function _assetsSection(u){
     +'</div></div>';
 }
 App._assetAdd=(userId)=>{
+  if(!can('employees','manageAssets'))return toast('You need People → Assets','err');
   const u=uById(userId);if(!u)return;
   if(!can('employees','edit')||!scopeFilter('employees')(userId)){toast('Not allowed','err');return;}
   const name=($('#ast-n')?.value||'').trim();
@@ -125,6 +126,7 @@ App._assetAdd=(userId)=>{
   if(document.getElementById('u-fn'))App.editUser(userId);else rr();
 };
 App._assetReturn=(userId,assetId)=>{
+  if(!can('employees','manageAssets'))return toast('You need People → Assets','err');
   const u=uById(userId);if(!u)return;
   if(!can('employees','edit')||!scopeFilter('employees')(userId)){toast('Not allowed','err');return;}
   const a=(u.hrm?.assets||[]).find(x=>x.id===assetId);if(!a)return;
@@ -134,6 +136,7 @@ App._assetReturn=(userId,assetId)=>{
   if(document.getElementById('u-fn'))App.editUser(userId);else rr();
 };
 App._assetDel=(userId,assetId)=>{
+  if(!can('employees','manageAssets'))return toast('You need People → Assets','err');
   const u=uById(userId);if(!u)return;
   if(!can('employees','edit')||!scopeFilter('employees')(userId)){toast('Not allowed','err');return;}
   const a=(u.hrm?.assets||[]).find(x=>x.id===assetId);if(!a)return;
@@ -292,6 +295,7 @@ App.saveUser=async(id)=>{
   }
 };
 App.resetPw=(id)=>{
+  if(!can('employees','resetPassword'))return toast('You need People → Reset password','err');
   // SEC-2: require employees.edit + target in scope.
   if(!can('employees','edit')||!scopeFilter('employees')(id)){toast('Not allowed','err');return;}
   const u=uById(id);
@@ -301,6 +305,7 @@ App.resetPw=(id)=>{
       +'<button type="button" id="rp-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent=\'Resetting…\';App._doResetPw(this.dataset.uid).finally(()=>{const b=document.getElementById(\'rp-btn\');if(b){b.disabled=false;b.textContent=\'Reset\';}})" data-uid="'+id+'" class="ui-btn ui-btn-primary">Reset</button>'});
 };
 App._doResetPw=async(uid)=>{
+  if(!can('employees','resetPassword'))return toast('You need People → Reset password','err');
   // SEC-2: re-check action + scope (this is the actual privileged call).
   if(!can('employees','edit')||!scopeFilter('employees')(uid)){toast('Not allowed','err');return;}
   const pw=$('#rp-pw')?.value?.trim();

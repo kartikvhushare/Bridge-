@@ -277,6 +277,7 @@ function deptsPage(){
     +'</div></div>';
 }
 App.editDept=(id=null,presetParent=null)=>{
+  if(id?!can('departments','edit'):!can('departments','create'))return toast(id?'You need Departments → Edit':'You need Departments → Create','err');
   const d=id?DB.departments.find(x=>x.id===id):null;
   const hasChildren=d?subDepts(d.id).length>0:false;
   const curParent=d?(d.parentId||''):(presetParent||'');
@@ -289,7 +290,7 @@ App.editDept=(id=null,presetParent=null)=>{
     body:fld('Name','d-n',d?.name||'')+parentField,
     footer:btnG('Cancel','App.closeModal()')+btnP(d?'Save':'Create',`App.saveDept('${id||''}')`)});
 };
-App.saveDept=(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}
+App.saveDept=(id)=>{if(id?!can('departments','edit'):!can('departments','create'))return toast('Not allowed','err');const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}
   let parentId=$('#d-parent')?.value||null;
   // Guard: a department with sub-departments stays top-level.
   if(id&&subDepts(id).length)parentId=null;
@@ -297,7 +298,7 @@ App.saveDept=(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required'
   if(id){obj.name=n;obj.parentId=parentId;}else DB.departments.push(obj);
   log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated':'Created');saveDB();closeModal();render();
   sb.from('departments').upsert({id:obj.id,name:obj.name,parent_id:obj.parentId||null},{onConflict:'id'}).then(({error})=>{if(error)_syncErr('department')(error);}).catch(_syncErr('department'));};
-App.delDept=(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;
+App.delDept=(id)=>{if(!can('departments','delete'))return toast('You need Departments → Delete','err');const d=DB.departments.find(x=>x.id===id);if(!d)return;
   // Referential-integrity guard: a department with sub-departments, people, checklists or targeted
   // announcements can't be deleted until those links are moved/removed (the old cascade is gone).
   if(!guardDelete('department',id,'"'+d.name+'"'))return;

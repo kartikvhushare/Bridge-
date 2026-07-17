@@ -2,7 +2,7 @@
 
 /* ── DISCIPLINE — warnings on file, 12-month retention ── */
 App._discNew=()=>{
-  if(!can('discipline','manage'))return toast('You need Discipline → Manage','err');
+  if(!can('discipline','create'))return toast('You need Discipline → Create','err');
   const users=DB.users.filter(u=>u.status==='Active');
   modalShell({title:'Record a warning',size:'max-w-md',
     body:`<div style="display:flex;flex-direction:column;gap:12px">
@@ -25,9 +25,9 @@ App._discSave=()=>{
   log(fullName(me()),'Warning recorded',level+' · '+(u?fullName(u):''));
   saveDB();closeModal();toast('Warning recorded');rr();
 };
-App._discDel=(id)=>{if(!can('discipline','manage'))return;if(!confirm('Remove this warning from file?'))return;DB.discipline=DB.discipline.filter(x=>x.id!==id);_delRow('discipline',id,'warning');saveDB();toast('Removed','warn');rr();};
+App._discDel=(id)=>{if(!can('discipline','delete'))return toast('You need Discipline → Delete','err');if(!confirm('Remove this warning from file?'))return;DB.discipline=DB.discipline.filter(x=>x.id!==id);_delRow('discipline',id,'warning');saveDB();toast('Removed','warn');rr();};
 function disciplinePage(){
-  const canMng=can('discipline','manage');
+  const canMng=can('discipline','create')||can('discipline','edit')||can('discipline','delete');
   const f=scopeFilter('discipline');
   const today=todayISO();
   let mine=(DB.discipline||[]).filter(d=>canMng||f(d.userId)||d.userId===S.uid).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));

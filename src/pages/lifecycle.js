@@ -10,7 +10,7 @@ const _LC_KIND={
   exit:{bg:'#FFF1F2',fg:'#BE123C',label:'Exit',icon:'logout',blurb:'Run a clean offboarding — handovers, asset returns, and an automatic payroll hold.'},
 };
 function _lcVisible(){
-  const canMng=can('lifecycle','manage');
+  const canMng=can('lifecycle','start')||can('lifecycle','progress');
   const f=scopeFilter('lifecycle');
   return (DB.flows||[]).filter(x=>canMng||f(x.userId)||x.userId===S.uid||x.steps.some(s=>s.ownerId===S.uid));
 }
@@ -83,7 +83,7 @@ function _lcCard(fl,canMng){
   </div>`;
 }
 function _lcBody(){
-  const canMng=can('lifecycle','manage');
+  const canMng=can('lifecycle','start')||can('lifecycle','progress');
   const mine=_lcVisible();
   const tab=S.filters.lcTab||'all';
   const today=todayISO();
@@ -125,7 +125,7 @@ function _lcRR(){if(S.route==='lifecycle'&&document.getElementById('lc-wrap'))_l
 App._lcTab=(k)=>{S.filters.lcTab=k;_lcRefresh();};
 App._lcToggle=(id)=>{S.filters.lcOpen=S.filters.lcOpen===id?null:id;_lcRefresh();};
 function lifecyclePage(){
-  const canMng=can('lifecycle','manage');
+  const canMng=can('lifecycle','start');
   return `<div class="fade">${hdr('Lifecycle','Onboarding · probation · exit — guided flows with owners & due dates',canMng?[['onboarding','Onboarding'],['probation','Probation'],['exit','Exit']].map(k=>btn('+ '+k[1],`App._flowNew('${k[0]}')`,{variant:k[0]==='onboarding'?'primary':'ghost',size:'sm'})).join(''):'')}
     ${_howBar('lifecycle')}
     <div id="lc-wrap">${_lcBody()}</div>

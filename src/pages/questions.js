@@ -7,7 +7,7 @@ window._QED=null;
 // Export every question the user can see as a CSV in the SAME column layout as the import
 // template, so the file can be edited and re-uploaded. Number questions export their first
 // condition (template supports one condition per row).
-App._downloadAllQuestions=()=>{
+App._downloadAllQuestions=(...__a)=>{if(!can('questions','export'))return toast('You need Questions → Export','err');return App.__dlAllQ(...__a);};App.__dlAllQ=()=>{
   const qs=visibleQuestions();
   if(!qs.length){toast('No questions to download','err');return;}
   const header=['text','type','option1','option2','option3','option4','option5','photo_required','comment_required','approval_required','number_condition','value','value2'];
@@ -23,7 +23,7 @@ App._downloadAllQuestions=()=>{
   _csvDownload(rows,'evarca_questions');
   toast('Downloaded '+qs.length+' question'+(qs.length!==1?'s':''));
 };
-App._downloadQTemplate=()=>{
+App._downloadQTemplate=(...__a)=>{if(!can('questions','export'))return toast('You need Questions → Export','err');return App.__dlQT(...__a);};App.__dlQT=()=>{
   // Clean template — just header + examples (no instruction rows to delete)
   const rows=[
     // header — photo/comment/approval flags, then OPTIONAL number-condition columns
@@ -50,6 +50,7 @@ App._downloadQTemplate=()=>{
 
 // ── Questions CSV import ──
 App._importQCSV=(input)=>{
+  if(!can('questions','import')){toast('You need Questions → Import','err');input.value='';return;}
   const file=input.files?.[0];if(!file)return;
   const reader=new FileReader();
   reader.onload=e=>{
@@ -135,14 +136,15 @@ App._importQCSV=(input)=>{
 // Admin always sees everything.
 function visibleQuestions(){
   const all=DB.questions||[];
-  if(isAdmin()||can('questions','manage'))return all; // R15
+  if(isAdmin()||can('questions','edit')||can('questions','delete'))return all; // micro: editors/deleters see the whole bank
   return all.filter(q=>q.isPublic!==false||q.createdBy===S.uid);
 }
 // Creator (or admin) can manage a question
 // perms M1: legacy = Super Admin / SubAdmin / the question's creator. For a user WITH a role profile,
 // also honor a profile granting questions.manage (lets a profile widen management beyond own questions).
 // Unassigned users hit only the legacy branch (_myProfile() is null), so today's behavior is unchanged.
-function canManageQ(q){return isAdmin()||q.createdBy===S.uid||can('questions','manage');} // R15: toggle decides
+function canManageQ(q){return isAdmin()||q.createdBy===S.uid||can('questions','edit');} // micro: edit toggle decides
+function canDeleteQ(q){return isAdmin()||q.createdBy===S.uid||can('questions','delete');}
 
 
 function qCard(q){
@@ -250,7 +252,7 @@ function questionsPage(){
   // perms M1: create/import gated by can('questions','manage'). Unassigned: _baseCan('questions','manage')
   // ===(me()?.questionsAccess||isSubAdmin())===exactly who can reach this page today, so no regression;
   // a profile with view-only now correctly hides the create/import controls.
-  const canMng=can('questions','manage');
+  const canMng=can('questions','create'),canImp=can('questions','import'),canExp=can('questions','export');
   return`<div class="fade">${hdr('Questions','Reusable question library for your checklists',btn('Expand all','App._qExpandAll()',{variant:'ghost',size:'sm'})+btn('Collapse all','App._qCollapseAll()',{variant:'ghost',size:'sm'})+(canMng?btnP('New question','App._editQuestion(null)','plus'):''))}
     <!-- ONE aligned action row: search + exports + CSV import -->
     <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
@@ -258,7 +260,7 @@ function questionsPage(){
         oninput="App._filterQuestions(this.value)"
         class="ui-input rf" style="flex:1;min-width:180px"/>
       ${allQ.length?btn('Download all','App._downloadAllQuestions()',{variant:'ghost',icon:'download'}):''}
-      ${canMng?btn('CSV template','App._downloadQTemplate()',{variant:'ghost',icon:'download'})+`<label class="ui-btn ui-btn-brand" title="Fill the CSV template, then upload to add many questions at once" style="cursor:pointer">${ic('upload','w-4 h-4')} Upload CSV<input type="file" accept=".csv" onchange="App._importQCSV(this)" style="display:none"/></label>`:''}
+      ${canExp?btn('CSV template','App._downloadQTemplate()',{variant:'ghost',icon:'download'}):''}${canImp?`<label class="ui-btn ui-btn-brand" title="Fill the CSV template, then upload to add many questions at once" style="cursor:pointer">${ic('upload','w-4 h-4')} Upload CSV<input type="file" accept=".csv" onchange="App._importQCSV(this)" style="display:none"/></label>`:''}
     </div>
     <div id="qResults">${(()=>{
       const filtered=S.filters.qSearch?allQ.filter(q=>q.text.toLowerCase().includes((S.filters.qSearch||'').toLowerCase())):allQ;
@@ -279,6 +281,7 @@ App._filterQuestions=(val)=>{
 };
 
 App._delQuestion=(id)=>{
+  {const _q=(DB.questions||[]).find(x=>x.id===id);if(_q&&!canDeleteQ(_q))return toast('You need Questions → Delete','err');}
   const q=(DB.questions||[]).find(x=>x.id===id);if(!q)return;
   // Referential-integrity guard: a question still used by checklists can't be deleted.
   if(!guardDelete('question',id,'this question'))return;
@@ -422,6 +425,7 @@ App._renderQModal=()=>{
 };
 
 App._saveQuestion=()=>{
+  {const _ed=window._QED;const _isNew=!_ed||!_ed.id||!(DB.questions||[]).some(x=>x.id===_ed.id);if(_isNew?!can('questions','create'):false)return toast('You need Questions → Create','err');}
   if(!_QED)return;
   const textEl=document.getElementById('qed-text');
   if(textEl)_QED.text=textEl.value.trim();
@@ -468,7 +472,7 @@ App._openClQuestionPicker=()=>{
 App._showClQPicker=()=>{
   const sel=App._clQSel||new Set();
   // Show questions the user can see, plus any already selected on this checklist (so existing private picks aren't lost)
-  const allQ=(DB.questions||[]).filter(q=>q.isPublic!==false||q.createdBy===S.uid||isAdmin()||can('questions','manage')||sel.has(q.id)); // R15
+  const allQ=(DB.questions||[]).filter(q=>q.isPublic!==false||q.createdBy===S.uid||isAdmin()||can('questions','edit')||sel.has(q.id)); // micro
   modalShell({title:'Add Questions',sub:'Select questions, then configure escalation',size:'max-w-md',
     body:`<div style="display:flex;flex-direction:column;gap:5px">
       ${!allQ.length

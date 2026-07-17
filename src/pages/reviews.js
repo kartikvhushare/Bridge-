@@ -39,7 +39,7 @@ App._rvSubmit=(cid,role,aboutId)=>{
 /* ── manage: create / close / export a cycle ── */
 const _RV_DEFAULT_QS=['Quality of work','Ownership & reliability','Collaboration & communication','Growth since last cycle'];
 App._rvNew=()=>{
-  if(!can('reviews','manage'))return;
+  if(!can('reviews','create'))return toast('You need Reviews → Create','err');
   window._RVD={name:'',start:todayISO(),end:_isoAdd(todayISO(),14),audience:{self:true,manager:true},
     questions:_RV_DEFAULT_QS.map(t=>({id:uid('rq'),text:t,type:'rating'})).concat([{id:uid('rq'),text:'Anything else to add?',type:'answer'}])};
   App._rvRenderNew();
@@ -65,6 +65,7 @@ App._rvRenderNew=()=>{
     footer:`<button onclick="App.closeModal()" class="ui-btn ui-btn-subtle">Cancel</button><button onclick="App._rvCreate()" class="ui-btn ui-btn-primary">Create & open cycle</button>`,size:'max-w-xl'});
 };
 App._rvCreate=()=>{
+  if(!can('reviews','create'))return toast('You need Reviews → Create','err');
   const d=window._RVD;if(!d)return;
   d.name=($('#rv-name')||{}).value||d.name;d.start=($('#rv-start')||{}).value||d.start;d.end=($('#rv-end')||{}).value||d.end;
   d.audience={self:!!($('#rv-aud-self')||{}).checked,manager:!!($('#rv-aud-mgr')||{}).checked};
@@ -86,12 +87,12 @@ App._rvCreate=()=>{
   saveDB();closeModal();toast('Cycle opened for '+told.size+' people');rr();
 };
 App._rvClose=(cid)=>{
-  if(!can('reviews','manage'))return;
+  if(!can('reviews','close'))return toast('You need Reviews → Open / Close','err');
   const c=rcById(cid);if(!c||c.status!=='Active')return;
   confirmModal({title:'Close this review cycle?',body:'"'+esc(c.name)+'" — people can no longer submit, and everyone reviewed sees their own result.',confirmLabel:'Close cycle',onConfirm:"App._rvCloseGo('"+cid+"')"});
 };
 App._rvCloseGo=(cid)=>{
-  if(!can('reviews','manage'))return;
+  if(!can('reviews','close'))return;
   const c=rcById(cid);if(!c||c.status!=='Active')return;
   c.status='Closed';c.closedAt=new Date().toISOString();_rcPush(c);
   _rcPeopleIn(c).forEach(u=>{
@@ -102,7 +103,7 @@ App._rvCloseGo=(cid)=>{
   saveDB();toast('Cycle closed — results visible');rr();
 };
 App._rvCSV=(cid)=>{
-  if(!can('reviews','manage'))return;
+  if(!can('reviews','export'))return toast('You need Reviews → Export','err');
   const c=rcById(cid);if(!c)return;
   const qs=(c.questions||[]).filter(q=>q.type!=='answer');
   const rows=[['Employee','Department','Self avg','Manager avg','Gap',...qs.map(q=>'Self · '+q.text),...qs.map(q=>'Mgr · '+q.text)]];
@@ -129,7 +130,7 @@ function _rvResultHTML(c,uid2){
 
 function reviewsPage(){
   const u=me();const tasks=_rcMyTasks(u);
-  const manage=can('reviews','manage');
+  const manage=can('reviews','create')||can('reviews','close')||can('reviews','export');
   const f=scopeFilter('reviews');
   const closedMine=_rcClosed().filter(c=>(DB.reviewAnswers||[]).some(x=>x.cycleId===c.id&&x.aboutUser===u.id));
   let body='';

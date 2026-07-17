@@ -168,7 +168,7 @@ function _flowStart(kind,userId,ownerPicks){
   saveDB();return f;
 }
 App._flowNew=(kind)=>{
-  if(!can('lifecycle','manage'))return toast('You need Lifecycle → Manage','err');
+  if(!can('lifecycle','start'))return toast('You need Lifecycle → Start / Assign','err');
   _seedHRMPlan();
   const users=DB.users.filter(u=>u.status==='Active');
   const tpl=((DB.hrmConfig||{}).flowTemplates||{})[kind]||[];
@@ -215,7 +215,7 @@ App._flowStartGo=(kind)=>{
 App._flowStep=(fid,sid)=>{
   const f=(DB.flows||[]).find(x=>x.id===fid);if(!f)return;
   const st=f.steps.find(x=>x.id===sid);if(!st)return;
-  if(!(st.ownerId===S.uid||can('lifecycle','manage')))return toast('Only the step owner or HR can complete this','err');
+  if(!(st.ownerId===S.uid||can('lifecycle','progress')))return toast('Only the step owner or someone with Lifecycle → Update steps can complete this','err');
   st.done=!st.done;st.doneBy=st.done?S.uid:null;st.doneAt=st.done?new Date().toISOString():null;
   const u=uById(f.userId);
   if(st.done&&st.type==='payrollHold'&&u){_ensureHrm(u);u.hrm.payrollHold=true;notify(...( _hrUsers()[0]?[_hrUsers()[0].id]:[S.uid]),'⏸️ Payroll suspended for '+fullName(u)+' (exit flow)','payroll');}
@@ -225,7 +225,7 @@ App._flowStep=(fid,sid)=>{
   saveDB();_lcRR(); // R20: scoped refresh — no full-page flash
 };
 App._flowForm=(fid,sid,val)=>{const f=(DB.flows||[]).find(x=>x.id===fid);if(!f)return;const st=f.steps.find(x=>x.id===sid);if(!st)return;st.formText=val;clearTimeout(App._flwT);App._flwT=setTimeout(()=>{_pushRow('flows',_flowRow(f),'flow');saveDB();},1200);};
-App._flowDel=(fid)=>{if(!can('lifecycle','manage'))return;const f=(DB.flows||[]).find(x=>x.id===fid);if(!f)return;if(!confirm('Delete this flow?'))return;DB.flows=DB.flows.filter(x=>x.id!==fid);_delRow('flows',fid,'flow');log(fullName(me()),'Deleted flow',f.kind);saveDB();_lcRR();};
+App._flowDel=(fid)=>{if(!can('lifecycle','start'))return toast('You need Lifecycle → Start / Assign','err');const f=(DB.flows||[]).find(x=>x.id===fid);if(!f)return;if(!confirm('Delete this flow?'))return;DB.flows=DB.flows.filter(x=>x.id!==fid);_delRow('flows',fid,'flow');log(fullName(me()),'Deleted flow',f.kind);saveDB();_lcRR();};
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
 window.notify=notify;window._notifyOnce=_notifyOnce;window.NOTIF_KINDS=NOTIF_KINDS;window._kindKey=_kindKey;window._inappOn=_inappOn;window._hrUsers=_hrUsers;window._mgrOf=_mgrOf;window._seedHRMPlan=_seedHRMPlan;window._runEventTriggers=_runEventTriggers;window._flowStart=_flowStart;

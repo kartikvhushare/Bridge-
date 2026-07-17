@@ -58,7 +58,7 @@ function announcementsPage(){
             <span style="font-weight:600;color:var(--c-text-2)">${esc(fullName(uById(a.createdBy))||'HR')}</span>
             <span>·</span><span>${esc(_annDate(a.createdAt))}</span>
             <span style="margin-left:auto;font-weight:700;background:var(--c-surface-2);color:var(--c-text-2);border-radius:99px;padding:2px 9px">${tgt}</span>
-            ${can('announcements','create')&&(isAdmin()||a.createdBy===S.uid||isHR())?`<button onclick="event.stopPropagation();App._delAnnouncement('${a.id}')" title="Delete" aria-label="Delete announcement" style="background:none;border:none;cursor:pointer;color:var(--c-text-3);padding:2px" onmouseover="this.style.color='var(--c-danger)'" onmouseout="this.style.color='var(--c-text-3)'">${ic('trash','w-3.5 h-3.5')}</button>`:''}
+            ${(can('announcements','delete')||a.createdBy===S.uid)?`<button onclick="event.stopPropagation();App._delAnnouncement('${a.id}')" title="Delete" aria-label="Delete announcement" style="background:none;border:none;cursor:pointer;color:var(--c-text-3);padding:2px" onmouseover="this.style.color='var(--c-danger)'" onmouseout="this.style.color='var(--c-text-3)'">${ic('trash','w-3.5 h-3.5')}</button>`:''}
           </div>
         </div>`;
       }).join('')}</div>`;
@@ -79,6 +79,7 @@ App._readAnnouncement=(id,fromBanner)=>{
 App._dismissAnnouncement=(id)=>{const u=me();if(u){if(!Array.isArray(u.hrm.announcementsRead))u.hrm.announcementsRead=[];if(!u.hrm.announcementsRead.includes(id))u.hrm.announcementsRead.push(id);saveDB();}rr();};
 App._readAllAnnouncements=()=>{const u=me();if(!u)return;if(!Array.isArray(u.hrm.announcementsRead))u.hrm.announcementsRead=[];_visibleAnnouncements().forEach(a=>{if(!u.hrm.announcementsRead.includes(a.id))u.hrm.announcementsRead.push(a.id);});saveDB();toast('All announcements marked read');rr();};
 App._delAnnouncement=(id)=>{
+  {const _a=(DB.announcements||[]).find(x=>x.id===id);if(_a&&!(can('announcements','delete')||_a.createdBy===S.uid))return toast('You need Announcements → Delete','err');}
   const a=(DB.announcements||[]).find(x=>x.id===id);if(!a)return;
   if(!(isAdmin()||a.createdBy===S.uid||isHR())){toast('Not allowed','err');return;}
   if(!confirm('Delete this announcement for everyone?'))return;

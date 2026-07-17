@@ -110,7 +110,7 @@ function loadDB(){
     if(!DB.hrmConfig||typeof DB.hrmConfig!=='object')DB.hrmConfig={};
     if(!DB.roleProfiles||typeof DB.roleProfiles!=='object')DB.roleProfiles={};
     _seedRoleProfiles(); // idempotent — seeds built-in basic/manager/admin presets (frontend-only)
-    try{_permsV3Migrate();}catch(e){console.warn('[perms] migrate skipped:',e.message);} // perms v3
+    try{_permsV3Migrate();_permsMicroMigrate();}catch(e){console.warn('[perms] migrate skipped:',e.message);} // perms v3 + v10 micro
     // §4: HR email/notification prefs — defaults merged under saved values. PHASE4b: also synced via
     // workspace_settings (key 'hrm_notif_prefs') so refreshes/devices agree; loadFromSB merges server copy.
     DB.hrmNotifPrefs={..._hrmNotifPrefsDefault(),...(DB.hrmNotifPrefs&&typeof DB.hrmNotifPrefs==='object'?DB.hrmNotifPrefs:{})};

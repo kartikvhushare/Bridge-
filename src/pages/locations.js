@@ -21,7 +21,7 @@ function locsPage(){
       +'<div style="font-size:12px;color:#9CA3AF">'+esc(l.address||'No address')+'</div></div>'
       +chip(l.status||'Active')
       +(can('locations','edit')?'<button onclick="App.editLoc(this.dataset.id)" data-id="'+l.id+'" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:10px;background:#F6F7F8;color:#374151;font-size:13px;font-weight:600;border:1px solid #ECEDF0;cursor:pointer">'+ic('edit','w-4 h-4')+'Edit</button>':'')
-      +(can('locations','edit')?'<button onclick="App.delLoc(this.dataset.id)" data-id="'+l.id+'" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:10px;background:#FFF1F2;color:#BE123C;font-size:13px;font-weight:600;border:1px solid #FECACA;cursor:pointer">'+ic('trash','w-4 h-4')+'Delete</button>':'')
+      +(can('locations','delete')?'<button onclick="App.delLoc(this.dataset.id)" data-id="'+l.id+'" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:10px;background:#FFF1F2;color:#BE123C;font-size:13px;font-weight:600;border:1px solid #FECACA;cursor:pointer">'+ic('trash','w-4 h-4')+'Delete</button>':'')
       +'</div>'
       +'<div class="ui-tabs" style="margin-bottom:16px">'
       +TABS.map(([k,ll])=>'<button class="ui-tab'+(stab===k?' on':'')+'" onclick="App._setLocTab(this.dataset.k)" data-k="'+k+'">'+ll+'</button>').join('')
@@ -64,7 +64,7 @@ function locsPage(){
         +'<div style="width:36px;height:36px;border-radius:10px;background:#EFF6FF;display:grid;place-items:center;flex-shrink:0">'+ic('pin','w-4 h-4')+'</div>'
         +'<div style="display:flex;align-items:center;gap:6px">'+chip(l.status||'Active')
         +(can('locations','edit')?'<button onclick="event.stopPropagation();App.editLoc(this.dataset.id)" data-id="'+l.id+'" aria-label="Edit location" title="Edit location" style="width:28px;height:28px;display:grid;place-items:center;border-radius:7px;color:#6B7280;border:1px solid #ECEDF0;background:#fff;cursor:pointer">'+ic('edit','w-3.5 h-3.5')+'</button>':'')
-        +(can('locations','edit')?'<button onclick="event.stopPropagation();App.delLoc(this.dataset.id)" data-id="'+l.id+'" aria-label="Delete location" title="Delete location" style="width:28px;height:28px;display:grid;place-items:center;border-radius:7px;color:#BE123C;border:1px solid #FECACA;background:#FFF1F2;cursor:pointer">'+ic('trash','w-3.5 h-3.5')+'</button>':'')
+        +(can('locations','delete')?'<button onclick="event.stopPropagation();App.delLoc(this.dataset.id)" data-id="'+l.id+'" aria-label="Delete location" title="Delete location" style="width:28px;height:28px;display:grid;place-items:center;border-radius:7px;color:#BE123C;border:1px solid #FECACA;background:#FFF1F2;cursor:pointer">'+ic('trash','w-3.5 h-3.5')+'</button>':'')
         +'</div></div>'
         +'<div class="fd" style="font-size:15px;font-weight:800;margin-bottom:4px">'+esc(l.name)+'</div>'
         +'<div style="font-size:12px;color:#9CA3AF;margin-bottom:8px">'+esc(l.address||l.department||'')+'</div>'
@@ -98,7 +98,7 @@ App.saveLoc=(id)=>{const n=$('#ln-n')?.value.trim();if(!n){toast('Name required'
   // location — add it to their city scope on create so it stays visible to them.
   if(!id){const _cu=me();if(_cu&&Array.isArray(_cu.cities)&&_cu.cities.length&&!_cu.cities.includes(obj.id)){_cu.cities.push(obj.id);sb.from('profiles').update({cities:_cu.cities}).eq('id',_cu.id).then(()=>{}).catch(()=>{});}}
   log(fullName(me()),id?'Edited location':'Created location',n);toast(id?'Updated':'Created');saveDB();closeModal();render();sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'}).then(({error})=>{if(error)_syncErr('location')(error);}).catch(_syncErr('location'));};
-App.delLoc=(id)=>{const l=locById(id);if(!l)return;
+App.delLoc=(id)=>{if(!can('locations','delete'))return toast('You need Locations → Delete','err');const l=locById(id);if(!l)return;
 // Referential-integrity guard: blocked while people are geofenced to it, checklists use it,
 // upcoming shifts happen there, or announcements target it.
 if(!guardDelete('location',id,'"'+l.name+'"'))return;

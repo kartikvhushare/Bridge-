@@ -96,7 +96,7 @@ App._pdExpiry=(uid2,docId,val)=>{
 };
 /* HR Config → Surveys tab: create, monitor, results */
 function _surveyCfgHTML(){
-  const canEd=can('surveys','manage');
+  const canEd=can('surveys','create')||can('surveys','close')||can('surveys','delete');
   const list=(DB.surveys||[]).filter(s=>s.status!=='Deleted').sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
   const results=(sv)=>{
     const ans=(DB.surveyAnswers||[]).filter(a=>a.surveyId===sv.id);
