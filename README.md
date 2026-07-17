@@ -1,5 +1,19 @@
 # Evarca HRM
 
+## Micro permissions (v10) — every operation is its own toggle
+
+- **Umbrella actions split into per-operation toggles**, wired into real gates: Tickets (change status / resolve / delete — delete no longer hard-coded to admins), Questions (create / edit / delete / import / export), Discipline (create / edit / delete), Lifecycle (start / update steps), Shifts (create / edit / publish / delete — delete was previously ungated), Surveys (create / open-close / delete / export), Reviews (create / open-close / export), Checklists (+ duplicate / delete), Announcements (+ delete), People (+ reset password / assets), Departments (create / edit / delete — the whole CRUD was previously ungated), Locations (+ delete).
+- **Nobody loses anything**: built-ins re-seed (v10) and a one-time expansion grants the new granular actions to any custom role or per-person override that held the old umbrella (idempotent; explicit later choices are respected). Owners/assignees keep their built-in rights (e.g. an assignee can still work their own ticket).
+- **Access Control editor**: every person row gains **Preview** — a read-only "view as this user" simulation showing exactly which pages they can open and every action they hold (with scope and OVERRIDE annotations), resolved by the same rules the app enforces. **New role** now starts from a template (Blank / Basic / Manager / HR / Administrator). The searchable permission matrix covers all the new toggles automatically.
+
+
+## OKR ported from Bridge (wholesale replacement)
+
+- The entire OKR feature — engine + UI — is now the Bridge version: **annual → quarterly split** (quarters' combined progress drives the annual, equal shares), **Move objective** (whole subtree, cycle-safe), **Close for record** (reason required, frozen but kept), **target revisions** (reason required, editable inline in the editor), **compact one-line cards**, **Annual / Quarterly views** (Quarterly mirrors the annual hierarchy — L1 Q1 under L0 Q1), and **Access-Control-scoped visibility** (okr area: "sees" scope + create / edit / checkin / manage / delete; built-in roles re-seeded v9 — admins see everyone, managers their team, basic self).
+- Code: `src/pages/okr.js` is the whole feature; `src/engine/okr.js` is a stub kept for import order. Supabase mappers gained `is_annual / quarter_label / closed / closed_reason / closed_at / closed_by` — run `work/okr-port-migration.sql` (additive only) on the Evarca database.
+- Dropped with the port (old Evarca-only OKR extras): the ⋯ card menu, upper-owner relationship rights + editEntries/changeOwner/deleteLogs/viewAll toggles (replaced by the scoped model), and OKR check-in drafts (checklist drafts untouched). Tests rewritten accordingly (`tests/okr-port.test.js` + updated smoke/perms assertions).
+
+
 Vite + vanilla-JS single-page HRM app (formerly "Bridge"), deployed on Vercel at https://bridgehrm.vercel.app, backed by Supabase (Postgres + Auth + Realtime, project `emzgwkvkgojcaqngkatw`). This README documents how the codebase works and every change round, newest first.
 
 ## Commands
