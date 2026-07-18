@@ -119,3 +119,27 @@ describe('disciplinary due-process helpers (Art 39)', () => {
     expect(W._dcDeadline({ createdAt: '2026-06-01', defenceAt: '2026-06-10T00:00:00' })).toBe(W._isoAdd('2026-06-10', 60));
   });                                                                                          // 22
 });
+
+describe('probation confirmation (UAE Art 9)', () => {
+  it('max probation end = joining + 6 months', () => {
+    const u = W.__mkUser({ id: 'pb1' }); W._ensureHrm(u); u.hrm.joiningDate = '2026-01-15';
+    expect(W._probMaxEnd(u)).toBe(W._addMonths('2026-01-15', 6)); // 2026-07-15
+  });                                                                                          // 23
+  it('state: none → open → confirmed / not-confirmed', () => {
+    const u = W.__mkUser({ id: 'pb2' }); W._ensureHrm(u);
+    expect(W._probState(u)).toBe('none');
+    u.hrm.probationEnd = '2026-06-30'; expect(W._probState(u)).toBe('open');
+    u.hrm.probationDecision = { status: 'extended' }; expect(W._probState(u)).toBe('open'); // still needs a final call
+    u.hrm.probationDecision = { status: 'confirmed' }; expect(W._probState(u)).toBe('confirmed');
+    u.hrm.probationDecision = { status: 'notconfirmed' }; expect(W._probState(u)).toBe('notconfirmed');
+  });                                                                                          // 24
+  it('pending lists only open probations, soonest end first', () => {
+    const a = W.__mkUser({ id: 'pbA', status: 'Active' }); W._ensureHrm(a); a.hrm.probationEnd = '2026-08-01';
+    const b = W.__mkUser({ id: 'pbB', status: 'Active' }); W._ensureHrm(b); b.hrm.probationEnd = '2026-07-01';
+    const c = W.__mkUser({ id: 'pbC', status: 'Active' }); W._ensureHrm(c); c.hrm.probationEnd = '2026-09-01'; c.hrm.probationDecision = { status: 'confirmed' };
+    W.DB.users.push(a, b, c);
+    const ids = W._probPending().map(u => u.id);
+    expect(ids).toContain('pbA'); expect(ids).toContain('pbB'); expect(ids).not.toContain('pbC');
+    expect(ids.indexOf('pbB')).toBeLessThan(ids.indexOf('pbA'));
+  });                                                                                          // 25
+});
