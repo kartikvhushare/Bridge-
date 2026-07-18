@@ -207,6 +207,7 @@ function _ensureHrm(u){
   if(!h.salary||typeof h.salary!=='object')h.salary={basic:0,allow:0,currency:'AED'};
   if(h.iban===undefined)h.iban='';
   if(h.probationEnd===undefined)h.probationEnd=null;
+  if(h.probationDecision===undefined)h.probationDecision=null; // R22 (Art 9): {status:'confirmed'|'extended'|'notconfirmed',at,by,note,newEnd}
   if(h.payrollHold===undefined)h.payrollHold=false;
   // §7: personal documents (frontend-only). Each entry: {id,name,type,size,uploadedAt,uploadedBy,dataUrl|null}
   //   Metadata persists in localStorage; the base64 dataUrl is STRIPPED in saveDB (mirrors photo stripping)

@@ -17,6 +17,7 @@ App._rvOpen=(cid,role,aboutId)=>{
     ${qs.map(q=>q.type==='answer'
       ?`<div style="margin-bottom:14px"><div style="font-size:13.5px;font-weight:600;margin-bottom:6px">${esc(q.text)}</div><textarea id="rv-txt-${q.id}" class="ui-input rf" rows="2" placeholder="Optional comment…"></textarea></div>`
       :_rvRatingRow(q,c.scale||10,null,cid,role,aboutId)).join('')}
+    <div style="font-size:11px;color:var(--c-text-3);background:var(--c-surface-2);border-radius:9px;padding:8px 11px;margin-top:6px">🔒 Your ratings are personal data, processed for performance management and visible only to ${role==='self'?'you and your manager/HR':'HR and the reporting line'}. Kept for the retention window in HR Config, then removed (UAE PDPL — DL 45/2021).</div>
   </div>`;
   modalShell({title:(role==='self'?'Self review':'Review — '+esc(fullName(about)))+' · '+esc(c.name),sub:'',body,
     footer:`<button onclick="App.closeModal()" class="ui-btn ui-btn-subtle">Cancel</button><button onclick="App._rvSubmit('${cid}','${role}','${aboutId}')" class="ui-btn ui-btn-primary">Submit review</button>`,size:'max-w-xl'});
@@ -60,6 +61,7 @@ App._rvRenderNew=()=>{
       <select class="ui-select rf" style="width:110px" onchange="window._RVD.questions[${i}].type=this.value">${[['rating','Rating'],['answer','Comment']].map(o=>`<option value="${o[0]}" ${q.type===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select>
       <button onclick="window._RVD.questions.splice(${i},1);App._rvRenderNew()" class="ui-btn ui-btn-subtle ui-btn-sm" style="color:var(--c-danger-ink)">✕</button></div>`).join('')}</div>
     <button onclick="window._RVD.questions.push({id:uid('rq'),text:'',type:'rating'});App._rvRenderNew()" class="ui-btn ui-btn-subtle ui-btn-sm">+ Add question</button>
+    <div style="font-size:11px;color:var(--c-text-3);background:var(--c-surface-2);border-radius:9px;padding:8px 11px;margin-top:12px">🔒 Ratings and comments are personal data (UAE PDPL — DL 45/2021): used for performance management, shown to the person and their reporting line, and kept for the retention window set in HR Config → Alerts.</div>
   </div>`;
   modalShell({title:'New review cycle',sub:'Opens for everyone the moment you create it',body,
     footer:`<button onclick="App.closeModal()" class="ui-btn ui-btn-subtle">Cancel</button><button onclick="App._rvCreate()" class="ui-btn ui-btn-primary">Create & open cycle</button>`,size:'max-w-xl'});
@@ -114,6 +116,52 @@ App._rvCSV=(cid)=>{
   log(fullName(me()),'Review results exported',c.name);
 };
 
+/* ── R22 (UAE Art 9) — probation confirmation. Max 6 months from joining; before it ends the
+   employer must CONFIRM, EXTEND (within the cap) or NOT CONFIRM (14 days' notice). Decision rides
+   on u.hrm.probationDecision → persists via user_hrm (_acPushHrm), no new table. ── */
+function _probMaxEnd(u){const j=u&&u.hrm&&u.hrm.joiningDate;return j?_addMonths(j,6):null;}
+function _probState(u){const h=u&&u.hrm;if(!h||!h.probationEnd)return 'none';const d=h.probationDecision;if(d&&(d.status==='confirmed'||d.status==='notconfirmed'))return d.status;return 'open';}
+function _probPending(){return (DB.users||[]).filter(u=>u.status==='Active'&&_probState(u)==='open').sort((a,b)=>String(a.hrm.probationEnd).localeCompare(String(b.hrm.probationEnd)));}
+App._probDecide=(userId,action)=>{
+  if(!can('employees','edit'))return toast('You need People → Edit','err');
+  const u=uById(userId);if(!u||!u.hrm)return;
+  if(action==='extend'){
+    const max=_probMaxEnd(u);
+    modalShell({title:'Extend probation — '+esc(fullName(u)),size:'max-w-sm',
+      body:`<div style="display:flex;flex-direction:column;gap:10px">
+        <div style="font-size:12px;color:var(--c-text-2)">Current end: <b>${u.hrm.probationEnd?fmtS(u.hrm.probationEnd):'—'}</b>${max?' · legal max (6 months from joining): <b>'+fmtS(max)+'</b>':''}</div>
+        <input id="pb-end" type="date" value="${u.hrm.probationEnd||''}" ${max?`max="${max}"`:''} class="ui-input rf"/>
+        <input id="pb-note" class="ui-input rf" placeholder="Reason for the extension (optional)"/>
+        <div style="font-size:11px;color:var(--c-text-3)">UAE Art 9: total probation can't exceed 6 months — a later date is capped automatically.</div>
+      </div>`,
+      footer:btnG('Cancel','App.closeModal()')+btnP('Extend',`App._probExtendGo('${userId}')`)});
+    return;
+  }
+  if(action==='notconfirm'&&!confirm('Not confirm '+fullName(u)+'? Records a probation-fail decision — UAE Art 9 requires 14 days\' written notice to end employment during probation.'))return;
+  const by=S.uid,at=new Date().toISOString();
+  u.hrm.probationDecision=action==='confirm'?{status:'confirmed',at,by}:{status:'notconfirmed',at,by};
+  _ensureHrm(u);_acPushHrm(u);
+  const msg=action==='confirm'
+    ?'🎉 Your probation is confirmed — welcome aboard! A confirmation letter can be issued from Letters.'
+    :'Your probation was not confirmed. HR will be in touch; 14 days\' notice applies (Art 9).';
+  _hrmNotify(u.id,msg,'lifecycle','lifecycle');
+  const m=_mgrOf(u);if(m&&m.id!==S.uid)notify(m.id,'🎓 Probation '+(action==='confirm'?'confirmed':'not confirmed')+' for '+fullName(u),'lifecycle');
+  log(fullName(me()),'Probation '+(action==='confirm'?'confirmed':'not confirmed'),fullName(u));
+  saveDB();toast('Probation '+(action==='confirm'?'confirmed':'decision recorded'));rr();
+};
+App._probExtendGo=(userId)=>{
+  if(!can('employees','edit'))return;
+  const u=uById(userId);if(!u||!u.hrm)return;
+  let end=document.getElementById('pb-end')?.value;const note=(document.getElementById('pb-note')?.value||'').trim();
+  if(!end)return toast('Pick a date','err');
+  const max=_probMaxEnd(u);if(max&&end>max){end=max;toast('Capped at the 6-month legal maximum (Art 9)','warn');}
+  u.hrm.probationEnd=end;u.hrm.probationDecision={status:'extended',at:new Date().toISOString(),by:S.uid,newEnd:end,note};
+  _ensureHrm(u);_acPushHrm(u);
+  notify(u.id,'🎓 Your probation was extended to '+fmtS(end)+'.','lifecycle');
+  log(fullName(me()),'Probation extended',fullName(u)+' → '+end);
+  saveDB();closeModal();toast('Probation extended to '+fmtS(end));rr();
+};
+
 /* ── result card (self vs manager, per question) ── */
 function _rvResultHTML(c,uid2){
   const r=_rcResultFor(c,uid2);const qs=(c.questions||[]).filter(q=>q.type!=='answer');const sc=c.scale||10;
@@ -142,6 +190,31 @@ function reviewsPage(){
       <button onclick="App._rvOpen('${t.cycle.id}','${t.role}','${t.about}')" class="ui-btn ui-btn-primary ui-btn-sm">Fill now</button></div>`).join('')
     :`<div style="font-size:12.5px;color:var(--c-text-3);background:var(--c-surface-2);border-radius:12px;padding:12px 14px">Nothing pending — you're all caught up.</div>`;
   body+='</div>';
+  // 1b · probation confirmations (Art 9) — People-edit holders (HR / managers)
+  if(can('employees','edit')){
+    const pend=_probPending();
+    if(pend.length){
+      body+=`<div style="margin-bottom:18px"><div class="fd font-bold" style="font-size:14px;margin-bottom:8px">Probation confirmations ${countBadge(pend.length)}</div>
+        <div style="font-size:11.5px;color:var(--c-text-3);margin-bottom:8px">Before probation ends, confirm employment, extend (max 6 months from joining), or record a non-confirmation — UAE Art 9.</div>`;
+      body+=pend.map(u=>{
+        const end=u.hrm.probationEnd;const overdue=end&&end<todayISO();const soon=end&&!overdue&&end<=_isoAdd(todayISO(),14);
+        const ext=u.hrm.probationDecision&&u.hrm.probationDecision.status==='extended';
+        const max=_probMaxEnd(u);const atMax=max&&end&&end>=max;
+        return `<div style="background:#fff;border:1.5px solid ${overdue?'#FCA5A5':'var(--c-border)'};border-radius:16px;padding:14px 16px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+            <div><b style="font-size:13.5px">${esc(fullName(u))}</b> <span style="font-size:11.5px;color:var(--c-text-3)">${esc(u.position||'')}${u.department?' · '+esc(u.department):''}</span>
+              <div style="font-size:11.5px;color:${overdue?'#BE123C':'var(--c-text-3)'}">Probation ends ${end?fmtS(end):'—'}${overdue?' · OVERDUE':soon?' · ends soon':''}${ext?' · extended':''}${u.hrm.joiningDate?' · joined '+fmtS(u.hrm.joiningDate):''}</div></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${btn('Confirm',`App._probDecide('${u.id}','confirm')`,{variant:'primary',size:'sm'})}
+              ${atMax?'':btn('Extend',`App._probDecide('${u.id}','extend')`,{variant:'ghost',size:'sm'})}
+              ${btn('Not confirmed',`App._probDecide('${u.id}','notconfirm')`,{variant:'danger',size:'sm'})}
+            </div></div>
+          ${atMax?`<div style="font-size:10.5px;color:#BE123C;margin-top:6px">At the 6-month legal maximum (Art 9) — extend not available.</div>`:''}
+        </div>`;
+      }).join('');
+      body+='</div>';
+    }
+  }
   // 2 · my results (closed cycles)
   if(closedMine.length){body+=`<div style="margin-bottom:18px"><div class="fd font-bold" style="font-size:14px;margin-bottom:8px">My results</div>${closedMine.map(c=>_rvResultHTML(c,u.id)).join('')}</div>`;}
   // 3 · team results for scope-holders (managers see directs; HR/admin see all)
@@ -173,4 +246,4 @@ function reviewsPage(){
 }
 
 /* — auto: expose on window — */
-window._RVD=_RVD;window._rvRatingRow=_rvRatingRow;window._rvResultHTML=_rvResultHTML;window.reviewsPage=reviewsPage;window._RV_DEFAULT_QS=_RV_DEFAULT_QS;
+window._RVD=_RVD;window._rvRatingRow=_rvRatingRow;window._rvResultHTML=_rvResultHTML;window.reviewsPage=reviewsPage;window._RV_DEFAULT_QS=_RV_DEFAULT_QS;window._probMaxEnd=_probMaxEnd;window._probState=_probState;window._probPending=_probPending;

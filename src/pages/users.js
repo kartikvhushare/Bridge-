@@ -46,7 +46,7 @@ function _hrmUserSection(u){
     <div>${selF('Office location (where they work)','u-loc',[['','— None —'],...DB.locations.filter(l=>l.status==='Active').map(l=>[l.id,l.name])],h.locationId||'')}<p style="font-size:11px;color:#9CA3AF;margin-top:4px">Just their workplace. Clock-in/out only checks location if this office has a geofence enabled in Locations.</p></div>
     <div><label class="block text-xs font-semibold text-ink-500 mb-1.5">Weekly off-days</label><div style="display:flex;gap:6px;flex-wrap:wrap">${DAYS3.map(d=>`<button type="button" class="dchip${off.has(d)?' on':''}" onclick="this.classList.toggle('on')" data-day="${d}">${d}</button>`).join('')}</div></div>
     ${mkTog('u-wfh',h.wfhEligible===true,'Eligible for Work-from-Home')}
-    ${fld('Probation ends','u-probend',h.probationEnd||'','date')}
+    ${fld('Probation ends (≤6 months — Art 9)','u-probend',h.probationEnd||'','date')}
     ${can('payroll','view')?`<div style="border-top:1px dashed #E5E7EB;padding-top:10px"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Payroll (visible to payroll roles only)</p>
       <div class="grid grid-cols-3 gap-3">${fld('Basic salary','u-salb',(h.salary||{}).basic??0,'number')}${fld('Allowances','u-sala',(h.salary||{}).allow??0,'number')}${fld('Currency','u-salc',(h.salary||{}).currency||'AED')}</div>
       <div class="mt-2">${fld('IBAN (for the WPS / bank file)','u-iban',h.iban||'')}</div></div>`:''}
