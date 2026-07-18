@@ -45,6 +45,12 @@ function _seedHRMPlan(){
   if(C.branding.payslipFooterImg===undefined)C.branding.payslipFooterImg=null;
   if(!C.branding.payslipTpl)C.branding.payslipTpl='{name} · {position} · {department}\nMonth: {month}\n\nBasic salary\t{currency} {basic}\nAllowances\t{currency} {allowances}\nOvertime ({ot_hours}h)\t+ {currency} {ot_amount}\nUnpaid days ({unpaid_days} × {currency} {per_day})\t− {currency} {deductions}\n──────────────────────────────\nNET PAY\t{currency} {net}\n\nDays: {present} present ({wfh} WFH) · {leave} on leave · {absent} absent · {working} working days\nLeave balance remaining: {leave_balance} day(s)\n\n{note}\nStatus: {status} · Generated {date}';
   if(!C.alerts||typeof C.alerts!=='object')C.alerts={late:true,missedClockIn:true,leaveSLA:true,slaDays:3,docExpiry:true,docExpiryDays:30,probation:true,probationDays:7,benefits:true,benefitMonths:24,otWeeklyCap:10,otMultiplier:1.25,payrollCutoff:23};
+  /* R22 (UAE compliance) — backfill new limits on existing configs; floors are also enforced in code. */
+  if(C.alerts.otNightMultiplier===undefined)C.alerts.otNightMultiplier=1.5;   // night 22:00–04:00 (Art 19)
+  if(C.alerts.otRestMultiplier===undefined)C.alerts.otRestMultiplier=1.5;      // rest-day / holiday (Art 19)
+  if(C.alerts.otDailyCap===undefined)C.alerts.otDailyCap=2;                    // max OT hours/day (Art 19)
+  if(C.alerts.compOffExpiryMonths===undefined)C.alerts.compOffExpiryMonths=0;  // 0 = never (earned lieu can't lapse)
+  if(C.alerts.dataRetentionMonths===undefined)C.alerts.dataRetentionMonths=12; // survey/review PDPL retention
   if(!C.flowTemplates||typeof C.flowTemplates!=='object'){
     const s=(title,ownerType,type,offsetDays,dept)=>({title,ownerType,type:type||'task',offsetDays:offsetDays||0,dept:dept||''});
     C.flowTemplates={

@@ -22,10 +22,19 @@ function _alertsCfgHTML(){
     ${tog('benefits','Air-ticket anniversary','When someone completes the months of service set below → they and the People team are told the ticket benefit is due.')}
     ${num('benefitMonths','Benefit due after','months')}
     <div style="border-top:1px dashed var(--c-border);margin:12px 0 6px"></div>
-    <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Limits used by Overtime & Payroll</div>
+    <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Overtime, pay & UAE limits</div>
+    <p style="font-size:11px;color:var(--c-text-3);margin:-2px 0 8px">UAE Labour Law floors are enforced in code — you can pay MORE here, never less: normal ×1.25, night & rest-day ×1.5, max 2 overtime hours/day (Art 19).</p>
     ${num('otWeeklyCap','Most overtime a person can log per week','hours')}
-    ${num('otMultiplier','Overtime is paid at (× hourly rate)','×')}
+    ${num('otDailyCap','Most overtime per day (Art 19 max: 2)','hours/day')}
+    ${num('otMultiplier','Normal overtime rate (min ×1.25)','×')}
+    ${num('otNightMultiplier','Night 10pm–4am rate (min ×1.5)','×')}
+    ${num('otRestMultiplier','Rest-day / holiday rate (min ×1.5)','×')}
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="flex:1;font-size:12.5px;color:var(--c-text-2)">Time-in-lieu expires after (0 = never)</span><input ${canEdit?'':'disabled'} type="number" min="0" step="1" value="${Number(A.compOffExpiryMonths)||0}" onchange="DB.hrmConfig.alerts.compOffExpiryMonths=Math.max(0,parseInt(this.value)||0);saveDB()" class="ui-input" style="width:86px;min-height:0;height:32px;padding:4px 10px"/><span style="font-size:11px;color:var(--c-text-3);width:64px">months</span></div>
     ${num('payrollCutoff','Attendance is verified up to day','of month')}
+    <div style="border-top:1px dashed var(--c-border);margin:12px 0 6px"></div>
+    <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Data protection (PDPL)</div>
+    <p style="font-size:11px;color:var(--c-text-3);margin:-2px 0 8px">Personal survey &amp; review data older than this is flagged for deletion (UAE PDPL — Federal Decree-Law 45/2021).</p>
+    ${num('dataRetentionMonths','Keep personal survey / review data for','months')}
     <div style="border-top:1px dashed var(--c-border);margin:12px 0 6px"></div>
     <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">In-app alerts per feature</div>
     <p style="font-size:11px;color:var(--c-text-3);margin-bottom:8px">Which features show bell (in-app) notifications. Switching a feature off silences its bell alerts for everyone — email switches below are unaffected.</p>

@@ -34,7 +34,7 @@ function surveysPage(){
     }).join('');
     return `<div class="ui-card" style="padding:16px;margin-bottom:8px">
       <div class="fd" style="font-size:14px;font-weight:800;color:var(--c-text);margin-bottom:2px">${esc(sv.title)} — about ${esc(item.label)}</div>
-      <div style="font-size:11px;color:var(--c-text-3);margin-bottom:12px">Ratings are 1 (poor) to 5 (excellent). Your answers go to the People team.</div>
+      <div style="font-size:11px;color:${sv.anonymous?'#047857':'var(--c-text-3)'};margin-bottom:12px">Ratings are 1 (poor) to 5 (excellent). ${sv.anonymous?'🔒 <b>Confidential</b> — your name is not attached to your answers.':'Your answers go to the People team.'}</div>
       ${qs}
       <div style="display:flex;gap:8px;justify-content:flex-end">${btnG('Cancel','_SVF=null;rr()')}${btnP('Submit',`App._svSubmit()`)}</div>
     </div>`;
@@ -59,7 +59,7 @@ App._svSubmit=()=>{
 };
 App._svNew=()=>{
   if(!can('surveys','create'))return toast('You need Surveys → Create','err');
-  window._SVN={kind:'company',qs:[{id:uid('q'),text:'How satisfied are you overall?',type:'rating'}]};
+  window._SVN={kind:'company',anonymous:false,qs:[{id:uid('q'),text:'How satisfied are you overall?',type:'rating'}]};
   App._svRenderNew();
 };
 App._svRenderNew=()=>{
@@ -69,6 +69,7 @@ App._svRenderNew=()=>{
       <div><label style="display:block;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase;margin-bottom:6px">Title *</label><input id="sv-title" value="${esc(d.title||'')}" oninput="window._SVN.title=this.value" class="ui-input rf" placeholder="e.g. Q3 pulse survey"/></div>
       <div><label style="display:block;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase;margin-bottom:6px">Who answers about whom</label><select class="ui-select rf" onchange="window._SVN.kind=this.value">${Object.keys(SV_KINDS).map(k=>`<option value="${k}" ${d.kind===k?'selected':''}>${SV_KINDS[k]}</option>`).join('')}</select></div>
       <div><label style="display:block;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase;margin-bottom:6px">Run date *</label><input id="sv-date" type="date" value="${d.date||todayISO()}" onchange="window._SVN.date=this.value" class="ui-input rf"/></div>
+      <label style="display:flex;align-items:flex-start;gap:8px;padding:9px 11px;border:1.5px solid var(--c-border);border-radius:10px;cursor:pointer"><input type="checkbox" ${d.anonymous?'checked':''} onchange="window._SVN.anonymous=this.checked" style="margin-top:2px"/><span style="font-size:12.5px;font-weight:600;color:var(--c-text)">Confidential responses<span style="display:block;font-size:11px;font-weight:400;color:var(--c-text-3)">Hide each respondent's identity in results &amp; exports (UAE PDPL). Recommended for "rate your manager".</span></span></label>
       <div><label style="display:block;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase;margin-bottom:6px">Questions</label>
         ${d.qs.map((q,i)=>`<div style="display:flex;gap:6px;margin-bottom:6px"><input value="${esc(q.text)}" oninput="window._SVN.qs[${i}].text=this.value" class="ui-input rf" style="flex:1"/><select onchange="window._SVN.qs[${i}].type=this.value" class="ui-select rf" style="width:96px">${['rating','text'].map(t=>`<option ${q.type===t?'selected':''}>${t}</option>`).join('')}</select><button onclick="window._SVN.qs.splice(${i},1);App._svRenderNew()" style="border:none;background:transparent;color:var(--c-text-3);cursor:pointer">${ic('trash','w-3.5 h-3.5')}</button></div>`).join('')}
         <button onclick="window._SVN.qs.push({id:uid('q'),text:'',type:'rating'});App._svRenderNew()" class="ui-btn ui-btn-ghost ui-btn-sm">${ic('plus','w-3.5 h-3.5')}Add question</button>
@@ -82,7 +83,7 @@ App._svCreate=()=>{
   if(!(d.title||'').trim())return toast('Give it a title','err');
   const qs=d.qs.filter(q=>(q.text||'').trim());
   if(!qs.length)return toast('Add at least one question','err');
-  const sv={id:uid('sv'),kind:d.kind,title:d.title.trim(),questions:qs,runDate:d.date||todayISO(),status:'Active',createdBy:S.uid,createdAt:new Date().toISOString()};
+  const sv={id:uid('sv'),kind:d.kind,title:d.title.trim(),questions:qs,runDate:d.date||todayISO(),status:'Active',anonymous:!!d.anonymous,createdBy:S.uid,createdAt:new Date().toISOString()};
   DB.surveys.push(sv);_pushRow('surveys',_svRow(sv),'survey');
   log(fullName(me()),'Survey created',sv.title);
   window._SVN=null;saveDB();closeModal();toast('Survey created — people are notified on the run date');rr();
@@ -95,7 +96,8 @@ App._svCSV=(id)=>{
   const rows=[['By','About','Score',...sv.questions.map(q=>q.text)]];
   (DB.surveyAnswers||[]).filter(a=>a.surveyId===id).forEach(a=>{
     const by=uById(a.byUser),ab=a.aboutUser?uById(a.aboutUser):null;
-    rows.push([by?fullName(by):a.byUser,ab?fullName(ab):'Company',a.score==null?'':a.score,...sv.questions.map(q=>{const x=(a.answers||[]).find(y=>y.qid===q.id);return x?x.value:'';})]);
+    const byLabel=sv.anonymous?'Anonymous':(by?fullName(by):a.byUser);   // R22 PDPL: never export respondent identity for confidential surveys
+    rows.push([byLabel,ab?fullName(ab):'Company',a.score==null?'':a.score,...sv.questions.map(q=>{const x=(a.answers||[]).find(y=>y.qid===q.id);return x?x.value:'';})]);
   });
   _csvDownload(rows,'survey_'+(sv.title||'export').replace(/\W+/g,'_'));
 };

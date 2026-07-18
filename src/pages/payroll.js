@@ -77,6 +77,10 @@ function payrollPage(){
       <div class="ui-tabs" style="margin:0"><button class="ui-tab on">Month</button><button class="ui-tab" onclick="S.filters.pyView='year';rr()">Year</button></div>
       <input type="month" value="${month}" onchange="S.filters.pyMonth=this.value;rr()" class="ui-input" style="width:auto;min-height:0;height:40px;padding:0 12px;line-height:38px;font-size:13px"/>
         <span style="font-size:11.5px;font-weight:700;color:var(--c-text-2);background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:99px;padding:5px 12px">${(()=>{const pp=_payPeriod(month);return 'Salary period: '+fmtD(pp.start)+' → '+fmtD(pp.end)+(_payCycleStartDay()===1?'':' · custom cycle (day '+_payCycleStartDay()+')');})()}</span>
+      ${(()=>{const due=_wpsDueDate(month);let txt,bg,fg,tip='MOHRE Wage Protection System (Ministerial Resolution 340/2026): wages are due through WPS by the 1st of the next month.';
+        if(run&&run.status==='Finalized'){const fa=String(run.sign&&run.sign.finalizedAt||'').slice(0,10);const onTime=fa&&fa<=due;txt='WPS · '+(onTime?'paid on time':'paid late');[bg,fg]=onTime?['#ECFDF5','#047857']:['#FFF1F2','#9F1239'];}
+        else{const late=todayISO()>due;txt=late?'WPS overdue · was due '+fmtD(due):'WPS due by '+fmtD(due);[bg,fg]=late?['#FFF1F2','#9F1239']:['#EFF6FF','#1D4ED8'];}
+        return '<span title="'+tip+'" style="font-size:11.5px;font-weight:800;border-radius:99px;padding:5px 12px;background:'+bg+';color:'+fg+'">'+txt+'</span>';})()}
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${steps}</div>
       <span style="flex:1"></span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">${actions}</div>
@@ -149,12 +153,13 @@ App._payslip=(itemId)=>{
   const B=(DB.hrmConfig&&DB.hrmConfig.branding)||{};
   const V={name:fullName(u),position:u.position||'—',department:u.department||'—',month:run.month,period:(d2.period?fmtD(d2.period.start)+' → '+fmtD(d2.period.end):run.month),currency:cur2,
     basic:n2(i.basic),allowances:n2(i.allowances),ot_hours:d2.otHours||0,ot_amount:n2(i.otAmount),
-    unpaid_days:i.unpaidDays||0,per_day:n2(d2.perDay||0),deductions:n2(i.deductions),net:n2(i.net),
+    unpaid_days:i.unpaidDays||0,per_day:n2(d2.perDay||0),deductions:n2(d2.absenceDed!=null?d2.absenceDed:i.deductions),net:n2(i.net),
     present:d2.present||0,wfh:d2.wfh||0,leave:d2.leaveDays||0,absent:d2.absent||0,working:d2.working||0,
     leave_balance:bal,note:B.payslipNote||'',status:run.status+((d2.hold)?' · PAYROLL HOLD':''),date:fmtD(todayISO())};
   const _DEF_TPL='PAYSLIP — {month}\nSalary period: {period}\n\nEmployee: {name}\nPosition: {position} · {department}\nStatus: {status}\n\n— Earnings —\nBasic salary:            {currency} {basic}\nAllowances:              {currency} {allowances}\nOvertime ({ot_hours}h):        {currency} {ot_amount}\n\n— Deductions —\nUnpaid days ({unpaid_days} × {per_day}): {currency} {deductions}\n\nNET PAY: {currency} {net}\n\n— Month summary —\nWorking days: {working} · Present: {present} · WFH: {wfh} · On leave: {leave} · Absent: {absent}\nLeave balance remaining: {leave_balance} days\n\n{note}\nGenerated on {date}';
   let body=String(B.payslipTpl||_DEF_TPL);
   Object.keys(V).forEach(k=>{body=body.split('{'+k+'}').join(String(V[k]));});
+  if(d2.fineAmount>0)body+="\n\nDisciplinary fine ("+d2.fineDays+" day"+(d2.fineDays==1?'':'s')+"' wage — Art 39): − "+cur2+" "+n2(d2.fineAmount)+(d2.fineCapped?' · capped (Art 25/39)':''); // R22: statutory fine, shown separately from unpaid-day deductions
   const _g=typeof _gratuityAccrued==='function'?_gratuityAccrued(u):null; // PHASE4: informational EOSB line
   if(_g&&_g.amount)body+='\n\nEnd-of-service accrued to date ('+_g.country+'): '+(_g.currency||cur2)+' '+n2(_g.amount)+' — informational, not part of this payslip.';
   const html='<div style="font-family:Georgia,serif;font-size:14px;line-height:1.8;white-space:pre-wrap">'+esc(body)+'</div>';

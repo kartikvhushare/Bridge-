@@ -37,15 +37,35 @@ function _payCompute(u,month){
     if(iso<=lastCheck)absent++;
   }
   const perDay=working?(basic+allow)/working:0;
-  const otHours=(DB.overtime||[]).filter(o=>o.userId===u.id&&o.status==='Approved'&&o.comp==='pay'&&o.date>=mStart&&o.date<=mEnd).reduce((a,o)=>a+o.hours,0);
   const hourly=working?(basic+allow)/(working*8):0;
-  const mult=Number(DB.hrmConfig?.alerts?.otMultiplier)||1.25;
-  const otAmount=Math.round(otHours*hourly*mult*100)/100;
+  /* R22 (UAE Art 19): each approved entry is paid at ITS OWN rate — normal / night 22:00–04:00 / rest-day.
+     The rate frozen at approval time (o.rate) wins; legacy entries without kind fall back to the normal multiplier. */
+  const otRows=(DB.overtime||[]).filter(o=>o.userId===u.id&&o.status==='Approved'&&o.comp==='pay'&&o.date>=mStart&&o.date<=mEnd);
+  const otHours=otRows.reduce((a,o)=>a+o.hours,0);
+  const otSplit={normal:0,night:0,rest:0};otRows.forEach(o=>{otSplit[o.kind==='night'?'night':o.kind==='rest'?'rest':'normal']+=o.hours;});
+  const otAmount=Math.round(otRows.reduce((a,o)=>a+o.hours*hourly*_otRateOf(o),0)*100)/100;
   const unpaidDays=unpaid+absent;
   const deduction=Math.round(unpaidDays*perDay*100)/100;
-  const net=Math.round((basic+allow+otAmount-deduction)*100)/100;
-  return{basic,allowances:allow,otAmount,deductions:deduction,unpaidDays,net,detail:{month,working,total,present,wfh,leaveDays,unpaid,absent,otHours,perDay:Math.round(perDay*100)/100,hold:u.hrm?.payrollHold===true,period:{start:mStart,end:mEnd}}};
+  /* R22 (UAE Art 39 + 25): disciplinary FINES decided inside this salary period land here —
+     capped at 5 days' wage per month (Art 39-3) and never past 50% of the wage (Art 25 guard). */
+  const fineRows=(DB.discipline||[]).filter(d=>d.userId===u.id&&d.penalty&&d.penalty.type==='fine'&&d.decidedAt&&String(d.decidedAt).slice(0,10)>=mStart&&String(d.decidedAt).slice(0,10)<=mEnd);
+  const fineDaysRaw=fineRows.reduce((a,d)=>a+(Number(d.penalty.days)||0),0);
+  const fineDays=Math.min(fineDaysRaw,5);
+  let fineAmount=Math.round(fineDays*perDay*100)/100;
+  const maxFine=Math.round((basic+allow)*0.5*100)/100;
+  const fineCapped=fineDaysRaw>5||fineAmount>maxFine;
+  if(fineAmount>maxFine)fineAmount=maxFine;
+  const net=Math.round((basic+allow+otAmount-deduction-fineAmount)*100)/100;
+  return{basic,allowances:allow,otAmount,deductions:Math.round((deduction+fineAmount)*100)/100,unpaidDays,net,detail:{month,working,total,present,wfh,leaveDays,unpaid,absent,otHours,otSplit,perDay:Math.round(perDay*100)/100,absenceDed:deduction,fineDays,fineAmount,fineCapped:fineCapped||undefined,hold:u.hrm?.payrollHold===true,period:{start:mStart,end:mEnd}}};
 }
+/* ── R22 — UAE overtime floors (Art 19). Config can pay MORE, never less:
+   normal ≥ ×1.25 · night 22:00–04:00 ≥ ×1.5 · rest-day / public holiday ≥ ×1.5. ── */
+function _otMults(){const a=DB.hrmConfig?.alerts||{};return{normal:Math.max(Number(a.otMultiplier)||1.25,1.25),night:Math.max(Number(a.otNightMultiplier)||1.5,1.5),rest:Math.max(Number(a.otRestMultiplier)||1.5,1.5)};}
+function _otRateOf(o){if(Number(o&&o.rate)>=1)return Number(o.rate);const m=_otMults();return o&&o.kind==='night'?m.night:o&&o.kind==='rest'?m.rest:m.normal;}
+/* Auto-classify a date for a user: their off-day or a public holiday → rest-day overtime. */
+function _otKindFor(u,date){const offs=new Set(u?.hrm?.schedule?.offDays||['Sun']);const hol=new Set((DB.holidays||[]).map(h=>h.date));return(offs.has(DAYS3[new Date(date+'T00:00:00').getDay()])||hol.has(date))?'rest':'normal';}
+/* WPS (MOHRE Res 340/2026): wages for a month are due through WPS by the 1st of the NEXT month. */
+function _wpsDueDate(month){const[y,m]=month.split('-').map(Number);const d=new Date(y,m,1);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01';}
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
-window._workingDaysIn=_workingDaysIn;window._payCompute=_payCompute;window._payPeriod=_payPeriod;window._payCycleStartDay=_payCycleStartDay;
+window._workingDaysIn=_workingDaysIn;window._payCompute=_payCompute;window._payPeriod=_payPeriod;window._payCycleStartDay=_payCycleStartDay;window._otMults=_otMults;window._otRateOf=_otRateOf;window._otKindFor=_otKindFor;window._wpsDueDate=_wpsDueDate;
