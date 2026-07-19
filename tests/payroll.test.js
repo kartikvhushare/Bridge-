@@ -10,6 +10,10 @@ const M = '2026-06';
 let u, r;
 
 beforeAll(() => {
+  // R23: this suite documents the LEGACY calculation (working-day divisor, gross OT base).
+  // The new defaults (MOHRE ÷30, basic OT base) are asserted in r23-payroll.test.js.
+  W.DB.hrmConfig = W.DB.hrmConfig || {};
+  W.DB.hrmConfig.payroll = { dayDivisor: 'working', otBase: 'gross' };
   u = W.__mkUser({ id: 'pe1' });
   W.DB.users.push(u);
   W._ensureHrm(u);

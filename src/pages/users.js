@@ -48,8 +48,11 @@ function _hrmUserSection(u){
     ${mkTog('u-wfh',h.wfhEligible===true,'Eligible for Work-from-Home')}
     ${fld('Probation ends (≤6 months — Art 9)','u-probend',h.probationEnd||'','date')}
     ${can('payroll','view')?`<div style="border-top:1px dashed #E5E7EB;padding-top:10px"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Payroll (visible to payroll roles only)</p>
-      <div class="grid grid-cols-3 gap-3">${fld('Basic salary','u-salb',(h.salary||{}).basic??0,'number')}${fld('Allowances','u-sala',(h.salary||{}).allow??0,'number')}${fld('Currency','u-salc',(h.salary||{}).currency||'AED')}</div>
-      <div class="mt-2">${fld('IBAN (for the WPS / bank file)','u-iban',h.iban||'')}</div></div>`:''}
+      <div class="grid grid-cols-3 gap-3">${fld('Basic salary','u-salb',(h.salary||{}).basic??0,'number')}${fld('Housing allowance','u-salh',(h.salary||{}).housing??0,'number')}${fld('Transport allowance','u-salt',(h.salary||{}).transport??0,'number')}</div>
+      <div class="grid grid-cols-3 gap-3 mt-2">${fld('Other allowances','u-sala',(h.salary||{}).allow??0,'number')}${fld('Currency','u-salc',(h.salary||{}).currency||'AED')}${fld('MOL person ID (WPS)','u-mol',h.molId||'')}</div>
+      <p style="font-size:11px;color:#9CA3AF;margin-top:4px">UAE structure: gratuity &amp; statutory overtime run on the BASIC salary; the allowances make up the gross (Art 51 / Art 19).</p>
+      <div class="grid grid-cols-2 gap-3 mt-2">${fld('IBAN (WPS / bank file)','u-iban',h.iban||'')}${fld('Bank routing code (SIF)','u-rout',h.bankRouting||'')}</div>
+      ${mkTog('u-pen',h.pensionOn===true,'GPSSA pension (UAE / GCC national) — 5% or 11% employee by joining date, 15% employer')}</div>`:''}
   </div>`;
   /* perms v2: the HR toggle + role-profile picker moved to the Access Control tab. */
 }
@@ -71,8 +74,12 @@ function _readHrmFromForm(prev){
     wfhEligible:$('#u-wfh')?togV('u-wfh'):(p.wfhEligible===true), // WFH eligibility (default: not eligible)
     assets:Array.isArray(p.assets)?p.assets:[], // asset records are managed by their own buttons — preserve verbatim on save
 
-    salary:$('#u-salb')?{basic:parseFloat($('#u-salb').value)||0,allow:parseFloat($('#u-sala')?.value)||0,currency:($('#u-salc')?.value||'AED').trim()||'AED'}:(p.salary||{basic:0,allow:0,currency:'AED'}),
+    salary:$('#u-salb')?{basic:parseFloat($('#u-salb').value)||0,housing:parseFloat($('#u-salh')?.value)||0,transport:parseFloat($('#u-salt')?.value)||0,allow:parseFloat($('#u-sala')?.value)||0,currency:($('#u-salc')?.value||'AED').trim()||'AED'}:(p.salary||{basic:0,allow:0,currency:'AED'}),
     iban:$('#u-iban')?($('#u-iban').value||'').trim():(p.iban||''),
+    molId:$('#u-mol')?($('#u-mol').value||'').trim():(p.molId||''),           // R23: WPS SIF
+    bankRouting:$('#u-rout')?($('#u-rout').value||'').trim():(p.bankRouting||''),
+    pensionOn:$('#u-pen')?togV('u-pen'):(p.pensionOn===true),                 // R23: GPSSA
+    payAdjust:Array.isArray(p.payAdjust)?p.payAdjust:[],                      // ledger managed from Payroll — preserve verbatim
     payrollHold:p.payrollHold===true,
     perms:(p.perms&&typeof p.perms==='object')?p.perms:undefined,
     permsBaked:p.permsBaked||0,

@@ -9,6 +9,8 @@ const M = '2026-06';
 beforeAll(() => {
   W.DB.hrmConfig = W.DB.hrmConfig || {};
   W._seedHRMPlan();
+  // R23: pin the legacy basis — these assertions were written against working-day rates.
+  W.DB.hrmConfig.payroll = { dayDivisor: 'working', otBase: 'gross' };
   W.DB.holidays = [];
 });
 

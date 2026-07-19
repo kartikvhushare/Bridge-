@@ -1,3 +1,4 @@
+import './vendor.js';   // R24: pinned supabase-js + chart.js — must load before every other module
 import './styles.css';
 import './ui/helpers.js';
 import './supabase.js';

@@ -205,7 +205,13 @@ function _ensureHrm(u){
   if(!Array.isArray(h.compOff))h.compOff=[];
   // HRM build plan: salary & payroll fields (payslips, WPS), probation date, payroll hold (exit flow)
   if(!h.salary||typeof h.salary!=='object')h.salary={basic:0,allow:0,currency:'AED'};
+  if(h.salary.housing===undefined)h.salary.housing=0;   // R23: UAE salary structure — housing / transport
+  if(h.salary.transport===undefined)h.salary.transport=0; //     join basic + "other" (the old allow field)
   if(h.iban===undefined)h.iban='';
+  if(h.molId===undefined)h.molId='';                    // R23: MOL person ID for the WPS SIF file
+  if(h.bankRouting===undefined)h.bankRouting='';        // R23: 9-digit agent routing code (SIF)
+  if(h.pensionOn===undefined)h.pensionOn=false;         // R23: GPSSA pension (UAE/GCC national)
+  if(!Array.isArray(h.payAdjust))h.payAdjust=[];        // R23: {id,kind:'earn'|'deduct',label,amount,month|null,recurring,at,by}
   if(h.probationEnd===undefined)h.probationEnd=null;
   if(h.probationDecision===undefined)h.probationDecision=null; // R22 (Art 9): {status:'confirmed'|'extended'|'notconfirmed',at,by,note,newEnd}
   if(h.payrollHold===undefined)h.payrollHold=false;

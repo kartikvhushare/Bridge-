@@ -36,6 +36,19 @@ function _alertsCfgHTML(){
     <p style="font-size:11px;color:var(--c-text-3);margin:-2px 0 8px">Personal survey &amp; review data older than this is flagged for deletion (UAE PDPL — Federal Decree-Law 45/2021).</p>
     ${num('dataRetentionMonths','Keep personal survey / review data for','months')}
     <div style="border-top:1px dashed var(--c-border);margin:12px 0 6px"></div>
+    <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Payroll — UAE calculation policy</div>
+    <p style="font-size:11px;color:var(--c-text-3);margin:-2px 0 8px">Defaults follow UAE law &amp; MOHRE convention — change them only if your company policy is MORE generous. Sick &amp; maternity pay tiers live on the leave types themselves (Leave rules tab).</p>
+    ${(()=>{const P=DB.hrmConfig.payroll=DB.hrmConfig.payroll||{};
+      const sel=(key,label,opts,cur)=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="flex:1;font-size:12.5px;color:var(--c-text-2)">${label}</span><select ${canEdit?'':'disabled'} onchange="DB.hrmConfig.payroll.${key}=this.value;saveDB();rr()" class="ui-select" style="width:auto;min-height:0;height:32px;font-size:12px;padding:4px 26px 4px 10px">${opts.map(o=>`<option value="${o[0]}" ${cur===o[0]?'selected':''}>${o[1]}</option>`).join('')}</select></div>`;
+      const pnum=(key,label,suffix,defv)=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="flex:1;font-size:12.5px;color:var(--c-text-2)">${label}</span><input ${canEdit?'':'disabled'} type="number" min="0" step="any" value="${isFinite(Number(P[key]))&&P[key]!==undefined?Number(P[key]):defv}" onchange="DB.hrmConfig.payroll.${key}=parseFloat(this.value)||0;saveDB()" class="ui-input" style="width:86px;min-height:0;height:32px;padding:4px 10px"/><span style="font-size:11px;color:var(--c-text-3);width:64px">${suffix}</span></div>`;
+      return sel('dayDivisor','Daily rate basis',[['fixed30','Gross ÷ 30 (MOHRE convention)'],['working','Gross ÷ actual working days']],(P.dayDivisor==='working'?'working':'fixed30'))
+        +sel('otBase','Overtime hourly base',[['basic','Basic salary (statutory)'],['gross','Full gross (more generous)']],(P.otBase==='gross'?'gross':'basic'))
+        +pnum('pensionEmpOld','GPSSA employee % — joined before 31 Oct 2023','%',5)
+        +pnum('pensionEmpNew','GPSSA employee % — joined after (FL 57/2023)','%',11)
+        +pnum('pensionEr','GPSSA employer %','%',15)
+        +pnum('pensionMin','GPSSA salary band — minimum','AED',3000)
+        +pnum('pensionMax','GPSSA salary band — maximum','AED',70000);})()}
+    <div style="border-top:1px dashed var(--c-border);margin:12px 0 6px"></div>
     <div style="font-size:11px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">In-app alerts per feature</div>
     <p style="font-size:11px;color:var(--c-text-3);margin-bottom:8px">Which features show bell (in-app) notifications. Switching a feature off silences its bell alerts for everyone — email switches below are unaffected.</p>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">${NOTIF_KINDS.map(([k,l])=>{const on=(DB.hrmConfig.inappKinds||{})[k]!==false;return `<button ${canEdit?'':'disabled'} onclick="DB.hrmConfig.inappKinds['${k}']=${on?'false':'true'};saveDB();rr()" style="display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;border:1.5px solid ${on?'#0E9F6E':'var(--c-border)'};background:${on?'#ECFDF5':'var(--c-surface)'};color:${on?'#0B7A55':'var(--c-text-3)'};font-size:11.5px;font-weight:700;cursor:${canEdit?'pointer':'not-allowed'}">${l}</button>`;}).join('')}</div>

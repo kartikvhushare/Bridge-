@@ -51,6 +51,16 @@ function _seedHRMPlan(){
   if(C.alerts.otDailyCap===undefined)C.alerts.otDailyCap=2;                    // max OT hours/day (Art 19)
   if(C.alerts.compOffExpiryMonths===undefined)C.alerts.compOffExpiryMonths=0;  // 0 = never (earned lieu can't lapse)
   if(C.alerts.dataRetentionMonths===undefined)C.alerts.dataRetentionMonths=12; // survey/review PDPL retention
+  /* R23 — payroll policy defaults = UAE law/convention; every value editable in HR Config → Payroll. */
+  if(!C.payroll||typeof C.payroll!=='object')C.payroll={};
+  if(C.payroll.cycleStartDay===undefined)C.payroll.cycleStartDay=1;
+  if(C.payroll.dayDivisor===undefined)C.payroll.dayDivisor='fixed30';   // MOHRE 30-day month
+  if(C.payroll.otBase===undefined)C.payroll.otBase='basic';             // statutory OT base
+  if(C.payroll.pensionEmpOld===undefined)C.payroll.pensionEmpOld=5;     // GPSSA old law (joined < 31 Oct 2023)
+  if(C.payroll.pensionEmpNew===undefined)C.payroll.pensionEmpNew=11;    // FL 57/2023 (joined after)
+  if(C.payroll.pensionEr===undefined)C.payroll.pensionEr=15;            // employer share
+  if(C.payroll.pensionMin===undefined)C.payroll.pensionMin=3000;        // GPSSA salary band (AED)
+  if(C.payroll.pensionMax===undefined)C.payroll.pensionMax=70000;
   if(!C.flowTemplates||typeof C.flowTemplates!=='object'){
     const s=(title,ownerType,type,offsetDays,dept)=>({title,ownerType,type:type||'task',offsetDays:offsetDays||0,dept:dept||''});
     C.flowTemplates={
