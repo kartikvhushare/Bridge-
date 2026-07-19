@@ -12,6 +12,7 @@ const MOB_MGR=['dashboard','mychecklists','attendance','notifications','more'];
 const NAV_ALL=[
   ['dashboard','grid','Dashboard',()=>true],
   ['mychecklists','check','My Checklists',()=>true],
+  ['okr','flag','OKRs',()=>can('okr','view')],
   ['hub:inbox','bell','Inbox',()=>true],
 
   ['attendance','clock','Attendance',()=>can('attendance','view')],
@@ -44,8 +45,7 @@ const HUB_DEF={
   dash:{label:'Dashboard',tabs:[
     ['dashboard','My Day',()=>true],
     ['analytics','Company',()=>isAdmin()||can('analytics','view')],
-    ['hrmanalytics','HRM Analytics',()=>can('reports','view')],
-    ['okr','OKRs',()=>can('okr','view')]]},
+    ['hrmanalytics','HRM Analytics',()=>can('reports','view')]]},
   cl:{label:'Checklists',tabs:[
     ['checklists','Builder',()=>can('checklists','create')],
     ['allcl','All results',()=>can('allChecklists','view')],
@@ -77,7 +77,7 @@ const navFor=()=>NAV_ALL.filter(n=>{try{return !!n[3]();}catch(e){return false;}
    navSectionsFor() buckets that SAME flat list into Daily + collapsible sections. No route or
    can()-gating logic changes — it only reshapes for rendering. Every flat item lands somewhere
    (unknown keys fall through to a "More" section so nothing is ever dropped). */
-const NAV_DAILY=['dashboard','mychecklists','hub:inbox']; // keep the daily strip tiny — everything else lives in named sections
+const NAV_DAILY=['dashboard','mychecklists','okr','hub:inbox']; // keep the daily strip tiny — everything else lives in named sections
 const NAV_SECTION_OF={
   attendance:'Time',leave:'Time',overtime:'Time',shifts:'Time',
   'hub:cl':'Work',questions:'Work',tickets:'Work',announcements:'Work',letters:'Work',surveys:'Work',
