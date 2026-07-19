@@ -14,7 +14,6 @@ function teamViewPage(){
     if(!team.length)return`<div class="fade">${hdr('Team','Live checklist status of your team')}${empty('users','No team members yet','Nobody reports to you. Ask an admin to set you as someone\'s manager in Users, or check Access Control → Team view.')}</div>`;
     return`<div class="fade">
       ${hdr('Team','Your people and every checklist — one place')}
-      ${can('allChecklists','view')?`<div style="display:flex;gap:6px;margin-bottom:14px"><button class="ui-tab-pill on">Team status</button><button class="ui-tab-pill" onclick="App.go('allcl')">All checklists</button></div>`:''}
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
         ${team.map(u=>{
           const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;

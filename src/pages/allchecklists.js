@@ -177,7 +177,6 @@ function allClsPage(){
   }
 
   return`<div class="fade">
-    ${can('teamview','view')?`<div style="display:flex;gap:6px;margin-bottom:14px"><button class="ui-tab-pill" onclick="App.go('teamview')">Team status</button><button class="ui-tab-pill on">All checklists</button></div>`:''}
     ${hdr('All Checklists',"Everyone's checklists and responses")}
     <!-- Filters row -->
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
