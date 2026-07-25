@@ -241,9 +241,15 @@ function hrmConfigPage(){
     const zeroNote=(types.some(t=>t.enabled&&(t.entitlement||0)===0&&(t.accrualPerMonth||0)===0&&!_isCompOffLt(t)))
       ?`<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;padding:11px 14px;margin-bottom:8px;font-size:12px;color:#92400E">Note: types seeded with <strong>0 entitlement</strong> are placeholders — set each type's entitlement &amp; accrual here to match your company policy. They are not a bug.</div>`
       :'';
-    body=`<div class="space-y-2">${zeroNote}${types.map(lt=>`<div style="background:#fff;border-radius:14px;border:1px solid #ECEDF0;padding:14px">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div><div style="font-size:14px;font-weight:700">${esc(lt.name)}${lt.enabled?'':' <span style="font-size:10px;color:#9CA3AF">(disabled)</span>'}</div><div style="font-size:11px;color:#9CA3AF">Entitlement ${lt.entitlement}${lt.accrualPerMonth?(' · '+lt.accrualPerMonth+'/mo'):''} · ${lt.unit} days${lt.carryOver?.enabled?(' · carry '+lt.carryOver.maxDays):''}</div></div>${btn('Edit',`App.editLeaveType('${lt.id}')`,{variant:'ghost',size:'sm'})}</div>
-    </div>`).join('')}</div>`;
+    // R26: the tab was edit-only — no way to add a type or remove one you never use. Both added;
+    //   delete is guarded by _refLinks('leaveType') so history can never be orphaned.
+    const canEditT=can('hrSettings','edit');
+    body=`<div class="space-y-2">${zeroNote}
+      ${canEditT?`<div style="display:flex;justify-content:flex-end;margin-bottom:4px">${btn('+ Add leave type',`App.addLeaveType('${profId}')`,{variant:'primary',size:'sm'})}</div>`:''}
+      ${types.length?types.map(lt=>`<div style="background:#fff;border-radius:14px;border:1px solid #ECEDF0;padding:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><div style="min-width:0"><div style="font-size:14px;font-weight:700">${esc(lt.name)}${lt.enabled?'':' <span style="font-size:10px;color:#9CA3AF">(disabled)</span>'}</div><div style="font-size:11px;color:#9CA3AF">Entitlement ${lt.entitlement}${lt.accrualPerMonth?(' · '+lt.accrualPerMonth+'/mo'):''} · ${lt.unit} days${lt.carryOver?.enabled?(' · carry '+lt.carryOver.maxDays):''}</div></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${btn('Edit',`App.editLeaveType('${lt.id}')`,{variant:'ghost',size:'sm'})}${canEditT?`<button onclick="App.delLeaveType('${lt.id}')" title="Delete this leave type" aria-label="Delete ${esc(lt.name)}" class="lt-del">${ic('trash','w-4 h-4')}</button>`:''}</div></div>
+    </div>`).join(''):empty('clock','No leave types yet','Add the first one to start tracking leave.')}</div>`;
   }else if(tab==='holidays'){
     const hols=(DB.holidays||[]).filter(h=>h.profileId===profId).sort((a,b)=>a.date.localeCompare(b.date));
     body=`<div style="background:#fff;border-radius:14px;border:1px solid #ECEDF0;padding:14px;margin-bottom:12px">
@@ -465,9 +471,9 @@ function _afRows(){
       <span style="font-size:11px;font-weight:700;color:#9CA3AF;min-width:18px">${i+1}.</span>
       ${typeSel}${userSel}
       <div style="margin-left:auto;display:flex;gap:4px">
-        <button type="button" title="Move up" onclick="App._afMove(${i},-1)" ${i===0?'disabled':''} style="width:28px;height:28px;border-radius:8px;border:1px solid #ECEDF0;background:#fff;cursor:pointer;${i===0?'opacity:.4;cursor:default':''}">▲</button>
-        <button type="button" title="Move down" onclick="App._afMove(${i},1)" ${i===(_AF.length-1)?'disabled':''} style="width:28px;height:28px;border-radius:8px;border:1px solid #ECEDF0;background:#fff;cursor:pointer;${i===(_AF.length-1)?'opacity:.4;cursor:default':''}">▼</button>
-        <button type="button" title="Remove" onclick="App._afDel(${i})" ${_AF.length<=1?'disabled':''} style="width:28px;height:28px;border-radius:8px;border:1px solid #FECACA;background:#fff;color:#B91C1C;cursor:pointer;display:grid;place-items:center;${_AF.length<=1?'opacity:.4;cursor:default':''}">${ic('x','w-3.5 h-3.5')}</button>
+        <button type="button" title="Move up" onclick="App._afMove(${i},-1)" ${i===0?'disabled':''} class="af-ico" style="width:28px;height:28px;border-radius:8px;border:1px solid #ECEDF0;background:#fff;cursor:pointer;${i===0?'opacity:.4;cursor:default':''}">▲</button>
+        <button type="button" title="Move down" onclick="App._afMove(${i},1)" ${i===(_AF.length-1)?'disabled':''} class="af-ico" style="width:28px;height:28px;border-radius:8px;border:1px solid #ECEDF0;background:#fff;cursor:pointer;${i===(_AF.length-1)?'opacity:.4;cursor:default':''}">▼</button>
+        <button type="button" title="Remove" onclick="App._afDel(${i})" ${_AF.length<=1?'disabled':''} class="af-ico" style="width:28px;height:28px;border-radius:8px;border:1px solid #FECACA;background:#fff;color:#B91C1C;cursor:pointer;display:grid;place-items:center;${_AF.length<=1?'opacity:.4;cursor:default':''}">${ic('x','w-3.5 h-3.5')}</button>
       </div>
     </div>`;
   }).join('');
@@ -484,6 +490,47 @@ App.addHoliday=(profId)=>{
   hlog('Holiday added',name+' ('+date+')');saveDB();toast('Holiday added');rr();
 };
 App.delHoliday=(id)=>{DB.holidays=(DB.holidays||[]).filter(h=>h.id!==id);hlog('Holiday removed',id);saveDB();rr();};
+/* ── R26: create a leave type ──────────────────────────────────────────────────────────────────
+   Seeded with safe neutral defaults; everything else is set in the same editor the built-ins use.
+   `key` stays empty on purpose — the statutory keys ('sick', 'maternity', 'compoff'…) drive special
+   engine behaviour (Art 31/30 pay tiers, the comp-off ledger), so a hand-made type never claims one. */
+App.addLeaveType=(profId)=>{
+  if(!can('hrSettings','edit'))return toast('You need HR settings → Edit','err');
+  const lt={id:uid('lt'),profileId:profId||DB.hrmConfig.activeProfile||'UAE',key:'',name:'New leave type',
+    enabled:true,unit:'calendar',entitlement:0,accrualPerMonth:0,eligibilityMonths:0,paidTiers:null,
+    unpaid:false,halfDayAllowed:true,carryOver:{enabled:false,maxDays:0,expiryMonths:0},
+    oncePerEmployment:false,birthdayMonthOnly:false,maxPerYear:null,nursingBreaks:false,notes:''};
+  if(!Array.isArray(DB.leaveTypes))DB.leaveTypes=[];
+  DB.leaveTypes.push(lt);
+  hlog('Leave type added',lt.name);saveDB();toast('Leave type added — set it up below');
+  App.editLeaveType(lt.id);   // straight into the editor so it is never left as "New leave type"
+};
+/* ── R26: guarded delete. Blocked while any request or balance still points at the type, naming
+   what holds it (same pattern as departments/locations). Tombstoned so the server copy can't
+   resurrect it on the next boot merge. ── */
+App.delLeaveType=(id)=>{
+  if(!can('hrSettings','edit'))return toast('You need HR settings → Edit','err');
+  const lt=ltById(id);if(!lt)return;
+  if(!guardDelete('leaveType',id,'leave type "'+lt.name+'"'))return;
+  confirmModal({
+    title:'Delete '+lt.name+'?',
+    body:'Nothing uses this leave type, so removing it is safe. If you only want to stop people picking it while keeping it on record, disable it in the editor instead.',
+    confirmLabel:'Delete',danger:true,onConfirm:"App._ltDelGo('"+id+"')"});
+};
+/* the actual removal — separate because confirmModal splices onConfirm into an onclick as a string */
+App._ltDelGo=(id)=>{
+  if(!can('hrSettings','edit'))return toast('You need HR settings → Edit','err');
+  const lt=ltById(id);if(!lt)return;
+  if(!guardDelete('leaveType',id,'leave type "'+lt.name+'"'))return;   // re-check: data may have changed
+  DB.leaveTypes=(DB.leaveTypes||[]).filter(t=>t.id!==id);
+  if(!Array.isArray(DB.leaveTypes_deleted))DB.leaveTypes_deleted=[];
+  if(!DB.leaveTypes_deleted.includes(id))DB.leaveTypes_deleted.push(id);
+  if(DB.leaveTypes_deleted.length>800)DB.leaveTypes_deleted=DB.leaveTypes_deleted.slice(-800);
+  if(typeof _delRow==='function')_delRow('leave_types',id,'leave type');
+  hlog('Leave type deleted',lt.name);
+  log(fullName(me()),'Leave type deleted',lt.name);
+  saveDB();toast('Leave type deleted','warn');rr();
+};
 App.editLeaveType=(id)=>{
   const lt=ltById(id);if(!lt)return;
   const tiers=lt.paidTiers||{};
@@ -521,34 +568,76 @@ App.saveLeaveType=(id)=>{
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
 window._alertsCfgHTML=_alertsCfgHTML;window._flowTplCfgHTML=_flowTplCfgHTML;window._surveyCfgHTML=_surveyCfgHTML;window._letterTplCfgHTML=_letterTplCfgHTML;window.hrmConfigPage=hrmConfigPage;window._balScopeUsers=_balScopeUsers;window._balFilterBar=_balFilterBar;window._bulkBalanceEditor=_bulkBalanceEditor;window._bulkBalMarkDirty=_bulkBalMarkDirty;window._bulkBalFlush=_bulkBalFlush;window._bulkBalTargetedSave=_bulkBalTargetedSave;window._compOffManager=_compOffManager;window._approvalFlowEditor=_approvalFlowEditor;window._afRows=_afRows;window._afRefresh=_afRefresh;
 
-/* ════════ COMPLIANCE (Phase 4) — per-country rules the accountant sets once + filing exports.
-   DISPLAY-ONLY: payslips show the accrual, exports are filing-ready, net pay never changes. ════════ */
+/* ════════ COMPLIANCE — UAE ONLY, fully dynamic (R26; was Phase 4 multi-country) ════════
+   DISPLAY-ONLY: payslips show the accrual, exports are filing-ready, net pay never changes.
+   The old tab hard-coded three country cards (AE / SA / a blank template), a per-office country
+   mapping, and exactly TWO gratuity tiers in fixed inputs. Evarca runs in the UAE, so there is now
+   one UAE card and every rule is data: the tier list grows and shrinks, and the divisor and basis
+   are fields. Tier edits live in a draft (_CMPT) so add/remove re-renders just the list. */
+let _CMPT=null;
+function _cmpTiers(){const c=_compCfg();if(!_CMPT)_CMPT=(c.countries[COMP_KEY].gratuity.tiers||[]).map(t=>({uptoYears:t.uptoYears,daysPerYear:t.daysPerYear}));return _CMPT;}
+function _cmpTierRows(){
+  const canEdit=can('hrSettings','edit');const T=_cmpTiers();
+  return T.map((t,i)=>{
+    const open=t.uptoYears==null;
+    const from=i===0?0:(T[i-1].uptoYears??0);
+    return `<div class="cmp-tier">
+      <div class="cmp-tier-n">${i+1}</div>
+      <div class="cmp-tier-f">
+        <label>Days of pay per year</label>
+        <input type="number" min="0" step="0.5" value="${esc(String(t.daysPerYear??0))}" ${canEdit?'':'disabled'} oninput="App._cmpTierSet(${i},'daysPerYear',this.value)"/>
+      </div>
+      <div class="cmp-tier-f">
+        <label>Applies up to (years of service)</label>
+        <input type="number" min="0" step="0.5" placeholder="no limit" value="${open?'':esc(String(t.uptoYears))}" ${canEdit?'':'disabled'} oninput="App._cmpTierSet(${i},'uptoYears',this.value)"/>
+      </div>
+      <div class="cmp-tier-hint">${open?`from year ${_r2(from)} onwards`:`years ${_r2(from)} → ${_r2(t.uptoYears)}`}</div>
+      ${canEdit?`<button type="button" class="cmp-tier-x" title="Remove this tier" aria-label="Remove tier ${i+1}" ${T.length<=1?'disabled':''} onclick="App._cmpTierDel(${i})">${ic('trash','w-3.5 h-3.5')}</button>`:''}
+    </div>`;
+  }).join('');
+}
+function _cmpTiersRefresh(){const el=$('#cmp-tiers');if(el)el.innerHTML=_cmpTierRows();}
+App._cmpTierSet=(i,k,v)=>{const T=_cmpTiers();if(!T[i])return;
+  T[i][k]=(k==='uptoYears')?(String(v).trim()===''?null:Number(v)):Number(v);
+  const hint=document.querySelectorAll('#cmp-tiers .cmp-tier-hint')[i];
+  if(hint&&k==='uptoYears'){const from=i===0?0:(T[i-1].uptoYears??0);hint.textContent=(T[i].uptoYears==null)?('from year '+_r2(from)+' onwards'):('years '+_r2(from)+' → '+_r2(T[i].uptoYears));}
+};
+App._cmpTierAdd=()=>{const T=_cmpTiers();
+  // insert BEFORE the open-ended tail so the new row is a bounded period
+  const last=T[T.length-1];
+  const prevCap=T.length>1?(T[T.length-2].uptoYears??0):0;
+  if(last&&last.uptoYears==null)T.splice(T.length-1,0,{uptoYears:(Number(prevCap)||0)+5,daysPerYear:last.daysPerYear||0});
+  else T.push({uptoYears:null,daysPerYear:0});
+  _cmpTiersRefresh();};
+App._cmpTierDel=(i)=>{const T=_cmpTiers();if(T.length<=1)return;T.splice(i,1);_cmpTiersRefresh();};
+
 function _complianceCfgHTML(){
-  const canEdit=can('hrSettings','edit');const c=_compCfg();
-  const cCard=(k)=>{const cc=c.countries[k];const g=cc.gratuity||{tiers:[]};const t1=(g.tiers||[])[0]||{},t2=(g.tiers||[])[1]||{};
-    return `<div style="background:#fff;border:1px solid var(--c-border);border-radius:16px;padding:16px;margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><b class="fd">${esc(cc.label||k)}</b><span style="font-size:11px;color:var(--c-text-3)">${esc(k)}</span></div>
-      <div class="grid grid-cols-3 gap-3">
-        ${fld('Currency','cmp-'+k+'-cur',cc.currency||'','text')}
-        ${fld('WPS employer ID','cmp-'+k+'-emp',(cc.wps||{}).employerId||'','text')}
-        ${fld('Bank / routing code','cmp-'+k+'-bank',(cc.wps||{}).bankCode||'','text')}
-      </div>
-      <div style="margin:10px 0 4px;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase">End-of-service (gratuity) accrual</div>
-      <div class="grid grid-cols-3 gap-3">
-        ${fld('Days per year — first period','cmp-'+k+'-d1',(t1.daysPerYear??0),'number')}
-        ${fld('First period lasts (years)','cmp-'+k+'-y1',(t1.uptoYears??5),'number')}
-        ${fld('Days per year — after that','cmp-'+k+'-d2',(t2.daysPerYear??t1.daysPerYear??0),'number')}
-      </div>
-      <p style="font-size:11px;color:#9CA3AF;margin-top:6px">${esc(cc.notes||'')} Daily rate = basic ÷ ${g.dailyDivisor||30}. Shown on payslips & the liability export — never deducted from pay.</p>
-    </div>`;};
-  const locRows=(DB.locations||[]).map(l=>`<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span style="flex:1;font-size:13px;font-weight:600">${esc(l.name)}</span>
-    <select class="ui-select rf" style="width:220px" id="cmp-loc-${l.id}" ${canEdit?'':'disabled'}>${Object.keys(c.countries).map(k=>`<option value="${k}" ${(c.locationCountry[l.id]||'AE')===k?'selected':''}>${esc(c.countries[k].label||k)}</option>`).join('')}</select></div>`).join('');
+  const canEdit=can('hrSettings','edit');const c=_compCfg();const cc=c.countries[COMP_KEY];
+  _CMPT=null; // re-read the tiers from config every time the tab renders
+  const g=cc.gratuity||{};
   return `<div class="space-y-4">
     <div style="background:var(--c-surface-2);border-radius:12px;padding:10px 14px;font-size:12px;color:var(--c-text-2)">Your accountant sets these once. Everything here is <b>informational</b> — payslips show the accrual, exports are filing-ready, and net pay is never changed.</div>
-    ${Object.keys(c.countries).map(cCard).join('')}
     <div style="background:#fff;border:1px solid var(--c-border);border-radius:16px;padding:16px">
-      <b class="fd" style="font-size:13.5px">Which country applies to each office</b>
-      <p style="font-size:11.5px;color:#9CA3AF;margin:4px 0 10px">People follow their assigned office's country. Offices with no mapping use UAE rules.</p>${locRows||'<span style="font-size:12px;color:var(--c-text-3)">No locations yet.</span>'}
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <b class="fd" style="font-size:13.5px">${esc(cc.label||'United Arab Emirates')}</b>
+        <span style="font-size:11px;font-weight:700;color:var(--c-text-3);background:var(--c-surface-2);border-radius:20px;padding:3px 10px">All offices follow these rules</span>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        ${fld('Currency','cmp-cur',cc.currency||'AED','text')}
+        ${fld('WPS employer ID','cmp-emp',(cc.wps||{}).employerId||'','text')}
+        ${fld('Bank / routing code','cmp-bank',(cc.wps||{}).bankCode||'','text')}
+      </div>
+    </div>
+    <div style="background:#fff;border:1px solid var(--c-border);border-radius:16px;padding:16px">
+      <b class="fd" style="font-size:13.5px">End-of-service (gratuity) accrual</b>
+      <p style="font-size:11.5px;color:#9CA3AF;margin:4px 0 12px">UAE default (Federal Decree-Law 33/2021, Art 51): <b>21 days</b> of basic pay per year for the first 5 years, <b>30 days</b>/year after. Add or remove tiers to match your own contracts — the last tier has no limit and covers every year beyond it.</p>
+      <div class="grid grid-cols-2 gap-3" style="margin-bottom:12px">
+        ${selF('Calculated on','cmp-basis',[['basic','Basic salary (UAE law)'],['gross','Gross salary (basic + allowances)']],g.basis||'basic')}
+        ${fld('Daily rate = salary ÷','cmp-div',g.dailyDivisor||30,'number')}
+      </div>
+      <div id="cmp-tiers">${_cmpTierRows()}</div>
+      ${canEdit?`<button type="button" onclick="App._cmpTierAdd()" class="ui-btn ui-btn-ghost ui-btn-sm" style="margin-top:10px">+ Add tier</button>`:''}
+      <p style="font-size:11px;color:#9CA3AF;margin-top:10px">Shown on payslips and in the liability export — never deducted from pay.</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       ${canEdit?'<button onclick="App._compSave()" class="ui-btn ui-btn-primary">Save compliance settings</button>':''}
@@ -558,16 +647,20 @@ function _complianceCfgHTML(){
 }
 App._compSave=()=>{
   if(!can('hrSettings','edit'))return toast('You need HR settings → Edit','err');
-  const c=_compCfg();
-  Object.keys(c.countries).forEach(k=>{const cc=c.countries[k];
-    const v=id=>{const el=document.getElementById(id);return el?el.value:null;};
-    if(v('cmp-'+k+'-cur')!=null)cc.currency=String(v('cmp-'+k+'-cur')).trim();
-    cc.wps=cc.wps||{};if(v('cmp-'+k+'-emp')!=null)cc.wps.employerId=String(v('cmp-'+k+'-emp')).trim();if(v('cmp-'+k+'-bank')!=null)cc.wps.bankCode=String(v('cmp-'+k+'-bank')).trim();
-    const d1=Number(v('cmp-'+k+'-d1')),y1=Number(v('cmp-'+k+'-y1')),d2=Number(v('cmp-'+k+'-d2'));
-    if(isFinite(d1)&&isFinite(y1)&&isFinite(d2))cc.gratuity={basis:'basic',dailyDivisor:(cc.gratuity||{}).dailyDivisor||30,tiers:[{uptoYears:(y1||5),daysPerYear:(d1||0)},{uptoYears:null,daysPerYear:(d2||0)}]};
-  });
-  (DB.locations||[]).forEach(l=>{const el=document.getElementById('cmp-loc-'+l.id);if(el)c.locationCountry[l.id]=el.value;});
-  log(fullName(me()),'Compliance settings saved','');
+  const c=_compCfg();const cc=c.countries[COMP_KEY];
+  const v=id=>{const el=document.getElementById(id);return el?el.value:null;};
+  if(v('cmp-cur')!=null)cc.currency=String(v('cmp-cur')).trim()||'AED';
+  cc.wps=cc.wps||{};
+  if(v('cmp-emp')!=null)cc.wps.employerId=String(v('cmp-emp')).trim();
+  if(v('cmp-bank')!=null)cc.wps.bankCode=String(v('cmp-bank')).trim();
+  const div=Number(v('cmp-div'));
+  cc.gratuity={
+    basis:v('cmp-basis')==='gross'?'gross':'basic',
+    dailyDivisor:(isFinite(div)&&div>0)?div:30,
+    tiers:_compNormalizeTiers(_cmpTiers()),
+  };
+  _CMPT=null;
+  log(fullName(me()),'Compliance settings saved','UAE');
   saveDB();toast('Compliance settings saved');rr();
 };
 /* Guarded letter-template delete (replaces the old inline confirm) — blocked while any
@@ -582,4 +675,4 @@ App._delLetterTpl=(key)=>{
   log(fullName(me()),'Letter template deleted',tpl.name);
   toast('Template deleted','warn');rr();
 };
-window._complianceCfgHTML=_complianceCfgHTML;
+window._complianceCfgHTML=_complianceCfgHTML;window._cmpTiers=_cmpTiers;window._cmpTierRows=_cmpTierRows;window._cmpTiersRefresh=_cmpTiersRefresh;

@@ -63,7 +63,7 @@ function _lcCard(fl,canMng){
       ${u?avatar(u,'w-10 h-10','text-xs'):''}
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span class="fd" style="font-size:14.5px;font-weight:800;color:var(--c-text)">${u?esc(fullName(u)):'—'}</span>
+          <span class="fd" style="font-size:14.5px;font-weight:800;color:var(--c-text);min-width:0;overflow-wrap:break-word">${u?esc(fullName(u)):'—'}</span>
           <span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:20px;background:${k.bg};color:${k.fg}">${esc(k.label)}</span>
           ${overdue?`<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:20px;background:var(--c-danger-soft);color:var(--c-danger-ink)">${overdue} overdue</span>`:''}
           ${completed?`<span style="font-size:10px;font-weight:800;padding:2px 9px;border-radius:20px;background:#ECFDF5;color:#0B7A55">COMPLETED</span>`:''}
@@ -73,7 +73,7 @@ function _lcCard(fl,canMng){
       <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
         <div style="text-align:right">
           <div style="font-size:11px;font-weight:800;color:${pct===100?'#0B7A55':'var(--c-text-2)'}">${done}/${total} steps</div>
-          <div style="width:110px;height:7px;background:var(--c-border);border-radius:4px;overflow:hidden;margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct===100?'#22C55E':'#0EA5E9'};border-radius:4px;transition:width .25s"></div></div>
+          <div class="lc-prog" style="width:110px;height:7px;background:var(--c-border);border-radius:4px;overflow:hidden;margin-top:4px"><div style="height:100%;width:${pct}%;background:${pct===100?'#22C55E':'#0EA5E9'};border-radius:4px;transition:width .25s"></div></div>
         </div>
         ${canMng?`<button onclick="event.stopPropagation();App._flowDel('${fl.id}')" title="Delete flow" aria-label="Delete flow" style="width:30px;height:30px;display:grid;place-items:center;border:none;border-radius:8px;background:transparent;color:var(--c-text-3);cursor:pointer" onmouseover="this.style.background='var(--c-danger-soft)';this.style.color='var(--c-danger)'" onmouseout="this.style.background='transparent';this.style.color='var(--c-text-3)'">${ic('trash','w-4 h-4')}</button>`:''}
         <span style="color:var(--c-text-3);display:grid;place-items:center;transform:${open?'rotate(180deg)':'none'};transition:transform .18s">${ic('chevD','w-4 h-4')}</span>

@@ -333,10 +333,10 @@ function _howBar(key){
       <div style="font-size:12.5px;color:#1E40AF;line-height:1.55">${h.t}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">
         <span style="font-size:10px;font-weight:800;color:#1E40AF;text-transform:uppercase;letter-spacing:.05em">Linked:</span>
-        ${h.l.filter(x=>navFor().some(n=>n[0]===x[0])).map(x=>`<button onclick="App.go('${x[0]}')" style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;border:1px solid #BFDBFE;background:var(--c-surface);color:#1E40AF;cursor:pointer">${x[1]} →</button>`).join('')}
+        ${h.l.filter(x=>navFor().some(n=>n[0]===x[0])).map(x=>`<button onclick="App.go('${x[0]}')" class="how-chip" style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;border:1px solid #BFDBFE;background:var(--c-surface);color:#1E40AF;cursor:pointer">${x[1]} →</button>`).join('')}
       </div>
     </div>
-    <button onclick="try{localStorage.setItem('bridge_how_${key}','1')}catch(e){};rr()" title="Got it — hide" style="border:none;background:transparent;color:#1E40AF;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0">×</button>
+    <button onclick="try{localStorage.setItem('bridge_how_${key}','1')}catch(e){};rr()" title="Got it — hide" aria-label="Hide this tip" class="how-x" style="border:none;background:transparent;color:#1E40AF;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0">×</button>
   </div>`;
 }
 
@@ -391,6 +391,16 @@ function _refLinks(type,id){
     add('Letter requests using it',(DB.letters||[]).filter(l=>l.type===id&&l.status==='Requested').map(l=>{const lu=uById(l.userId);return(l.title||l.type)+(lu?' · '+fullName(lu):'');}),'Decide those requests first');
   }else if(type==='role'){
     add('People assigned this role',DB.users.filter(x=>x.hrm&&x.hrm.roleProfileId===id).map(x=>fullName(x)),'Give them another role in Access Control → People');
+  }else if(type==='leaveType'){
+    // R26 — leave types became deletable, so history must be protected: any request (at any status,
+    // including years-old decided ones) or any balance row keeps the type alive, otherwise those
+    // records would point at a type that no longer exists and render as "undefined".
+    const nameOf=r=>{const ru=uById(r.userId);return(ru?fullName(ru):'Someone')+' · '+fmtS(r.start)+(r.end&&r.end!==r.start?(' → '+fmtS(r.end)):'')+' ('+(r.status||'Pending')+')';};
+    add('Leave requests using it',(DB.leaveRequests||[]).filter(r=>r.leaveTypeId===id).map(nameOf),'Delete those requests first (Approvals → decided rows can be removed)');
+    add('Balances carrying it',(DB.leaveBalances||[]).filter(b=>b.leaveTypeId===id&&((b.entitled||0)!==0||(b.accrued||0)!==0||(b.taken||0)!==0||(b.adjustments||0)!==0))
+      .map(b=>{const bu=uById(b.userId);return(bu?fullName(bu):'Someone')+' · '+(b.leaveYear||'')+' · '+_r2((b.entitled||0)+(b.accrued||0))+'d';}),'Zero the balance in HR Config → Bulk Balances, or disable the type instead');
+    const lt=ltById(id);
+    if(lt&&lt.key)add('Statutory type used by the payroll engine',['"'+lt.name+'" carries the reserved key "'+lt.key+'"'],'Sick/maternity pay tiers and the comp-off ledger key off this — disable it rather than deleting');
   }
   return L;
 }

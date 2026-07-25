@@ -112,7 +112,9 @@ function _attCalendar(userId,ym){
   const monName=first.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
   const prevYm=_ymShift(ym,-1),nextYm=_ymShift(ym,1);
   const legend=Object.keys(ATT_COLOR).map(k=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#6B7280"><span style="width:10px;height:10px;border-radius:3px;background:${ATT_COLOR[k]}"></span>${ATT_LABEL[k]}</span>`).join('');
-  return `<div style="background:#fff;border-radius:20px;border:1px solid #ECEDF0;padding:18px">
+  // R26: the calendar is now a full-width row (the log moved below it), so cap it at a natural width
+  // instead of letting 7 day-cells stretch across a 1152px page.
+  return `<div style="background:#fff;border-radius:20px;border:1px solid #ECEDF0;padding:18px;max-width:520px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
       <button onclick="S.filters.attYm='${prevYm}';rr()" style="width:32px;height:32px;border-radius:9px;border:1px solid #ECEDF0;background:#fff;cursor:pointer;display:grid;place-items:center"><span style="transform:rotate(180deg)">${ic('chevR','w-4 h-4')}</span></button>
       <div class="fd" style="font-weight:800;font-size:15px">${monName}</div>
@@ -161,6 +163,49 @@ App._attDay=(userId,date)=>{
     +'</div>','max-w-sm');
 };
 
+/* ════════ ATTENDANCE LOG RANGE (R26) ════════
+   The log used to show "the newest 60 records, always" with no way to ask for a period. It now runs
+   on an explicit From/To range with presets. Pure helpers (no DOM) so they are unit-testable. */
+const ATT_PRESETS=[['month','This month'],['d30','Last 30 days'],['m3','Last 3 months'],['year','This year']];
+/* Resolve a preset key to {from,to} ISO dates, relative to `today` (injectable for tests). */
+function _attPresetRange(key,today){
+  const t=today||todayISO();
+  const d=new Date(t+'T00:00:00');
+  const iso=x=>x.toISOString().slice(0,10);
+  if(key==='d30'){const f=new Date(d);f.setDate(f.getDate()-29);return{from:iso(f),to:t};}
+  if(key==='m3'){const f=new Date(d);f.setMonth(f.getMonth()-3);f.setDate(f.getDate()+1);return{from:iso(f),to:t};}
+  if(key==='year')return{from:t.slice(0,4)+'-01-01',to:t};
+  // default 'month' — the 1st of the current month → today
+  return{from:t.slice(0,7)+'-01',to:t};
+}
+/* The range currently in force: an explicit From/To beats a preset; both fall back to this month. */
+function _attRange(){
+  const f=S.filters;
+  if(f.attFrom||f.attTo){
+    const base=_attPresetRange('month');
+    const from=f.attFrom||base.from,to=f.attTo||base.to;
+    // a backwards range would silently show nothing — swap instead
+    return from>to?{from:to,to:from,custom:true}:{from,to,custom:true};
+  }
+  const r=_attPresetRange(f.attPreset||'month');
+  return{from:r.from,to:r.to,custom:false};
+}
+/* Rows for one user inside a range, sorted. Pure — the page and the tests both call this. */
+function _attRowsIn(userId,range,sortKey){
+  const rows=(DB.attendance||[]).filter(a=>a.userId===userId&&a.date>=range.from&&a.date<=range.to);
+  return rows.sort((a,b)=>sortKey==='hours'?((b.hours||0)-(a.hours||0)):b.date.localeCompare(a.date));
+}
+App._attSetPreset=(k)=>{S.filters.attPreset=k;S.filters.attFrom='';S.filters.attTo='';_attEnsureLoaded();rr();};
+App._attSetFrom=(v)=>{S.filters.attFrom=v;_attEnsureLoaded();rr();};
+App._attSetTo=(v)=>{S.filters.attTo=v;_attEnsureLoaded();rr();};
+/* Attendance boots on a 7-day window and cold-loads 90 days (R7 egress budget). A range that reaches
+   further back would render an empty log that looks broken — pull the older rows on demand instead. */
+function _attEnsureLoaded(){
+  const r=_attRange();
+  if(typeof _lazyAttFrom==='function')_lazyAttFrom(r.from);
+  else if(typeof _lazyCold==='function')_lazyCold('att90');
+}
+
 /* ════════ ATTENDANCE PAGE ════════ */
 function attendancePage(){
   _runAutoClose();
@@ -175,30 +220,46 @@ function attendancePage(){
   }
   const selUser=S.filters.attUser&&viewUsers.find(u=>u.id===S.filters.attUser)?S.filters.attUser:S.uid;
   const canSwitch=viewUsers.length>1;
-  // logs (attendance + leave history) for selected user
-  const att=(DB.attendance||[]).filter(a=>a.userId===selUser).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60);
+  // logs (attendance + leave history) for selected user — R26: an explicit From/To range, not "newest 60"
   const sortKey=S.filters.attSort||'date';
-  const rows=att.slice().sort((a,b)=>sortKey==='hours'?((b.hours||0)-(a.hours||0)):b.date.localeCompare(a.date));
+  const range=_attRange();
+  const rows=_attRowsIn(selUser,range,sortKey);
+  const activePreset=range.custom?'':(S.filters.attPreset||'month');
+  const presetBar=ATT_PRESETS.map(([k,label])=>`<button onclick="App._attSetPreset('${k}')" class="att-preset${activePreset===k?' on':''}">${label}</button>`).join('');
   const logTable=`<div style="background:#fff;border-radius:20px;border:1px solid #ECEDF0;overflow:hidden">
-    <div style="padding:14px 18px;border-bottom:1px solid #F3F4F6;display:flex;align-items:center;justify-content:space-between"><h3 class="fd" style="font-weight:700;font-size:14px">Attendance log</h3>
-      <select onchange="S.filters.attSort=this.value;rr()" class="bg-white border border-ink-200 rounded-lg px-2 py-1 text-xs rf"><option value="date"${sortKey==='date'?' selected':''}>Newest first</option><option value="hours"${sortKey==='hours'?' selected':''}>Most hours</option></select>
+    <div style="padding:14px 18px;border-bottom:1px solid #F3F4F6">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <h3 class="fd" style="font-weight:700;font-size:14px">Attendance log <span style="font-weight:600;color:#9CA3AF;font-size:12px">· ${rows.length} ${rows.length===1?'day':'days'}</span></h3>
+        <select onchange="S.filters.attSort=this.value;rr()" class="bg-white border border-ink-200 rounded-lg px-2 py-1 text-xs rf"><option value="date"${sortKey==='date'?' selected':''}>Newest first</option><option value="hours"${sortKey==='hours'?' selected':''}>Most hours</option></select>
+      </div>
+      <div class="att-filter">
+        <div class="att-presets hscroll">${presetBar}</div>
+        <div class="att-dates">
+          <input type="date" aria-label="From date" value="${esc(range.from)}" max="${esc(range.to)}" onchange="App._attSetFrom(this.value)" class="rf"/>
+          <span style="font-size:12px;color:#9CA3AF;flex-shrink:0">to</span>
+          <input type="date" aria-label="To date" value="${esc(range.to)}" min="${esc(range.from)}" onchange="App._attSetTo(this.value)" class="rf"/>
+          ${range.custom?`<button onclick="App._attSetPreset('month')" class="att-clear" title="Back to this month">Clear</button>`:''}
+        </div>
+      </div>
     </div>
-    <div class="hidden md:block" style="overflow-x:auto"><table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-4 py-2.5 font-semibold">Date</th><th class="px-4 py-2.5 font-semibold">In</th><th class="px-4 py-2.5 font-semibold">Out</th><th class="px-4 py-2.5 font-semibold">Hours</th><th class="px-4 py-2.5 font-semibold">Status</th><th class="px-4 py-2.5 font-semibold">Flags</th></tr></thead>
-    <tbody class="divide-y divide-ink-50">${rows.length?rows.map(r=>`<tr class="hover:bg-ink-50/50"><td class="px-4 py-2.5 font-medium">${fmtD(r.date)}</td><td class="px-4 py-2.5">${_m2hm(r.inMin)}</td><td class="px-4 py-2.5">${_m2hm(r.outMin)}</td><td class="px-4 py-2.5 font-semibold">${r.hours!=null?fmtH(r.hours):'—'}</td><td class="px-4 py-2.5"><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${ATT_COLOR[r.status]}22;color:${ATT_COLOR[r.status]}">${ATT_LABEL[r.status]||r.status}</span></td><td class="px-4 py-2.5 text-xs">${(r.flags||[]).map(f=>`<span style="display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:#FEF2F2;color:#B91C1C;margin-right:3px">${esc(FLAG_LABEL[f]||f)}</span>`).join('')||'—'}</td></tr>`).join(''):`<tr><td colspan="6">${empty('clock','No attendance records','')}</td></tr>`}</tbody></table></div>
-    <div class="md:hidden">${rows.length?rows.slice(0,40).map(r=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #F3F4F6">
+    <div class="hidden md:block" style="overflow-x:auto"><table class="w-full text-sm att-log"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-4 py-2.5 font-semibold">Date</th><th class="px-4 py-2.5 font-semibold">In</th><th class="px-4 py-2.5 font-semibold">Out</th><th class="px-4 py-2.5 font-semibold">Hours</th><th class="px-4 py-2.5 font-semibold">Status</th><th class="px-4 py-2.5 font-semibold">Flags</th></tr></thead>
+    <tbody class="divide-y divide-ink-50">${rows.length?rows.map(r=>`<tr class="hover:bg-ink-50/50"><td class="px-4 py-2.5 font-medium">${fmtD(r.date)}</td><td class="px-4 py-2.5">${_m2hm(r.inMin)}</td><td class="px-4 py-2.5">${_m2hm(r.outMin)}</td><td class="px-4 py-2.5 font-semibold">${r.hours!=null?fmtH(r.hours):'—'}</td><td class="px-4 py-2.5"><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${ATT_COLOR[r.status]}22;color:${ATT_COLOR[r.status]}">${ATT_LABEL[r.status]||r.status}</span></td><td class="px-4 py-2.5 text-xs">${(r.flags||[]).map(f=>`<span style="display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:#FEF2F2;color:#B91C1C;margin-right:3px">${esc(FLAG_LABEL[f]||f)}</span>`).join('')||'—'}</td></tr>`).join(''):`<tr><td colspan="6">${empty('clock','No attendance in this range','Pick a wider range or a different period.')}</td></tr>`}</tbody></table></div>
+    <div class="md:hidden">${rows.length?rows.map(r=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #F3F4F6">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:13px;font-weight:700">${fmtD(r.date)}</span><span style="font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px;background:${ATT_COLOR[r.status]}22;color:${ATT_COLOR[r.status]}">${ATT_LABEL[r.status]||r.status}</span></div>
         <div style="font-size:12px;color:#6B7280;margin-top:2px">${_m2hm(r.inMin)} → ${_m2hm(r.outMin)}${r.hours!=null?' · <b>'+fmtH(r.hours)+'</b>':''}</div>
         ${(r.flags||[]).length?`<div style="margin-top:4px">${(r.flags||[]).map(f=>`<span style="display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;background:#FEF2F2;color:#B91C1C;margin-right:3px">${esc(FLAG_LABEL[f]||f)}</span>`).join('')}</div>`:''}
       </div>
-    </div>`).join(''):`<div style="padding:8px 0">${empty('clock','No attendance records','')}</div>`}</div>
+    </div>`).join(''):`<div style="padding:8px 0">${empty('clock','No attendance in this range','Pick a wider range or a different period.')}</div>`}</div>
   </div>`;
   return `<div class="fade">${hdr('Attendance','Clock in / out and view your attendance calendar')}
     ${selUser===S.uid?_clockWidget():''}
     ${canSwitch?`<div style="margin-bottom:14px"><select onchange="S.filters.attUser=this.value;rr()" class="bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf" style="max-width:280px">${viewUsers.map(u=>`<option value="${u.id}"${u.id===selUser?' selected':''}>${esc(fullName(u))}${u.id===S.uid?' (me)':''}</option>`).join('')}</select></div>`:''}
-    <div class="grid md:grid-cols-2 gap-4 items-start">${_attCalendar(selUser,ym)}${logTable}</div>
+    <div style="margin-bottom:16px">${_attCalendar(selUser,ym)}</div>
+    ${logTable}
   </div>`;
 }
 
 /* — auto: expose on window (Phase 3 split; original was one classic <script>) — */
 window._clockWidget=_clockWidget;window._attCalendar=_attCalendar;window._ymShift=_ymShift;window.attendancePage=attendancePage;
+window.ATT_PRESETS=ATT_PRESETS;window._attPresetRange=_attPresetRange;window._attRange=_attRange;window._attRowsIn=_attRowsIn;window._attEnsureLoaded=_attEnsureLoaded;

@@ -315,9 +315,9 @@ function analyticsPage(){
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:220px">
-        <input type="date" value="${f.dr1||''}" onchange="S.filters.dr1=this.value;rr()" style="flex:1;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:8px;padding:7px 10px;font-size:13px;outline:none;color:var(--c-text)"/>
+        <input type="date" value="${f.dr1||''}" onchange="S.filters.dr1=this.value;rr()" style="flex:1;min-width:0;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:8px;padding:7px 10px;font-size:13px;outline:none;color:var(--c-text)"/>
         <span style="color:var(--c-text-3)">to</span>
-        <input type="date" value="${f.dr2||''}" onchange="S.filters.dr2=this.value;rr()" style="flex:1;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:8px;padding:7px 10px;font-size:13px;outline:none;color:var(--c-text)"/>
+        <input type="date" value="${f.dr2||''}" onchange="S.filters.dr2=this.value;rr()" style="flex:1;min-width:0;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:8px;padding:7px 10px;font-size:13px;outline:none;color:var(--c-text)"/>
       </div>
 
       ${activeCount?btn('Clear ('+activeCount+')','S.filters={};S.afOpen=null;rr()',{variant:'ghost',size:'sm'}):''}

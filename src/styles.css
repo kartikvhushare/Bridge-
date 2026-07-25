@@ -257,8 +257,13 @@ html,body{max-width:100%;overflow-x:hidden}
   #content canvas,#content img{max-width:100%}
   /* Modal footer buttons: comfortable tap targets. */
   #modal .ui-btn{min-height:44px}
-  /* Long unbroken strings (emails, serials, URLs) wrap instead of forcing horizontal scroll. */
-  #content td,#content th{word-break:normal;overflow-wrap:anywhere}
+  /* Long unbroken strings (emails, serials, URLs) wrap instead of forcing horizontal scroll.
+     R26: `overflow-wrap:anywhere` ALSO shrinks a cell's min-content width to one character, so a
+     table with an unshrinkable neighbour column (a 200px <select>, a button pair) crushed the name
+     column to ~12px and rendered every name one letter per line — Access Control was 21,662px tall.
+     `break-word` wraps the same long strings but leaves min-content intact. Never go back to
+     `anywhere` here without re-running work/mobile-audit. */
+  #content td,#content th{word-break:normal;overflow-wrap:break-word}
 }
 /* ════════ RESPONSIVE POLISH (Wave 3 — compact mobile pass) ════════
    Owner feedback: tables cramped, cards/buttons misaligned, text wrapping, sub-tabs on 2 lines.
@@ -288,6 +293,79 @@ html,body{max-width:100%;overflow-x:hidden}
   /* OKR compact rows: drop the meta line + inline bar on phones — title, %, values, status stay */
   .okr-meta{display:none}
   .okr-bar{display:none}
+}
+/* ════════ TABLET BAND 768–1023px (R26) ════════
+   The sidebar switches on at 768px and eats 224px, so "desktop" layouts get ~490px there — narrower
+   than the phone-to-desktop jump suggests. These rules keep fixed-size content inside that band. */
+/* Charts were only capped on phones; a 300px canvas in a 219px card overflowed on tablets too. */
+#content canvas{max-width:100%}
+@media(min-width:768px) and (max-width:1023px){
+  /* any 2-up card grid inside a page collapses — there is not room for two cards beside each other */
+  #content .grid.md\:grid-cols-3{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* modal field rows: 3-across does not fit either */
+  #modal .grid.grid-cols-3{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+/* ════════ LEAVE TYPES — delete button (R26) ════════ */
+.lt-del{width:34px;height:34px;flex-shrink:0;display:grid;place-items:center;border:1px solid var(--c-border);border-radius:9px;background:var(--c-surface);color:var(--c-text-3);cursor:pointer;transition:background .12s,color .12s,border-color .12s}
+.lt-del:hover{background:var(--c-danger-soft,#FEF2F2);color:var(--c-danger,#DC2626);border-color:#FECACA}
+/* ════════ COMPLIANCE — editable gratuity tiers (R26) ════════ */
+.cmp-tier{display:flex;align-items:flex-end;gap:10px;padding:10px;border:1px solid var(--c-border);border-radius:12px;margin-bottom:8px;background:var(--c-surface)}
+.cmp-tier-n{width:24px;height:24px;flex-shrink:0;border-radius:50%;background:var(--c-surface-2);color:var(--c-text-2);font-size:11px;font-weight:800;display:grid;place-items:center;margin-bottom:6px}
+.cmp-tier-f{flex:1;min-width:0}
+.cmp-tier-f label{display:block;font-size:10px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.cmp-tier-f input{width:100%;min-width:0;background:var(--c-surface);border:1px solid var(--c-border);border-radius:9px;padding:8px 10px;font-size:13px;color:var(--c-text)}
+.cmp-tier-hint{font-size:11px;color:var(--c-text-3);white-space:nowrap;flex-shrink:0;margin-bottom:9px}
+.cmp-tier-x{width:32px;height:32px;flex-shrink:0;display:grid;place-items:center;border:1px solid #FECACA;border-radius:9px;background:var(--c-surface);color:#B91C1C;cursor:pointer;margin-bottom:2px}
+.cmp-tier-x[disabled]{opacity:.35;cursor:default}
+@media(max-width:767px){
+  /* four columns do not fit a phone — stack the fields, keep the number badge on the first line */
+  .cmp-tier{flex-wrap:wrap;align-items:stretch}
+  .cmp-tier-f{flex:1 1 100%}
+  .cmp-tier-hint{flex:1 1 auto;margin-bottom:0;align-self:center}
+  .cmp-tier-x{min-width:36px;min-height:36px;margin-bottom:0}
+}
+/* ════════ ATTENDANCE LOG (R26) ════════
+   The log used to sit in a 2-column grid beside the calendar, so its 6 columns were squeezed into
+   half the page and "24 Jul 2026" wrapped over 3 lines. It is now a full-width row; these rules
+   keep the date/time/hours columns on one line and style the From/To range bar. */
+.att-log td,.att-log th{white-space:nowrap}
+.att-log td:last-child,.att-log th:last-child{white-space:normal}
+/* flag chips wrap as whole chips, never mid-label ("No fence at clock-out" went 5 lines at 768px) */
+.att-log td:last-child span{white-space:nowrap;display:inline-block}
+.att-filter{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.att-presets{display:flex;gap:6px}
+.att-preset{font-size:12px;font-weight:700;padding:6px 12px;border-radius:20px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);cursor:pointer;white-space:nowrap;min-height:32px}
+.att-preset:hover{background:var(--c-surface-2)}
+.att-preset.on{background:var(--c-ink,#15171C);border-color:var(--c-ink,#15171C);color:#fff}
+.att-dates{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
+.att-dates input[type=date]{min-width:0;background:var(--c-surface);border:1px solid var(--c-border);border-radius:9px;padding:6px 9px;font-size:12.5px;color:var(--c-text)}
+.att-clear{font-size:12px;font-weight:700;padding:6px 10px;border-radius:9px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);cursor:pointer;white-space:nowrap;min-height:32px}
+@media(max-width:767px){
+  /* stack the two halves of the filter so neither is squeezed */
+  .att-filter{flex-direction:column;align-items:stretch;gap:8px}
+  .att-dates{width:100%}
+  .att-dates input[type=date]{flex:1;min-width:0}
+}
+/* ════════ RESPONSIVE POLISH (Wave 4 — R26, measured) ════════
+   Every rule below closes a defect measured by work/mobile-audit (headless Chrome at 390×844),
+   not a guess. Re-run `node work/mobile-audit/audit.mjs` after touching this block. */
+@media(max-width:767px){
+  /* Tap targets that measured under ~32px. The "how it works" tip bar's dismiss was 8×14px —
+     effectively untappable — and its Linked: chips were 23px tall. */
+  .how-x{min-width:34px;min-height:34px;margin:-6px -6px 0 0;font-size:18px!important}
+  .how-chip{padding:6px 12px!important;min-height:32px}
+  .ann-x{width:36px!important;height:36px!important}
+  /* Lifecycle cards: the fixed 110px progress column squeezed the name column to ~84px, so long
+     names spilled out of their box. Narrower bar on phones + the name may now break. */
+  .lc-prog{width:64px!important}
+  /* Native date inputs are pinned to 16px on mobile (iOS zoom guard above), which inflates their
+     intrinsic width — a two-input date range then overflowed its flex row. */
+  #content input[type=date]{min-width:0}
+  /* Standalone icon buttons that measured under 32px. Deliberately NOT applied to the OKR compact
+     rows (22px icons) or .tog switches — those are compact by design (R5) and enlarging them
+     would undo that layout. */
+  .help-q{min-width:36px;min-height:36px}
+  .af-ico{min-width:34px;min-height:34px}
 }
 /* Safe-area aware sticky topbar on notched devices */
 .topbar{padding-top:env(safe-area-inset-top)}
@@ -365,10 +443,13 @@ button:active{opacity:.75;transform:scale(.97);transition:transform .1s}
 /* A1: keyboard focus ring for bespoke inline buttons (the .ui-* primitives set their own). */
 button:focus-visible{outline:none;box-shadow:var(--ring);border-radius:8px}
 .ui-btn:focus-visible,.ui-tab:focus-visible,.nav-item:focus-visible,.ui-tab-pill:focus-visible{border-radius:inherit}
-/* R1: analytics stat/chart grids — 2-up (stats) / stacked (charts) on mobile, full on desktop */
+/* R1: analytics stat/chart grids — 2-up (stats) / stacked (charts) on mobile, full on desktop.
+   R26: the multi-column step moved from 768px to 1024px. At exactly 768px the sidebar (224px) also
+   appears, leaving ~488px of content — two 338px chart cards do not fit in that, so the charts hung
+   ~150px outside their column. Between 768 and 1024 the sidebar is showing, so stay single/2-up. */
 .astat-grid{display:grid;gap:8px;grid-template-columns:repeat(2,1fr)}
 .achart-grid{display:grid;gap:12px;grid-template-columns:1fr}
-@media(min-width:768px){.astat-grid{grid-template-columns:repeat(4,1fr)}.achart-grid{grid-template-columns:1fr 1fr}}
+@media(min-width:1024px){.astat-grid{grid-template-columns:repeat(4,1fr)}.achart-grid{grid-template-columns:1fr 1fr}}
 /* Clickable stat cards */
 .stat-card-click:hover{box-shadow:0 4px 16px rgba(0,0,0,.1)!important}
 .stat-card-click:active{transform:scale(.98);opacity:.9}

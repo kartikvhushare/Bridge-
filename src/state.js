@@ -102,7 +102,7 @@ function loadDB(){
     const r=localStorage.getItem(LS_KEY);
     if(!r)return false;
     const p=JSON.parse(r);if(!p.DB)return false;DB=p.DB;
-    ['users','departments','locations','checklists','submissions','approvals','feedback','folders','documents','audit','notifications','questions','checklists_deleted','questions_deleted','folders_deleted','documents_deleted','users_deleted','departments_deleted','locations_deleted','attendance','leaveTypes','leaveRequests','leaveBalances','holidays','hrmAudit','announcements','shifts','okrs','okrCheckins','okrLogs','flows','letters','discipline','overtime','payrollRuns','payrollItems','surveys','surveyAnswers'].forEach(k=>{if(!DB[k])DB[k]=[];});
+    ['users','departments','locations','checklists','submissions','approvals','feedback','folders','documents','audit','notifications','questions','checklists_deleted','questions_deleted','folders_deleted','documents_deleted','users_deleted','departments_deleted','locations_deleted','leaveTypes_deleted','attendance','leaveTypes','leaveRequests','leaveBalances','holidays','hrmAudit','announcements','shifts','okrs','okrCheckins','okrLogs','flows','letters','discipline','overtime','payrollRuns','payrollItems','surveys','surveyAnswers'].forEach(k=>{if(!DB[k])DB[k]=[];});
     // OKR v2 migration: drop the retired question-linked OKR model from stale localStorage.
     // Old rows are recognisable by having no metricType (they carried questionId/rollup instead).
     DB.okrs=(DB.okrs||[]).filter(o=>o&&o.metricType);
@@ -117,7 +117,7 @@ function loadDB(){
     if(!Array.isArray(DB.drafts))DB.drafts=[]; // PHASE4b: drafts collection for older saved states
     // R7 (sync-integrity): tombstones for user-deletable feed records — a deleted alert/approval/
     // leave record must never resurrect from a concurrent server fetch or a local re-push.
-    ['notifications_deleted','approvals_deleted','leaveRequests_deleted'].forEach(k=>{if(!Array.isArray(DB[k]))DB[k]=[];});
+    ['notifications_deleted','approvals_deleted','leaveRequests_deleted','leaveTypes_deleted'].forEach(k=>{if(!Array.isArray(DB[k]))DB[k]=[];});
     try{_seedHRMPlan();}catch(e){}
     DB.users.forEach(u=>{
       if(!u.rules)u.rules={past:true,future:true,edit:true};

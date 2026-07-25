@@ -31,7 +31,7 @@ function _annBanner(){
     </div>
     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
       <button onclick="App._readAnnouncement('${a.id}',true)" style="font-size:12px;font-weight:700;background:#fff;color:#15171C;border:none;border-radius:9px;padding:7px 12px;cursor:pointer">Read${more>0?' ('+(more+1)+')':''}</button>
-      <button onclick="App._dismissAnnouncement('${a.id}')" title="Dismiss" style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.1);border:none;color:#fff;cursor:pointer;display:grid;place-items:center">${ic('x','w-4 h-4')}</button>
+      <button onclick="App._dismissAnnouncement('${a.id}')" title="Dismiss" aria-label="Dismiss announcement" class="ann-x" style="width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.1);border:none;color:#fff;cursor:pointer;display:grid;place-items:center">${ic('x','w-4 h-4')}</button>
     </div>
   </div>`;
 }
